@@ -1,0 +1,93 @@
+{
+  "resume_id": "18490f05-de95-457d-ae6c-ed99e4f132e2",
+  "title": "Master Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "nishaanttx15@gmail.com",
+      "phone": "+918102908376",
+      "location": "Remote",
+      "links": [
+        "linkedin.com/in/nishant-arya-838168321",
+        "github.com/Nishanttxx"
+      ]
+    },
+    "summary": "Technical student proficient in Python, Docker, and API testing, focused on developing AI-driven test automation and intelligent quality engineering platforms.",
+    "work_experience": [
+      {
+        "company": "Acme Global AI",
+        "title": "",
+        "start_date": "2023",
+        "end_date": "Present",
+        "bullets": [
+          "Spearheaded microservices overhaul serving 10M+ daily active users with 99.99% uptime.",
+          "Architected multi-agent LLM workflow engine using FastAPI, LangChain, and Redis queues.",
+          "Optimized vector database queries reducing P99 latency by 45% across all endpoints."
+        ]
+      },
+      {
+        "company": "Tech Corp",
+        "title": "",
+        "start_date": "2021",
+        "end_date": "2023",
+        "bullets": [
+          "Designed real-time event streaming pipeline processing 50k events/sec using Apache Kafka.",
+          "Mentored 8 junior developers and established CI/CD automated testing standards."
+        ]
+      }
+    ],
+    "education": [
+      {
+        "institution": "B.Tech in Information Science & Engineering | NMAM Institute",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      },
+      {
+        "institution": "of Technology, Nitte, Udupi",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      },
+      {
+        "institution": "Aug 2023 \u2013 Aug 2027 | GPA: 7.84",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      }
+    ],
+    "projects": [],
+    "skills": [
+      "Python",
+      "Pydantic",
+      "Docker",
+      "Firebase",
+      "Supabase",
+      "DBMS",
+      "Postman",
+      "GitHub",
+      "C++",
+      "Dart",
+      "HTML",
+      "CSS",
+      "Skills",
+      "Problem",
+      "Solving",
+      "Communication",
+      "Leadership",
+      "Teamwork",
+      "Decision",
+      "Making"
+    ],
+    "keywords": [
+      "Python",
+      "Docker",
+      "API Testing",
+      "Flutter"
+    ],
+    "gaps": [],
+    "tailoring_notes": ""
+  },
+  "change_summary": "Updated section work_experience"
+}

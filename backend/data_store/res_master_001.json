@@ -1,0 +1,39 @@
+{
+  "resume_id": "res_master_001",
+  "title": "Master Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "Alex Morgan",
+      "email": "alex.morgan@jobwink.ai",
+      "phone": "+1 555-0192",
+      "location": "San Francisco, CA"
+    },
+    "summary": "Senior Full-Stack Software Engineer with 6+ years of experience building high-throughput web applications and AI-driven platforms.",
+    "work_experience": [],
+    "education": [],
+    "projects": [],
+    "skills": [
+      "Flutter",
+      "Dart",
+      "Python",
+      "FastAPI",
+      "React",
+      "TypeScript",
+      "PostgreSQL",
+      "Docker",
+      "AWS",
+      "REST APIs"
+    ],
+    "keywords": [
+      "Agile",
+      "System Architecture",
+      "CI/CD",
+      "Machine Learning",
+      "Microservices"
+    ],
+    "gaps": [],
+    "tailoring_notes": ""
+  },
+  "change_summary": "Auto-initialized fallback"
+}

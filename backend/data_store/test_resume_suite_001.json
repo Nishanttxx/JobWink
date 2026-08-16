@@ -1,0 +1,37 @@
+{
+  "resume_id": "test_resume_suite_001",
+  "title": "Updated Master Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "",
+      "phone": "",
+      "location": "",
+      "links": []
+    },
+    "summary": "Updated Senior Backend Developer summary with new skills.",
+    "work_experience": [
+      {
+        "company": "NewTech",
+        "title": "Staff Engineer",
+        "start_date": "",
+        "end_date": "",
+        "bullets": []
+      }
+    ],
+    "education": [],
+    "projects": [],
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Go",
+      "Kubernetes",
+      "AWS"
+    ],
+    "keywords": [],
+    "gaps": [],
+    "tailoring_notes": ""
+  },
+  "change_summary": "Version snapshot"
+}

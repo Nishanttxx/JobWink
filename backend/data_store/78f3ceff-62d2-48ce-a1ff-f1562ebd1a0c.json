@@ -1,0 +1,34 @@
+{
+  "resume_id": "78f3ceff-62d2-48ce-a1ff-f1562ebd1a0c",
+  "title": "Tailored Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "",
+      "phone": "",
+      "location": "Remote",
+      "links": []
+    },
+    "summary": "",
+    "work_experience": [],
+    "education": [],
+    "projects": [],
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Docker",
+      "Flutter",
+      "AI Agents"
+    ],
+    "keywords": [
+      "Python",
+      "Docker",
+      "API Testing",
+      "Flutter"
+    ],
+    "gaps": [],
+    "tailoring_notes": "Tailored resume sections for target job description. Prioritized 3 key skills. Identified 0 potential technology gaps."
+  },
+  "change_summary": "Tailored against job description"
+}

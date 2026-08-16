@@ -1,0 +1,34 @@
+{
+  "resume_id": "34168673-885f-40d7-8036-bb088197f83d",
+  "title": "Master Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "",
+      "phone": "",
+      "location": "Remote",
+      "links": []
+    },
+    "summary": "",
+    "work_experience": [],
+    "education": [],
+    "projects": [],
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Docker",
+      "Flutter",
+      "AI Agents"
+    ],
+    "keywords": [
+      "Python",
+      "Docker",
+      "API Testing",
+      "Flutter"
+    ],
+    "gaps": [],
+    "tailoring_notes": ""
+  },
+  "change_summary": "Updated section skills"
+}

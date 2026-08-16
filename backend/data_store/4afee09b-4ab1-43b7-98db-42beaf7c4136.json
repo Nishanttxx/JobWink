@@ -1,0 +1,23 @@
+{
+  "resume_id": "4afee09b-4ab1-43b7-98db-42beaf7c4136",
+  "title": "New Blank Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "",
+      "phone": "",
+      "location": "",
+      "links": []
+    },
+    "summary": "",
+    "work_experience": [],
+    "education": [],
+    "projects": [],
+    "skills": [],
+    "keywords": [],
+    "gaps": [],
+    "tailoring_notes": ""
+  },
+  "change_summary": "Initialized blank resume"
+}

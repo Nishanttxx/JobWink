@@ -1,0 +1,68 @@
+{
+  "resume_id": "9985ca0a-71f8-492f-aef4-c3e2aaf705ad",
+  "title": "Tailored Resume",
+  "user_id": null,
+  "sections": {
+    "contact_info": {
+      "name": "",
+      "email": "nishaanttx15@gmail.com",
+      "phone": "+918102908376",
+      "location": "Remote",
+      "links": [
+        "linkedin.com/in/nishant-arya-838168321",
+        "github.com/Nishanttxx"
+      ]
+    },
+    "summary": "Technical student proficient in Python, Docker, and API testing, focused on developing AI-driven test automation and intelligent quality engineering platforms.",
+    "work_experience": [
+      {
+        "company": "Company",
+        "title": "AI/ML Intern | 3skill | Remote Jul 2026 Present",
+        "start_date": "",
+        "end_date": "Present",
+        "bullets": [
+          "Engineered a predictive ML model for quality classification using  Logistic Regression,  KNN, and",
+          "Decision Tree, optimizing hyperparameters via GridSearchCV to boost accuracy.",
+          "Developed an AI-based hiring prediction system to automate decision-making by analyzing candidate"
+        ]
+      }
+    ],
+    "education": [
+      {
+        "institution": "B.Tech in Information Science & Engineering | NMAM Institute",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      },
+      {
+        "institution": "of Technology, Nitte, Udupi",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      },
+      {
+        "institution": "Aug 2023 \u2013 Aug 2027 | GPA: 7.84",
+        "degree": "Degree",
+        "field": "Information Science",
+        "graduation_date": ""
+      }
+    ],
+    "projects": [],
+    "skills": [
+      "Python",
+      "FastAPI",
+      "Docker",
+      "Flutter",
+      "AI Agents"
+    ],
+    "keywords": [
+      "Python",
+      "Docker",
+      "API Testing",
+      "Flutter"
+    ],
+    "gaps": [],
+    "tailoring_notes": "Tailored resume sections for target job description. Prioritized 3 key skills. Identified 0 potential technology gaps."
+  },
+  "change_summary": "Tailored against job description"
+}
