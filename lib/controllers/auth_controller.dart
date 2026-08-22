@@ -7,6 +7,7 @@ import '../repositories/auth_repository.dart';
 import '../repositories/auth_result.dart';
 import '../services/demo_service.dart';
 import '../services/supabase_service.dart';
+import '../utils/avatar_image_helper.dart';
 
 
 // ---------------------------------------------------------------------------
@@ -166,14 +167,25 @@ class AuthController extends ChangeNotifier {
     final result = await _repo.getProfile(userId);
     if (result is AuthSuccess<AppUser?>) {
       _currentUser = result.value;
-      if (_currentUser?.avatarUrl != null && _currentUser!.avatarUrl!.contains('googleusercontent.com')) {
-        SupabaseService.instance.syncGoogleAvatarToSupabase(
+      if (_currentUser?.avatarUrl != null &&
+          _currentUser!.avatarUrl!.contains('googleusercontent.com')) {
+        final googleUrl = _currentUser!.avatarUrl!;
+        if (AvatarImageHelper.isFailed(googleUrl)) {
+          return;
+        }
+        SupabaseService.instance
+            .syncGoogleAvatarToSupabase(
           userId: userId,
-          googleUrl: _currentUser!.avatarUrl!,
-        ).then((mirroredUrl) {
-          if (mirroredUrl != null && _currentUser != null && _currentUser!.id == userId) {
+          googleUrl: googleUrl,
+        )
+            .then((mirroredUrl) {
+          if (mirroredUrl != null &&
+              _currentUser != null &&
+              _currentUser!.id == userId) {
             _currentUser = _currentUser!.copyWith(avatarUrl: mirroredUrl);
             notifyListeners();
+          } else {
+            AvatarImageHelper.markFailed(googleUrl);
           }
         });
       }

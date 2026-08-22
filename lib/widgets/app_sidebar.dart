@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/avatar_image_helper.dart';
 import 'report_bug_modal.dart';
 
 class AppSidebar extends StatefulWidget {
@@ -334,15 +336,29 @@ class _AppSidebarState extends State<AppSidebar> {
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.pushNamed(context, '/profile'),
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.2),
-                          child: Text(
-                            initials,
-                            style: GoogleFonts.plusJakartaSans(
-                              color: AppTheme.primaryOrange,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.primaryOrange.withValues(alpha: 0.2),
+                          ),
+                          child: ClipOval(
+                            child: AvatarImageHelper.buildAvatarImage(
+                              avatarUrl: user?.avatarUrl,
+                              initials: initials,
+                              width: 36,
+                              height: 36,
+                              fallbackBuilder: (context, initVal) => Center(
+                                child: Text(
+                                  initVal,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: AppTheme.primaryOrange,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -362,42 +378,31 @@ class _AppSidebarState extends State<AppSidebar> {
                     children: [
                       GestureDetector(
                         onTap: () => Navigator.pushNamed(context, '/profile'),
-                        child: Builder(
-                          builder: (context) {
-                            final showImage = user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty && !_hasAvatarError;
-                            if (showImage) {
-                              debugPrint('[AppSidebar] Loading avatar');
-                              debugPrint('[AppSidebar] Stored avatar found');
-                            } else {
-                              debugPrint('[AppSidebar] Using initials fallback');
-                            }
-                            return CircleAvatar(
-                              radius: 18,
-                              backgroundColor: AppTheme.primaryOrange,
-                              backgroundImage: showImage
-                                  ? NetworkImage(user!.avatarUrl!)
-                                  : null,
-                              onBackgroundImageError: showImage
-                                  ? (exception, stackTrace) {
-                                      debugPrint('[AppSidebar] Avatar unavailable (429)');
-                                      debugPrint('[AppSidebar] Using initials fallback');
-                                      if (mounted) {
-                                        setState(() => _hasAvatarError = true);
-                                      }
-                                    }
-                                  : null,
-                              child: !showImage
-                                  ? Text(
-                                      initials,
-                                      style: GoogleFonts.plusJakartaSans(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13,
-                                      ),
-                                    )
-                                  : null,
-                            );
-                          },
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppTheme.primaryOrange,
+                          ),
+                          child: ClipOval(
+                            child: AvatarImageHelper.buildAvatarImage(
+                              avatarUrl: user?.avatarUrl,
+                              initials: initials,
+                              width: 36,
+                              height: 36,
+                              fallbackBuilder: (context, initVal) => Center(
+                                child: Text(
+                                  initVal,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),

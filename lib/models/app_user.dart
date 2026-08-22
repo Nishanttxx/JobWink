@@ -82,8 +82,22 @@ class AppUser {
   String get displayName =>
       fullName?.isNotEmpty == true ? fullName! : email.split('@').first;
 
-  /// First letter of [displayName] for avatar initials.
-  String get initials => displayName.isNotEmpty
-      ? displayName.substring(0, 1).toUpperCase()
-      : '?';
+  /// Generates initials from the user's name or display name.
+  /// Examples: "Arun Singh" -> "AS", "Nishant Arya" -> "NA", "Arun" -> "A"
+  String get initials {
+    final nameToUse = (fullName != null && fullName!.trim().isNotEmpty)
+        ? fullName!.trim()
+        : (displayName.isNotEmpty ? displayName.trim() : '');
+
+    if (nameToUse.isEmpty) return 'U';
+
+    final parts =
+        nameToUse.split(RegExp(r'[\s._-]+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return 'U';
+    if (parts.length == 1) {
+      return parts[0].substring(0, 1).toUpperCase();
+    }
+    return (parts[0].substring(0, 1) + parts.last.substring(0, 1))
+        .toUpperCase();
+  }
 }

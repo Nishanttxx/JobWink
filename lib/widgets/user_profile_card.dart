@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../utils/avatar_image_helper.dart';
 
 /// Dynamic, interactive User Profile Card with avatar photo upload capability.
 class UserProfileCard extends StatefulWidget {
@@ -177,32 +178,25 @@ class _UserProfileCardState extends State<UserProfileCard> {
                         color: AppTheme.primaryOrange.withValues(alpha: 0.4),
                         width: 2,
                       ),
-                      image: (hasPhoto && !_hasAvatarImageError)
-                          ? DecorationImage(
-                              image: NetworkImage(effectiveUser.avatarUrl!),
-                              fit: BoxFit.cover,
-                              onError: (exception, stackTrace) {
-                                debugPrint('[AppSidebar] Avatar unavailable (429)');
-                                debugPrint('[AppSidebar] Using initials fallback');
-                                if (mounted) {
-                                  setState(() => _hasAvatarImageError = true);
-                                }
-                              },
-                            )
-                          : null,
                     ),
-                    child: (!hasPhoto || _hasAvatarImageError)
-                        ? Center(
-                            child: Text(
-                              initials,
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: widget.compact ? 15 : 22,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primaryOrange,
-                              ),
+                    child: ClipOval(
+                      child: AvatarImageHelper.buildAvatarImage(
+                        avatarUrl: effectiveUser.avatarUrl,
+                        initials: initials,
+                        width: avatarSize,
+                        height: avatarSize,
+                        fallbackBuilder: (context, initVal) => Center(
+                          child: Text(
+                            initVal,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: widget.compact ? 15 : 22,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.primaryOrange,
                             ),
-                          )
-                        : null,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
 
                   // Hover Overlay (Camera Icon)
