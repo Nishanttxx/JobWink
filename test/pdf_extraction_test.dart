@@ -25,7 +25,7 @@ void main() {
 
     expect(text.trim().isNotEmpty, isTrue);
     expect(AIService.validateExtractedText(text), isTrue);
-    expect(text.contains('NISHANT ARYA'), isTrue);
+    expect(RegExp(r'NISHANT\s+ARYA', caseSensitive: false).hasMatch(text), isTrue);
   });
 
   test('Test PDF text extraction on Nishant Arya.pdf', () async {

@@ -157,7 +157,10 @@ class GeminiService {
           ], timeout: const Duration(seconds: 15));
 
           final text = response.text;
-          debugPrint('[DEBUG-PIPELINE-4] AI RAW RESPONSE: provider=Gemini (Multimodal), length=${text?.length ?? 0}, textSnippet=${text != null && text.length > 200 ? text.substring(0, 200) : text}');
+          debugPrint('================ RAW AI RESUME RESPONSE ================');
+          debugPrint(text ?? '[NULL/EMPTY RESPONSE]');
+          debugPrint('=========================================================');
+          debugPrint('[DEBUG-PIPELINE-4] AI RAW RESPONSE: provider=Gemini (Multimodal), length=${text?.length ?? 0}');
           if (text != null && text.isNotEmpty) {
             final jsonMap = _extractJson(text);
             debugPrint('[DEBUG-PIPELINE-5] AI JSON: provider=Gemini (Multimodal), decodedMapKeys=${jsonMap?.keys.toList()}');
@@ -182,7 +185,10 @@ class GeminiService {
           ], timeout: const Duration(seconds: 12));
 
           final text = response.text;
-          debugPrint('[DEBUG-PIPELINE-4] AI RAW RESPONSE: provider=Gemini (Text-Fallback), length=${text?.length ?? 0}, textSnippet=${text != null && text.length > 200 ? text.substring(0, 200) : text}');
+          debugPrint('================ RAW AI RESUME RESPONSE ================');
+          debugPrint(text ?? '[NULL/EMPTY RESPONSE]');
+          debugPrint('=========================================================');
+          debugPrint('[DEBUG-PIPELINE-4] AI RAW RESPONSE: provider=Gemini (Text-Fallback), length=${text?.length ?? 0}');
           if (text != null && text.isNotEmpty) {
             final jsonMap = _extractJson(text);
             debugPrint('[DEBUG-PIPELINE-5] AI JSON: provider=Gemini (Text-Fallback), decodedMapKeys=${jsonMap?.keys.toList()}');
@@ -509,10 +515,19 @@ CRITICAL RULES:
 3. "title": The candidate's job title, professional title, or headline if present.
 4. "skills": An array of individual skill strings (e.g. ["Python", "React", "AWS"]).
 5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings.
-6. "projects": Each entry MUST have "name", "description" as array of strings, "technologies" as array, and "url".
+6. "projects": Each project entry MUST be an independent structured object:
+   - "name": Short title of the project ONLY (e.g. "Nexus Search", "AI Search Platform"). NEVER put long descriptions, sentences, or repository URLs into "name".
+   - "description": Array of description bullet strings ONLY.
+   - "url": Project or GitHub repository URL (e.g. "github.com/Nishanttxx/Nexus-Searchh").
+   - "technologies": Array of technologies used in that project.
 7. "education": Each entry MUST have "institution", "degree", "fieldOfStudy", "startDate", "endDate", "gpa".
 8. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
 9. DO NOT invent, fabricate, or add placeholder data for missing sections.
-10. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
+10. CRITICAL GROUPING RULE: Return exactly one object per semantic resume record. NEVER create objects for individual description sentences, technologies, keywords, or line fragments.
+    - Projects: Exactly one project object per actual project. Group all description bullets and details under that single project object.
+    - Experience: Exactly one object per job/internship/role. Group all its bullet points under "description".
+    - Education: Exactly one object per degree/school. Group institution, degree, dates, and GPA together.
+    - Extracurriculars: Group multi-line descriptions into a single extracurricular object.
+11. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
 ''';
 }

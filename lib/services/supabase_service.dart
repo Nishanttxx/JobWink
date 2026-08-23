@@ -197,8 +197,10 @@ class SupabaseService {
     final c = client;
     if (c == null) throw Exception('Supabase is not initialized');
 
+    final authEmail = c.auth.currentUser?.email;
     final payload = <String, dynamic>{
       'id': userId,
+      if (authEmail != null && authEmail.isNotEmpty) 'email': authEmail,
       'full_name': fullName,
       'avatar_url': avatarUrl,
       'phone': phone,

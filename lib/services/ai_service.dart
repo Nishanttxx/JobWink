@@ -133,16 +133,25 @@ class AIService {
 
     // 1. Gemini (Primary)
     debugPrint('[AIService] Primary provider: Gemini (isInitialized=${GeminiService.instance.isInitialized})');
+    debugPrint('[AI EXTRACTION] Primary provider: Gemini');
     try {
       final result = await GeminiService.instance.parseResume(bytes, mimeType);
       if (result != null && _hasStructuredData(result)) {
+        debugPrint('[AI EXTRACTION] Primary provider result received');
+        debugPrint('[AI EXTRACTION] Primary provider response length: ${result.toString().length}');
         debugPrint('[AIService] Gemini SUCCESS: name="${result.fullName}", exp=${result.experience.length}, edu=${result.education.length}, proj=${result.projects.length}');
         return result;
       }
+      debugPrint('[AI EXTRACTION] PRIMARY PROVIDER FAILED: insufficient structured data');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: OpenAI');
       debugPrint('[AIService] Gemini returned insufficient structured data — falling back to OpenAI');
     } on GeminiQuotaExceededException catch (qErr) {
+      debugPrint('[AI EXTRACTION] PRIMARY PROVIDER FAILED: Quota exceeded ($qErr)');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: OpenAI');
       debugPrint('[AIService] Gemini quota exceeded: $qErr — falling back to OpenAI');
     } catch (e) {
+      debugPrint('[AI EXTRACTION] PRIMARY PROVIDER FAILED: $e');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: OpenAI');
       debugPrint('[AIService] Gemini parse error: $e — falling back to OpenAI');
     }
 
@@ -151,11 +160,16 @@ class AIService {
     try {
       final openAiResult = await OpenAIService.instance.parseResume(bytes, mimeType);
       if (openAiResult != null && _hasStructuredData(openAiResult)) {
+        debugPrint('[AI EXTRACTION] Fallback 1 (OpenAI) result received');
         debugPrint('[AIService] OpenAI SUCCESS: name="${openAiResult.fullName}", exp=${openAiResult.experience.length}, edu=${openAiResult.education.length}, proj=${openAiResult.projects.length}');
         return openAiResult;
       }
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (OpenAI) FAILED: insufficient structured data');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: Cerebras');
       debugPrint('[AIService] OpenAI returned insufficient structured data — falling back to Cerebras');
     } catch (e) {
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (OpenAI) FAILED: $e');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: Cerebras');
       debugPrint('[AIService] OpenAI fallback error: $e — falling back to Cerebras');
     }
 
@@ -164,11 +178,16 @@ class AIService {
     try {
       final cerebrasResult = await CerebrasService.instance.parseResume(bytes, mimeType);
       if (cerebrasResult != null && _hasStructuredData(cerebrasResult)) {
+        debugPrint('[AI EXTRACTION] Fallback 2 (Cerebras) result received');
         debugPrint('[AIService] Cerebras SUCCESS: name="${cerebrasResult.fullName}", exp=${cerebrasResult.experience.length}, edu=${cerebrasResult.education.length}, proj=${cerebrasResult.projects.length}');
         return cerebrasResult;
       }
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (Cerebras) FAILED: insufficient structured data');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: Mistral');
       debugPrint('[AIService] Cerebras returned insufficient structured data — falling back to Mistral');
     } catch (e) {
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (Cerebras) FAILED: $e');
+      debugPrint('[AI EXTRACTION] FALLING BACK TO: Mistral');
       debugPrint('[AIService] Cerebras fallback error: $e — falling back to Mistral');
     }
 
@@ -177,14 +196,18 @@ class AIService {
     try {
       final mistralResult = await MistralService.instance.parseResume(bytes, mimeType);
       if (mistralResult != null && mistralResult.hasUsableData) {
+        debugPrint('[AI EXTRACTION] Fallback 3 (Mistral) result received');
         debugPrint('[AIService] Mistral SUCCESS: name="${mistralResult.fullName}", exp=${mistralResult.experience.length}, edu=${mistralResult.education.length}, proj=${mistralResult.projects.length}');
         return mistralResult;
       }
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (Mistral) FAILED: empty/null data');
       debugPrint('[AIService] Mistral returned empty/null data');
     } catch (e) {
+      debugPrint('[AI EXTRACTION] FALLBACK PROVIDER (Mistral) FAILED: $e');
       debugPrint('[AIService] Mistral fallback error: $e');
     }
 
+    debugPrint('[AI EXTRACTION] ALL AI PROVIDERS FAILED - RUNNING LOCAL TEXT EXTRACTION FALLBACK');
     debugPrint('[AIService] All configured AI providers failed. Using local extraction fallback...');
     final localResult = await _localFallbackParseAsync(bytes);
     debugPrint('[AIService] Local fallback result: name="${localResult.fullName}", exp=${localResult.experience.length}, edu=${localResult.education.length}');
@@ -196,16 +219,13 @@ class AIService {
     return null;
   }
 
-  /// Returns true if the resume has meaningful structured content (identity or section data).
-  /// This ensures valid AI extraction results are accepted rather than rejected.
+  /// Returns true if the resume has meaningful structured section content (projects, education, experience, skills, etc.).
   bool _hasStructuredData(ResumeData data) {
-    return data.fullName.trim().isNotEmpty ||
-        data.title.trim().isNotEmpty ||
-        data.summary.trim().isNotEmpty ||
-        data.skills.isNotEmpty ||
-        data.experience.isNotEmpty ||
+    return data.projects.isNotEmpty ||
         data.education.isNotEmpty ||
-        data.projects.isNotEmpty ||
+        data.experience.isNotEmpty ||
+        data.skills.isNotEmpty ||
+        data.skillGroups.isNotEmpty ||
         data.certifications.isNotEmpty ||
         data.extracurriculars.isNotEmpty;
   }
@@ -851,7 +871,7 @@ Return ONLY valid JSON.
           if (streamText.contains('Tj') || streamText.contains('TJ') || streamText.contains('BT')) {
             final decoded = _decodePdfTextStream(streamText, cmap);
             if (decoded.trim().isNotEmpty) {
-              buffer.write('$decoded ');
+              buffer.write('$decoded\n');
             }
           }
         }
@@ -866,7 +886,7 @@ Return ONLY valid JSON.
                   .replaceAll(r'\)', ')')
                   .replaceAll(r'\\', r'\');
               if (!_isPdfSyntaxBoilerplate(unescaped)) {
-                buffer.write('$unescaped ');
+                buffer.write('$unescaped\n');
               }
             }
           }
@@ -877,14 +897,15 @@ Return ONLY valid JSON.
           final tokens = matches
               .map((m) => m.group(0)!.trim())
               .where((s) => s.length > 2 && !_isPdfSyntaxBoilerplate(s));
-          buffer.write(tokens.join(' '));
+          buffer.write(tokens.join('\n'));
         }
 
         var extracted = buffer
             .toString()
             .replaceAll(RegExp(r'[\uFFFD\u21D3\u27E8\u266A\u2225\u2309\u2308\u2207\u222B\u22A3\u21A1\u22C5\uE000-\uF8FF]'), ' ')
             .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '')
-            .replaceAll(RegExp(r'\s+'), ' ')
+            .replaceAll(RegExp(r'[ \t]+'), ' ')
+            .replaceAll(RegExp(r'\n{3,}'), '\n\n')
             .trim();
 
         final resultText = extracted.length > 8000 ? extracted.substring(0, 8000) : extracted;
@@ -1227,7 +1248,7 @@ Return ONLY valid JSON.
           }
         }
       }
-      sb.write(' ');
+      sb.write('\n');
     }
 
     final singleLitRegex = RegExp(r'\(([^)]{1,300})\)\s*(?:Tj|\x27|\x22)');
@@ -1238,7 +1259,7 @@ Return ONLY valid JSON.
         final code = unescaped.codeUnitAt(i);
         sb.write(_mapCode(code, cmap));
       }
-      sb.write(' ');
+      sb.write('\n');
     }
 
     final singleHexRegex = RegExp(r'<([0-9a-fA-F]+)>\s*(?:Tj|\x27|\x22)');
@@ -1254,7 +1275,7 @@ Return ONLY valid JSON.
           }
         }
       }
-      sb.write(' ');
+      sb.write('\n');
     }
 
     return sb.toString();
@@ -1273,7 +1294,7 @@ Return ONLY valid JSON.
               .replaceAll(r'\)', ')')
               .replaceAll(r'\\', r'\');
           if (!_isPdfSyntaxBoilerplate(unescaped)) {
-            buffer.write('$unescaped ');
+            buffer.write('$unescaped\n');
           }
         }
       }
