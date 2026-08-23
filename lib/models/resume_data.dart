@@ -56,6 +56,11 @@ class ResumeData {
   final List<ExtracurricularEntry> certifications;
   final List<ExtracurricularEntry> extracurriculars;
 
+  // ── Metadata & Invalidation ──
+  static const String currentParserVersion = 'v3.1.0';
+  final String parserVersion;
+  final String fileHash;
+
   const ResumeData({
     this.fullName = '',
     this.email = '',
@@ -72,6 +77,8 @@ class ResumeData {
     this.education = const [],
     this.certifications = const [],
     this.extracurriculars = const [],
+    this.parserVersion = currentParserVersion,
+    this.fileHash = '',
   });
 
   /// Evaluates whether this resume object contains meaningful structured section data (skills, experience, etc.).
@@ -336,133 +343,247 @@ class ResumeData {
 
   static String _normalizeSectionBreaks(String rawText) {
     if (rawText.trim().isEmpty) return rawText;
-
-    var text = rawText;
-
-    final headings = [
-      r'PROFESSIONAL SUMMARY',
-      r'EXECUTIVE SUMMARY',
-      r'PROFILE SUMMARY',
-      r'CAREER OBJECTIVE',
-      r'ABOUT ME',
-      r'SUMMARY',
-      r'OBJECTIVE',
-      r'TECHNICAL SKILLS',
-      r'SKILLS & TOOLS',
-      r'SKILLS & TECHNOLOGIES',
-      r'PROGRAMMING LANGUAGES',
-      r'CORE COMPETENCIES',
-      r'KEY SKILLS',
-      r'SKILLS',
-      r'WORK EXPERIENCE',
-      r'PROFESSIONAL EXPERIENCE',
-      r'EMPLOYMENT HISTORY',
-      r'RELEVANT EXPERIENCE',
-      r'INTERNSHIP EXPERIENCE',
-      r'INTERNSHIPS',
-      r'EXPERIENCE',
-      r'KEY PROJECTS',
-      r'PERSONAL PROJECTS',
-      r'TECHNICAL PROJECTS',
-      r'ACADEMIC PROJECTS',
-      r'SELECTED PROJECTS',
-      r'PROJECTS',
-      r'EDUCATIONAL BACKGROUND',
-      r'ACADEMIC BACKGROUND',
-      r'ACADEMIC HISTORY',
-      r'EDUCATION & QUALIFICATIONS',
-      r'EDUCATION',
-      r'ACADEMICS',
-      r'QUALIFICATIONS',
-      r'CERTIFICATIONS & LICENSES',
-      r'LICENSES & CERTIFICATIONS',
-      r'CERTIFICATIONS',
-      r'CERTIFICATES',
-      r'AWARDS & ACHIEVEMENTS',
-      r'HONORS & AWARDS',
-      r'ACHIEVEMENTS',
-      r'EXTRACURRICULAR ACTIVITIES',
-      r'CO-CURRICULAR ACTIVITIES',
-      r'VOLUNTEER EXPERIENCE',
-      r'EXTRACURRICULARS',
-      r'VOLUNTEERING',
-      r'ACTIVITIES',
-    ];
-
-    for (final heading in headings) {
-      final pattern = RegExp(
-        r'(?<!\b(?:soft|backend|frontend|testing|mobile|database|cloud|with|in|and|of|for|has|have|had|years|practical|hands-on|industry)\s+)(?:^|[\r\n|•\-\*]|[ ]{2,}|\b(?=[A-Z]{4,}\b))(' + heading + r')\b(?!\s*:)',
-        caseSensitive: false,
-      );
-
-      text = text.replaceAllMapped(pattern, (m) {
-        final matchedHeading = m.group(1)!.trim();
-        return '\n\n$matchedHeading\n';
-      });
-    }
-
-    final skillCategories = [
-      r'Backend Tools',
-      r'Testing API',
-      r'Languages',
-      r'Soft Skills',
-      r'Frontend Tools',
-      r'Databases',
-      r'Frameworks',
-      r'DevOps & Cloud',
-      r'Cloud & DevOps',
-    ];
-
-    for (final cat in skillCategories) {
-      final catPattern = RegExp(
-        r'(?:^|[\r\n\t|•\-\*]|[ ]{2,})\s*(' + cat + r'\s*:)',
-        caseSensitive: false,
-      );
-      text = text.replaceAllMapped(catPattern, (m) {
-        return '\n${m.group(1)!.trim()} ';
-      });
-    }
-
-    return text;
+    return rawText;
   }
 
-  static bool _isSectionHeaderLine(String line, String sectionKey) {
-    if (line.contains(':') || line.contains('|')) return false;
-    if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–')) return false;
-    if (line.contains('@') || line.contains('http') || line.contains('.com') || line.contains('.in') || line.contains('.org')) return false;
-    if (RegExp(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b', caseSensitive: false).hasMatch(line)) return false;
-    if (RegExp(r'\b\d{4}\s*[\–\-—\to]\s*(\d{4}|Present)\b', caseSensitive: false).hasMatch(line)) return false;
+  /// Normalizes a candidate heading line by trimming, stripping list numbers,
+  /// bullets, markdown hashes, dashes, and trailing colons, converting to lowercase,
+  /// removing non-alphanumeric chars (preserving '&' and space), and collapsing spaces.
+  static String _normalizeHeadingCandidate(String line) {
+    var s = line.trim();
+    // Strip leading list numbers, Roman numerals, bullets, markdown hashes, dashes
+    s = s.replaceFirst(
+      RegExp(r'^(?:[#*_\-–—•◦°▪▫●○◆◇►▶▸⁃∙\t]+|\d+[\.\)\:\-]\s*|[ivxlcdm]+[\.\)\:\-]\s*)', caseSensitive: false),
+      '',
+    ).trim();
+    // Strip trailing colons, dashes, hashes, underscores, vertical bars
+    s = s.replaceFirst(RegExp(r'[:#*_\-–—|\s]+$'), '').trim();
+    // Convert to lowercase, remove characters except a-z, 0-9, &, and spaces, collapse spaces
+    return s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9\s&]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
 
-    final clean = line.toLowerCase().replaceAll(RegExp(r'[^a-z\s&]'), '').trim();
-    if (clean.isEmpty || clean.split(RegExp(r'\s+')).length > 5 || clean.length > 35) return false;
+  static String? _detectSectionHeaderFromNormalized(String norm) {
+    if (norm.isEmpty) return null;
 
-    switch (sectionKey) {
-      case 'summary':
-        return RegExp(r'^(summary|professional summary|executive summary|profile summary|profile|about me|about|objective|career objective|personal summary|bio)$').hasMatch(clean);
-      case 'skills':
-        return RegExp(r'^(skills|technical skills|key skills|core skills|skills & tools|skills and tools|skills & technologies|skills and technologies|technologies|technical proficiencies|core competencies|competencies|areas of expertise|expertise|technical expertise|programming languages|languages & tools)$').hasMatch(clean);
-      case 'experience':
-        return RegExp(r'^(experience|work experience|professional experience|employment|employment history|work history|career history|relevant experience|internships|internship experience)$').hasMatch(clean);
-      case 'education':
-        return RegExp(r'^(education|educational background|academic background|academics|academic history|academic qualification|qualifications|educational qualifications|degrees|schooling|education & qualifications)$').hasMatch(clean);
-      case 'projects':
-        return RegExp(r'^(projects|key projects|personal projects|academic projects|technical projects|selected projects|project work|projects & repositories|repositories|github projects|open source projects)$').hasMatch(clean);
-      case 'certifications':
-        return RegExp(r'^(certifications|certificates|certifications & licenses|licenses & certifications|credentials|courses & certifications|awards & achievements|achievements|honors & awards)$').hasMatch(clean);
-      case 'extracurriculars':
-        return RegExp(r'^(extracurricular activities|extracurriculars|co-curricular activities|volunteer experience|volunteering|activities|leadership & activities|leadership activities|involvement)$').hasMatch(clean);
-      default:
-        return false;
+    // Reject if too long (section headers are concise: <= 6 words, <= 45 chars)
+    if (norm.length > 45 || norm.split(' ').length > 6) return null;
+
+    // summary
+    if (const {
+      'summary',
+      'professional summary',
+      'executive summary',
+      'profile summary',
+      'career summary',
+      'personal summary',
+      'summary statement',
+      'summary objective',
+      'profile overview',
+      'professional overview',
+      'profile',
+      'career profile',
+      'personal profile',
+      'about me',
+      'about',
+      'bio',
+      'objective',
+      'career objective',
+      'statement of purpose',
+      'background',
+      'overview',
+    }.contains(norm)) {
+      return 'summary';
     }
+
+    // skills
+    if (const {
+      'skills',
+      'technical skills',
+      'key skills',
+      'core skills',
+      'skills & tools',
+      'skills and tools',
+      'skills & technologies',
+      'skills and technologies',
+      'technologies',
+      'technical proficiencies',
+      'core competencies',
+      'competencies',
+      'areas of expertise',
+      'expertise',
+      'technical expertise',
+      'programming languages',
+      'languages & tools',
+      'languages and tools',
+      'technical stack',
+      'tech stack',
+      'tools & technologies',
+      'tools and technologies',
+      'developer skills',
+      'professional skills',
+      'it skills',
+      'software skills',
+      'skills competencies',
+      'skills proficiencies',
+      'technologies & tools',
+      'technologies and tools',
+    }.contains(norm)) {
+      return 'skills';
+    }
+
+    // experience
+    if (const {
+      'experience',
+      'work experience',
+      'professional experience',
+      'employment',
+      'employment history',
+      'work history',
+      'career history',
+      'relevant experience',
+      'internships',
+      'internship experience',
+      'practical experience',
+      'industry experience',
+      'professional background',
+      'experience history',
+      'career background',
+      'work background',
+      'previous experience',
+      'job history',
+    }.contains(norm)) {
+      return 'experience';
+    }
+
+    // education
+    if (const {
+      'education',
+      'educational background',
+      'academic background',
+      'academics',
+      'academic history',
+      'academic qualification',
+      'academic qualifications',
+      'qualifications',
+      'educational qualifications',
+      'degrees',
+      'schooling',
+      'education & qualifications',
+      'education and qualifications',
+      'academic details',
+      'academic record',
+      'education details',
+      'education history',
+      'studies',
+    }.contains(norm)) {
+      return 'education';
+    }
+
+    // projects
+    if (const {
+      'projects',
+      'key projects',
+      'personal projects',
+      'academic projects',
+      'technical projects',
+      'selected projects',
+      'project work',
+      'projects & repositories',
+      'projects and repositories',
+      'repositories',
+      'github projects',
+      'open source projects',
+      'major projects',
+      'relevant projects',
+      'software projects',
+      'portfolio',
+      'portfolio projects',
+      'featured projects',
+      'notable projects',
+      'projects open source',
+    }.contains(norm)) {
+      return 'projects';
+    }
+
+    // certifications
+    if (const {
+      'certifications',
+      'certificates',
+      'certifications & licenses',
+      'certifications and licenses',
+      'licenses & certifications',
+      'licenses and certifications',
+      'credentials',
+      'courses & certifications',
+      'courses and certifications',
+      'awards & achievements',
+      'awards and achievements',
+      'achievements',
+      'honors & awards',
+      'honors and awards',
+      'awards',
+      'honors',
+      'certifications courses',
+      'accreditations',
+      'licenses',
+      'publications',
+    }.contains(norm)) {
+      return 'certifications';
+    }
+
+    // extracurriculars
+    if (const {
+      'extracurricular activities',
+      'extracurricular activities & achievements',
+      'extracurricular activities and achievements',
+      'extra curricular activities',
+      'extra curricular activities & achievements',
+      'extra curricular activities and achievements',
+      'extracurriculars',
+      'extra curriculars',
+      'extra curricular',
+      'extracurricular',
+      'co curricular activities',
+      'cocurricular activities',
+      'volunteer experience',
+      'volunteering',
+      'activities',
+      'leadership & activities',
+      'leadership activities',
+      'involvement',
+      'campus involvement',
+      'activities & achievements',
+      'activities and achievements',
+      'community involvement',
+      'extracurricular involvement',
+      'positions of responsibility',
+      'responsibilities',
+    }.contains(norm)) {
+      return 'extracurriculars';
+    }
+
+    return null;
   }
 
   static String? _detectSectionHeader(String line) {
-    for (final sec in ['skills', 'experience', 'education', 'projects', 'certifications', 'extracurriculars', 'summary']) {
-      if (_isSectionHeaderLine(line, sec)) {
-        return sec;
-      }
-    }
-    return null;
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return null;
+
+    // Filter out date ranges or contact info lines
+    if (trimmed.contains('@') || trimmed.contains('http://') || trimmed.contains('https://') || trimmed.contains('www.')) return null;
+    if (RegExp(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b', caseSensitive: false).hasMatch(trimmed)) return null;
+    if (RegExp(r'\b\d{4}\s*[\–\-—\to]\s*(\d{4}|Present)\b', caseSensitive: false).hasMatch(trimmed)) return null;
+
+    final norm = _normalizeHeadingCandidate(trimmed);
+    return _detectSectionHeaderFromNormalized(norm);
+  }
+
+  /// Returns true if the text matches any known section header alias.
+  static bool isKnownSectionHeader(String text) {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) return false;
+    final norm = _normalizeHeadingCandidate(trimmed);
+    return _detectSectionHeaderFromNormalized(norm) != null;
   }
 
   static Map<String, List<String>> _splitIntoSectionBlocks(String rawText) {
@@ -477,6 +598,8 @@ class ResumeData {
       'extracurriculars': [],
     };
 
+    if (rawText.trim().isEmpty) return blocks;
+
     final rawLines = rawText.split(RegExp(r'[\r\n]+')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
     String currentSection = 'header';
 
@@ -489,20 +612,28 @@ class ResumeData {
       blocks[currentSection]?.add(line);
     }
 
-    debugPrint('================ SECTION DEBUG ================');
-    for (final entry in blocks.entries) {
-      debugPrint('\n[SECTION: ${entry.key}] (${entry.value.length} lines)');
-      debugPrint(entry.value.join('\n'));
+    debugPrint('\n================ SECTION DEBUG ================');
+    for (final sec in ['summary', 'skills', 'education', 'experience', 'projects', 'certifications', 'extracurriculars']) {
+      final lines = blocks[sec] ?? [];
+      debugPrint('[SECTION DEBUG] $sec:');
+      if (lines.isNotEmpty) {
+        for (final l in lines) {
+          debugPrint('  $l');
+        }
+      } else {
+        debugPrint('  [EMPTY]');
+      }
     }
-    debugPrint('================================================');
+    debugPrint('================================================\n');
 
-    debugPrint('[PROJECT BLOCK LENGTH] ${blocks['projects']?.length ?? 0}');
-    debugPrint('[PROJECT BLOCK]');
-    debugPrint(blocks['projects']?.isNotEmpty == true ? blocks['projects']!.join('\n') : '[EMPTY]');
+    final nonHeaderCount = blocks.entries
+        .where((e) => e.key != 'header')
+        .map((e) => e.value.length)
+        .fold(0, (a, b) => a + b);
 
-    debugPrint('[EDUCATION BLOCK LENGTH] ${blocks['education']?.length ?? 0}');
-    debugPrint('[EXPERIENCE BLOCK LENGTH] ${blocks['experience']?.length ?? 0}');
-    debugPrint('[SKILLS BLOCK LENGTH] ${blocks['skills']?.length ?? 0}');
+    if (rawText.length > 500 && nonHeaderCount == 0) {
+      debugPrint('[SECTION PARSER WARNING] Raw text exists (length=${rawText.length}) but section content is missing.');
+    }
 
     return blocks;
   }
@@ -532,9 +663,36 @@ class ResumeData {
       currentItems.clear();
     }
 
+    const knownCatPrefixes = [
+      'backend tools',
+      'backend',
+      'testing & api',
+      'testing api',
+      'testing',
+      'languages & tools',
+      'programming languages',
+      'languages',
+      'soft skills',
+      'frontend tools',
+      'frontend',
+      'databases & tools',
+      'databases',
+      'frameworks & libraries',
+      'frameworks',
+      'devops & cloud',
+      'cloud & devops',
+      'cloud',
+      'devops',
+      'tools & technologies',
+      'tools',
+      'core competencies',
+      'technical proficiencies',
+      'technical skills',
+    ];
+
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
 
       if (cleanLine.contains(':')) {
         final colonIdx = cleanLine.indexOf(':');
@@ -551,6 +709,26 @@ class ResumeData {
           continue;
         }
       }
+
+      bool matchedPrefix = false;
+      final lowerLine = cleanLine.toLowerCase();
+      for (final prefix in knownCatPrefixes) {
+        if (lowerLine.startsWith(prefix) && cleanLine.length > prefix.length) {
+          final nextChar = cleanLine[prefix.length];
+          if (nextChar == ' ' || nextChar == ':' || nextChar == '-' || nextChar == '|') {
+            flushGroup();
+            currentCategory = cleanLine.substring(0, prefix.length).trim();
+            final restPart = cleanLine.substring(prefix.length).replaceFirst(RegExp(r'^[:\-\|\s]+'), '').trim();
+            if (restPart.isNotEmpty) {
+              final tokens = restPart.split(RegExp(r'[,;•|\t]+')).map((s) => s.trim()).where((s) => s.isNotEmpty && !ResumeData._isPlaceholderValue(s)).toList();
+              currentItems.addAll(tokens);
+            }
+            matchedPrefix = true;
+            break;
+          }
+        }
+      }
+      if (matchedPrefix) continue;
 
       final isHeaderCandidate = cleanLine.length < 35 && !cleanLine.contains(',') && !RegExp(r'\b(python|javascript|java|c\+\+|dart|flutter|html|css|sql|react|node|docker|aws|git|supabase|firebase|postman|rest api|pydantic|dbms)\b', caseSensitive: false).hasMatch(cleanLine);
       if (isHeaderCandidate) {
@@ -571,20 +749,36 @@ class ResumeData {
   // Record State Machine Extractors
   // ---------------------------------------------------------------------------
 
+  static bool _isSingleTechnologyKeyword(String text) {
+    final s = text.trim().toLowerCase();
+    if (s.isEmpty) return false;
+    return RegExp(
+      r'^(flutter|dart|gemini|gemini api|prompt engineering|llm|llms|generative ai|genai|react|react\.js|reactjs|vue|vue\.js|angular|node|node\.js|express|express\.js|python|java|c\+\+|c#|c|html|css|html\/css|javascript|typescript|docker|kubernetes|aws|gcp|azure|supabase|firebase|mongodb|postgresql|postgres|mysql|sqlite|redis|graphql|rest api|api|apis|postman|git|github|gitlab|ci\/cd|pydantic|dbms|pandas|numpy|scikit-learn|tensorflow|pytorch|logistic regression|knn|decision tree|gridsearchcv|riverpod|bloc|redux|tailwind|bootstrap|linux|bash|fastapi|flask|django|api testing|testing api|backend tools|languages|soft skills)$',
+      caseSensitive: false,
+    ).hasMatch(s);
+  }
+
   static _ProjectHeaderInfo? _tryParseProjectHeader(String line) {
-    final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+    final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
     if (cleanLine.isEmpty) return null;
 
-    if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line)) {
+    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line)) {
       return null;
     }
-    if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(cleanLine)) {
+
+    if (line.startsWith('•') || line.startsWith('◦') || line.startsWith('°') || line.startsWith('▪') || line.startsWith('▫') || line.startsWith('●') || line.startsWith('○') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line)) {
+      return null;
+    }
+    if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating|collaborating|researching|automating|testing|authored)\b', caseSensitive: false).hasMatch(cleanLine)) {
       return null;
     }
     if (RegExp(r'^[a-z]').hasMatch(cleanLine) || RegExp(r'^(and|for|with|in|to|of|from|by|into|during|via|under|about|the|an|a)\b', caseSensitive: false).hasMatch(cleanLine)) {
       return null;
     }
-    if ((cleanLine.endsWith('.') || cleanLine.endsWith(';')) && !cleanLine.contains('|')) {
+    if (_isSingleTechnologyKeyword(cleanLine)) {
+      return null;
+    }
+    if ((cleanLine.endsWith('.') || cleanLine.endsWith(';') || cleanLine.endsWith(',')) && !cleanLine.contains('|')) {
       return null;
     }
     if (cleanLine.length > 75 && !cleanLine.contains('|')) {
@@ -596,6 +790,9 @@ class ResumeData {
       if (parts.isNotEmpty) {
         final name = parts[0];
         if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed)\b', caseSensitive: false).hasMatch(name)) {
+          return null;
+        }
+        if (_isSingleTechnologyKeyword(name) || isKnownSectionHeader(name)) {
           return null;
         }
         String sub = parts.length > 1 ? parts[1] : '';
@@ -623,7 +820,7 @@ class ResumeData {
       final parts = line.split(sep).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       if (parts.isNotEmpty) {
         final name = parts[0];
-        if (!RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed)\b', caseSensitive: false).hasMatch(name) && name.length < 50) {
+        if (!RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed)\b', caseSensitive: false).hasMatch(name) && !_isSingleTechnologyKeyword(name) && !isKnownSectionHeader(name) && name.length < 50) {
           String sub = parts.length > 1 ? parts[1] : '';
           String repo = '';
           if (sub.contains('github.com') || (sub.contains('/') && !sub.contains(' '))) {
@@ -635,7 +832,7 @@ class ResumeData {
       }
     }
 
-    if (cleanLine.length <= 40 && !cleanLine.contains(',') && RegExp(r'^[A-Z0-9]').hasMatch(cleanLine)) {
+    if (cleanLine.length <= 40 && !cleanLine.contains(',') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z0-9]').hasMatch(cleanLine)) {
       return _ProjectHeaderInfo(name: cleanLine);
     }
 
@@ -661,7 +858,7 @@ class ResumeData {
     }
 
     void flushCurrentProject() {
-      if (currentName != null && currentName!.trim().isNotEmpty) {
+      if (currentName != null && currentName!.trim().isNotEmpty && !isKnownSectionHeader(currentName!)) {
         flushCurrentBullet();
         projects.add(ProjectEntry(
           name: currentName!.trim(),
@@ -679,8 +876,8 @@ class ResumeData {
     }
 
     for (final line in lines) {
-      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty) continue;
+      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
 
       final header = _tryParseProjectHeader(line);
       if (header != null) {
@@ -692,7 +889,7 @@ class ResumeData {
       }
 
       if (currentName == null) {
-        if (cleanLine.length < 40 && !cleanLine.endsWith('.') && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
+        if (cleanLine.length < 40 && !cleanLine.endsWith('.') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
           currentName = cleanLine;
         }
         continue;
@@ -703,7 +900,7 @@ class ResumeData {
         continue;
       }
 
-      final isNewBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line);
+      final isNewBullet = line.startsWith('•') || line.startsWith('◦') || line.startsWith('°') || line.startsWith('▪') || line.startsWith('▫') || line.startsWith('●') || line.startsWith('○') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line);
       final isActionVerbStart = RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanLine);
 
       if (isNewBullet || (isActionVerbStart && currentBullet.isNotEmpty)) {
@@ -711,7 +908,9 @@ class ResumeData {
         currentBullet = cleanLine;
       } else {
         if (currentBullet.isNotEmpty) {
-          if (currentBullet.endsWith('-')) {
+          if (cleanLine.startsWith(',') || cleanLine.startsWith('.') || cleanLine.startsWith(';') || cleanLine.startsWith(':')) {
+            currentBullet = '$currentBullet$cleanLine';
+          } else if (currentBullet.endsWith('-')) {
             currentBullet = currentBullet.substring(0, currentBullet.length - 1) + cleanLine;
           } else {
             currentBullet = '$currentBullet $cleanLine';
@@ -736,19 +935,26 @@ class ResumeData {
   }
 
   static _ExperienceHeaderInfo? _tryParseExperienceHeader(String line) {
-    final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+    final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
     if (cleanLine.isEmpty) return null;
 
-    if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line)) {
+    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line)) {
       return null;
     }
-    if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(cleanLine)) {
+
+    if (line.startsWith('•') || line.startsWith('◦') || line.startsWith('°') || line.startsWith('▪') || line.startsWith('▫') || line.startsWith('●') || line.startsWith('○') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line)) {
+      return null;
+    }
+    if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating|collaborating|researching)\b', caseSensitive: false).hasMatch(cleanLine)) {
       return null;
     }
     if (RegExp(r'^[a-z]').hasMatch(cleanLine) || RegExp(r'^(and|for|with|in|to|of|from|by|into|during|via|under|about)\b', caseSensitive: false).hasMatch(cleanLine)) {
       return null;
     }
-    if ((cleanLine.endsWith('.') || cleanLine.endsWith(';')) && !cleanLine.contains('|')) {
+    if (_isSingleTechnologyKeyword(cleanLine)) {
+      return null;
+    }
+    if ((cleanLine.endsWith('.') || cleanLine.endsWith(';') || cleanLine.endsWith(',')) && !cleanLine.contains('|')) {
       return null;
     }
 
@@ -756,6 +962,7 @@ class ResumeData {
       final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       if (parts.isNotEmpty) {
         String role = parts[0];
+        if (_isSingleTechnologyKeyword(role) || isKnownSectionHeader(role)) return null;
         String company = parts.length > 1 ? parts[1] : '';
         String location = '';
         String startDate = '';
@@ -788,7 +995,7 @@ class ResumeData {
       if (isDate0 && isDate1) {
         return null;
       }
-      if (parts.length >= 2 && parts[0].length < 50 && !isDate0) {
+      if (parts.length >= 2 && parts[0].length < 50 && !isDate0 && !_isSingleTechnologyKeyword(parts[0]) && !isKnownSectionHeader(parts[0])) {
         return _ExperienceHeaderInfo(role: parts[0], company: parts[1]);
       }
     }
@@ -817,7 +1024,7 @@ class ResumeData {
     }
 
     void flushCurrentExperience() {
-      if ((currentRole != null && currentRole!.trim().isNotEmpty) || currentCompany.trim().isNotEmpty) {
+      if ((currentRole != null && currentRole!.trim().isNotEmpty && !isKnownSectionHeader(currentRole!)) || (currentCompany.trim().isNotEmpty && !isKnownSectionHeader(currentCompany))) {
         flushCurrentBullet();
         experience.add(ExperienceEntry(
           role: currentRole ?? '',
@@ -838,8 +1045,8 @@ class ResumeData {
     }
 
     for (final line in lines) {
-      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty) continue;
+      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
 
       final header = _tryParseExperienceHeader(line);
       if (header != null) {
@@ -853,7 +1060,7 @@ class ResumeData {
       }
 
       if (currentRole == null && currentCompany.isEmpty) {
-        if (cleanLine.length < 50 && !cleanLine.endsWith('.') && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
+        if (cleanLine.length < 50 && !cleanLine.endsWith('.') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
           currentRole = cleanLine;
         }
         continue;
@@ -866,15 +1073,17 @@ class ResumeData {
         continue;
       }
 
-      final isNewBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line);
-      final isActionVerbStart = RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanLine);
+      final isNewBullet = line.startsWith('•') || line.startsWith('◦') || line.startsWith('°') || line.startsWith('▪') || line.startsWith('▫') || line.startsWith('●') || line.startsWith('○') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line);
+      final isActionVerbStart = RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|collaborated|researched)\b', caseSensitive: false).hasMatch(cleanLine);
 
       if (isNewBullet || (isActionVerbStart && currentBullet.isNotEmpty)) {
         flushCurrentBullet();
         currentBullet = cleanLine;
       } else {
         if (currentBullet.isNotEmpty) {
-          if (currentBullet.endsWith('-')) {
+          if (cleanLine.startsWith(',') || cleanLine.startsWith('.') || cleanLine.startsWith(';') || cleanLine.startsWith(':')) {
+            currentBullet = '$currentBullet$cleanLine';
+          } else if (currentBullet.endsWith('-')) {
             currentBullet = currentBullet.substring(0, currentBullet.length - 1) + cleanLine;
           } else {
             currentBullet = '$currentBullet $cleanLine';
@@ -897,8 +1106,13 @@ class ResumeData {
     String currentEnd = '';
     String currentGpa = '';
 
+    final degreeRegex = RegExp(
+      r'\b(b\.?\s*tech|m\.?\s*tech|b\.?\s*sc|m\.?\s*sc|b\.?\s*e|m\.?\s*e|b\.?\s*com|m\.?\s*com|bba|mba|bca|mca|b\.?\s*des|m\.?\s*des|phd|diploma|bachelor(?:\s+of\s+[a-z\s&]+)?|master(?:\s+of\s+[a-z\s&]+)?|b\.?\s*s\.?|m\.?\s*s\.?|b\.?\s*a\.?|m\.?\s*a\.?|bs|ms|ba|ma|class\s*(?:xii|x|xi|ix|12|10|11|9)\b|12th|10th|cbse|icse|intermediate|matriculation|ssc|hsc|degree|associate(?:\s+degree)?)\b',
+      caseSensitive: false,
+    );
+
     void flushCurrentEducation() {
-      if ((currentDegree != null && currentDegree!.trim().isNotEmpty) || currentInst.trim().isNotEmpty) {
+      if ((currentDegree != null && currentDegree!.trim().isNotEmpty && !isKnownSectionHeader(currentDegree!)) || (currentInst.trim().isNotEmpty && !isKnownSectionHeader(currentInst))) {
         education.add(EducationEntry(
           degree: currentDegree ?? '',
           institution: currentInst.trim(),
@@ -916,18 +1130,20 @@ class ResumeData {
 
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
 
-      final isDegreeLine = RegExp(r'\b(b\.tech|m\.tech|b\.sc|m\.sc|b\.e|m\.e|b\.com|m\.com|bba|mba|bca|mca|b\.des|m\.des|phd|diploma|bachelor|master|class\s*(?:xii|x|xi|ix|12|10|11|9)\b|12th|10th|cbse|icse|intermediate|matriculation|ssc|hsc)\b', caseSensitive: false).hasMatch(cleanLine);
+      final isDegreeLine = degreeRegex.hasMatch(cleanLine);
 
       if (line.contains('|')) {
         final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
         if (isDegreeLine && currentDegree != null) {
           flushCurrentEducation();
         }
-        for (final p in parts) {
-          final isDeg = RegExp(r'\b(b\.tech|m\.tech|class\s*(?:xii|x|xi|ix|12|10)\b|bachelor|master|bca|mca|b\.sc|m\.sc|b\.e|m\.e|phd|diploma|cbse|icse|degree)\b', caseSensitive: false).hasMatch(p);
-          final isInst = RegExp(r'\b(university|college|school|institute|academy)\b', caseSensitive: false).hasMatch(p);
+        for (int i = 0; i < parts.length; i++) {
+          final p = parts[i];
+          if (isKnownSectionHeader(p)) continue;
+          final isDeg = degreeRegex.hasMatch(p);
+          final isInst = RegExp(r'\b(university|college|school|institute|academy|campus|polytechnic)\b', caseSensitive: false).hasMatch(p);
           final dateMatch = RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\b', caseSensitive: false).firstMatch(p);
           final gpaMatch = RegExp(r'\b(?:gpa:?\s*|grade:?\s*)?(\d+(?:\.\d+)?|\d+\%)\b', caseSensitive: false).firstMatch(p);
 
@@ -940,6 +1156,10 @@ class ResumeData {
             currentEnd = dateMatch.group(2) ?? '';
           } else if (gpaMatch != null && currentGpa.isEmpty && (p.toLowerCase().contains('gpa') || p.toLowerCase().contains('grade') || p.contains('%'))) {
             currentGpa = p.replaceAll(RegExp(r'^(gpa|grade):?\s*', caseSensitive: false), '').trim();
+          } else if (currentDegree == null || currentDegree!.isEmpty) {
+            currentDegree = p;
+          } else if (currentInst.isEmpty) {
+            currentInst = p;
           }
         }
         continue;
@@ -984,7 +1204,7 @@ class ResumeData {
     String currentActivity = '';
 
     void flushActivity() {
-      if (currentActivity.trim().isNotEmpty) {
+      if (currentActivity.trim().isNotEmpty && !isKnownSectionHeader(currentActivity.trim())) {
         list.add(ExtracurricularEntry(activity: currentActivity.trim()));
         currentActivity = '';
       }
@@ -992,7 +1212,7 @@ class ResumeData {
 
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
 
       final isNewBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || RegExp(r'^\d+[\.\)]').hasMatch(line);
       if (isNewBullet && currentActivity.isNotEmpty) {
@@ -1120,12 +1340,15 @@ class ResumeData {
     final parsedCerts = _parseCertifications(targetJson);
     final parsedExtras = _parseExtracurriculars(targetJson);
 
-    final validExp = parsedExp.where(validateExperience).toList();
+    final validExp = validateAndSanitizeExperience(parsedExp);
     final sanitizedProj = validateAndSanitizeProjects(parsedProj);
     final validProj = sanitizedProj.where(validateProject).toList();
     final validEdu = parsedEdu.where(validateEducation).toList();
     final validSkillGroups = parsedSkillGroups.where(validateSkillGroup).toList();
     final validSkills = parsedSkills.where((s) => s.trim().isNotEmpty && !_isPlaceholderValue(s)).toList();
+
+    final parsedParserVersion = getString(['parserVersion', 'parser_version']);
+    final parsedFileHash = getString(['fileHash', 'file_hash']);
 
     final rawData = ResumeData(
       fullName: extractedName.isNotEmpty ? extractedName : fallbackData.fullName,
@@ -1143,6 +1366,8 @@ class ResumeData {
       education: validEdu.isEmpty ? fallbackData.education : validEdu,
       certifications: parsedCerts.isEmpty ? fallbackData.certifications : parsedCerts,
       extracurriculars: parsedExtras.isEmpty ? fallbackData.extracurriculars : parsedExtras,
+      parserVersion: parsedParserVersion.isNotEmpty ? parsedParserVersion : currentParserVersion,
+      fileHash: parsedFileHash.isNotEmpty ? parsedFileHash : fallbackData.fileHash,
     );
 
     final result = _sanitizeAndRepairSectionMapping(rawData, fallbackData: fallbackData);
@@ -1183,7 +1408,7 @@ class ResumeData {
     final cleanSkillGroups = List<SkillGroupEntry>.from(raw.skillGroups);
 
     // 2. Sanitize Experience & repair education/project leaks
-    final cleanExp = <ExperienceEntry>[];
+    final rawExpFiltered = <ExperienceEntry>[];
     final cleanEdu = List<EducationEntry>.from(raw.education);
     var cleanProj = validateAndSanitizeProjects(raw.projects);
     final cleanExtras = List<ExtracurricularEntry>.from(raw.extracurriculars);
@@ -1209,9 +1434,11 @@ class ResumeData {
           endDate: exp.endDate,
         ));
       } else {
-        cleanExp.add(exp);
+        rawExpFiltered.add(exp);
       }
     }
+
+    var cleanExp = validateAndSanitizeExperience(rawExpFiltered);
 
     if (misclassifiedBullets.isNotEmpty && cleanExp.isNotEmpty) {
       final firstExp = cleanExp.first;
@@ -1258,6 +1485,7 @@ class ResumeData {
     }
 
     cleanProj = validateAndSanitizeProjects(cleanProj);
+    cleanExp = validateAndSanitizeExperience(cleanExp);
 
     // Fallback backfilling for any empty section if fallbackData has entries
     if (fallbackData != null) {
@@ -1336,10 +1564,20 @@ class ResumeData {
       final name = p.name.trim();
       if (name.isEmpty) return true;
 
-      if (name.toLowerCase() == 'project' || name.toLowerCase() == 'projects' || name.toLowerCase() == 'key projects' || name.toLowerCase() == 'personal projects') {
+      if (isKnownSectionHeader(name)) return true;
+
+      if (name.toLowerCase() == 'project' ||
+          name.toLowerCase() == 'projects' ||
+          name.toLowerCase() == 'key projects' ||
+          name.toLowerCase() == 'personal projects') {
         return true;
       }
-      if (RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(name)) {
+
+      if (_isSingleTechnologyKeyword(name)) {
+        return true;
+      }
+
+      if (RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(name)) {
         return true;
       }
       if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(name)) {
@@ -1351,10 +1589,6 @@ class ResumeData {
       if (name.length > 70 || RegExp(r'[.!?]\s+[A-Z]').hasMatch(name) || (name.endsWith('.') && !name.contains('|'))) {
         return true;
       }
-      final isSingleTech = RegExp(r'\b(flutter|gemini|prompt engineering|llm|react|supabase|riverpod|gstr-1|cgst|sgst|igst|python|docker|dart|c\+\+|api|tools|database|git)\b', caseSensitive: false).hasMatch(name);
-      if (isSingleTech && p.githubUrl.isEmpty && p.type.isEmpty && p.descriptionBullets.isEmpty && p.description.isEmpty) {
-        return true;
-      }
       if (p.description.isEmpty && p.descriptionBullets.isEmpty && p.githubUrl.isEmpty && p.type.isEmpty) {
         return true;
       }
@@ -1363,19 +1597,81 @@ class ResumeData {
     }
 
     for (final p in rawProjects) {
+      final isRepoOnly = (p.name.contains('github.com/') || (p.name.contains('/') && !p.name.contains(' ') && p.name.length < 50));
+      if (isRepoOnly && cleanProjects.isNotEmpty) {
+        final last = cleanProjects.removeLast();
+        final repoUrl = p.name.startsWith('http') ? p.name : (p.name.contains('github.com') ? 'https://${p.name}' : 'https://github.com/${p.name}');
+        final updatedBullets = List<String>.from(last.descriptionBullets);
+        final textToAdd = p.description.isNotEmpty ? p.description : '';
+        if (textToAdd.isNotEmpty && !updatedBullets.contains(textToAdd)) {
+          updatedBullets.add(textToAdd);
+        }
+        for (final b in p.descriptionBullets) {
+          if (b.isNotEmpty && !updatedBullets.contains(b)) {
+            updatedBullets.add(b);
+          }
+        }
+        cleanProjects.add(last.copyWith(
+          githubUrl: last.githubUrl.isEmpty ? repoUrl : last.githubUrl,
+          descriptionBullets: updatedBullets,
+          description: updatedBullets.join(' '),
+        ));
+        continue;
+      }
+
       if (isFragmentOrBullet(p)) {
         if (cleanProjects.isNotEmpty) {
           final last = cleanProjects.removeLast();
           final updatedBullets = List<String>.from(last.descriptionBullets);
-          final textToAdd = p.description.isNotEmpty ? p.description : p.name;
-          if (textToAdd.isNotEmpty && !updatedBullets.contains(textToAdd)) {
-            updatedBullets.add(textToAdd);
+
+          final fragments = <String>[];
+          final nameClean = p.name.trim();
+          if (nameClean.isNotEmpty &&
+              !ResumeData._isPlaceholderValue(nameClean) &&
+              !isKnownSectionHeader(nameClean) &&
+              nameClean.toLowerCase() != 'project' &&
+              nameClean.toLowerCase() != 'projects' &&
+              nameClean.toLowerCase() != 'key projects' &&
+              nameClean.toLowerCase() != 'personal projects') {
+            fragments.add(nameClean);
           }
-          for (final b in p.descriptionBullets) {
-            if (b.isNotEmpty && !updatedBullets.contains(b)) {
-              updatedBullets.add(b);
+
+          if (p.descriptionBullets.isNotEmpty) {
+            for (final b in p.descriptionBullets) {
+              final bClean = b.trim();
+              if (bClean.isNotEmpty && !fragments.contains(bClean) && !isKnownSectionHeader(bClean)) {
+                fragments.add(bClean);
+              }
+            }
+          } else if (p.description.trim().isNotEmpty && !fragments.contains(p.description.trim()) && !isKnownSectionHeader(p.description.trim())) {
+            fragments.add(p.description.trim());
+          }
+
+          for (final f in fragments) {
+            final cleanF = f.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+            if (cleanF.isEmpty || isKnownSectionHeader(cleanF)) continue;
+
+            final isNewBullet = f.startsWith('•') || f.startsWith('◦') || f.startsWith('°') || f.startsWith('▪') || f.startsWith('▫') || f.startsWith('-') || f.startsWith('*') ||
+                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanF);
+
+            if (isNewBullet || updatedBullets.isEmpty) {
+              if (!updatedBullets.contains(cleanF)) {
+                updatedBullets.add(cleanF);
+              }
+            } else {
+              final lastB = updatedBullets.removeLast();
+              String merged;
+              if (cleanF.startsWith(',') || cleanF.startsWith('.') || cleanF.startsWith(';') || cleanF.startsWith(':')) {
+                merged = '$lastB$cleanF';
+              } else if (lastB.endsWith('-')) {
+                merged = '${lastB.substring(0, lastB.length - 1)}$cleanF';
+              } else {
+                merged = '$lastB $cleanF';
+              }
+              updatedBullets.add(merged);
             }
           }
+
           cleanProjects.add(last.copyWith(
             descriptionBullets: updatedBullets,
             description: updatedBullets.join(' '),
@@ -1401,10 +1697,18 @@ class ResumeData {
         }
       }
 
-      name = name.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      name = name.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
 
       if (p.description.isNotEmpty && bullets.isEmpty) {
         bullets.add(p.description);
+      }
+
+      final cleanBullets = <String>[];
+      for (final b in bullets) {
+        final trimmed = b.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+        if (trimmed.isNotEmpty && !ResumeData._isPlaceholderValue(trimmed) && !cleanBullets.contains(trimmed) && !isKnownSectionHeader(trimmed)) {
+          cleanBullets.add(trimmed);
+        }
       }
 
       cleanProjects.add(ProjectEntry(
@@ -1417,8 +1721,8 @@ class ResumeData {
         source: p.source,
         githubOwner: p.githubOwner,
         githubRepo: p.githubRepo,
-        descriptionBullets: bullets,
-        description: bullets.join(' '),
+        descriptionBullets: cleanBullets,
+        description: cleanBullets.join(' '),
       ));
     }
 
@@ -1435,6 +1739,152 @@ class ResumeData {
     return cleanProjects;
   }
 
+  static List<ExperienceEntry> validateAndSanitizeExperience(List<ExperienceEntry> rawExp) {
+    final cleanExp = <ExperienceEntry>[];
+
+    bool isFragmentOrBullet(ExperienceEntry e) {
+      final role = e.role.trim();
+      final comp = e.company.trim();
+
+      if (comp.isEmpty && role.isEmpty) return true;
+
+      if (_isSingleTechnologyKeyword(role) || _isSingleTechnologyKeyword(comp)) {
+        return true;
+      }
+
+      if (isKnownSectionHeader(role) || isKnownSectionHeader(comp)) {
+        return true;
+      }
+
+      final combined = '$role $comp'.trim();
+      if (RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(combined)) {
+        return true;
+      }
+      if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating)\b', caseSensitive: false).hasMatch(combined)) {
+        return true;
+      }
+      if (RegExp(r'^[a-z]').hasMatch(role) && comp.isEmpty) {
+        return true;
+      }
+      if ((role.length > 70 || RegExp(r'[.!?]\s+[A-Z]').hasMatch(role)) && comp.isEmpty) {
+        return true;
+      }
+
+      return false;
+    }
+
+    for (final e in rawExp) {
+      if (isFragmentOrBullet(e)) {
+        if (cleanExp.isNotEmpty) {
+          final last = cleanExp.removeLast();
+          final updatedBullets = List<String>.from(last.description);
+
+          final fragments = <String>[];
+          final roleClean = e.role.trim();
+          final compClean = e.company.trim();
+          if (roleClean.isNotEmpty &&
+              !ResumeData._isPlaceholderValue(roleClean) &&
+              !isKnownSectionHeader(roleClean)) {
+            fragments.add(roleClean);
+          }
+          if (compClean.isNotEmpty &&
+              !ResumeData._isPlaceholderValue(compClean) &&
+              !isKnownSectionHeader(compClean) &&
+              !fragments.contains(compClean)) {
+            fragments.add(compClean);
+          }
+          for (final b in e.description) {
+            final bClean = b.trim();
+            if (bClean.isNotEmpty && !fragments.contains(bClean) && !isKnownSectionHeader(bClean)) {
+              fragments.add(bClean);
+            }
+          }
+
+          for (final f in fragments) {
+            final cleanF = f.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+            if (cleanF.isEmpty || isKnownSectionHeader(cleanF)) continue;
+
+            final isNewBullet = f.startsWith('•') || f.startsWith('◦') || f.startsWith('°') || f.startsWith('▪') || f.startsWith('▫') || f.startsWith('-') || f.startsWith('*') ||
+                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanF);
+
+            if (isNewBullet || updatedBullets.isEmpty) {
+              if (!updatedBullets.contains(cleanF)) {
+                updatedBullets.add(cleanF);
+              }
+            } else {
+              final lastB = updatedBullets.removeLast();
+              String merged;
+              if (cleanF.startsWith(',') || cleanF.startsWith('.') || cleanF.startsWith(';') || cleanF.startsWith(':')) {
+                merged = '$lastB$cleanF';
+              } else if (lastB.endsWith('-')) {
+                merged = '${lastB.substring(0, lastB.length - 1)}$cleanF';
+              } else {
+                merged = '$lastB $cleanF';
+              }
+              updatedBullets.add(merged);
+            }
+          }
+
+          cleanExp.add(last.copyWith(description: updatedBullets));
+        }
+        continue;
+      }
+
+      var role = e.role.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      var company = e.company.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      var location = e.location.trim();
+      var startDate = e.startDate.trim();
+      var endDate = e.endDate.trim();
+      final bullets = List<String>.from(e.description);
+
+      if (role.contains('|')) {
+        final parts = role.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+        if (parts.isNotEmpty) {
+          role = parts[0];
+          if (parts.length > 1 && company.isEmpty) company = parts[1];
+          for (int i = 2; i < parts.length; i++) {
+            final p = parts[i];
+            final dateMatch = RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\b', caseSensitive: false).firstMatch(p);
+            if (dateMatch != null && startDate.isEmpty) {
+              startDate = dateMatch.group(1) ?? '';
+              endDate = dateMatch.group(2) ?? '';
+            } else if (location.isEmpty) {
+              location = p;
+            }
+          }
+        }
+      }
+
+      final cleanBullets = <String>[];
+      for (final b in bullets) {
+        final trimmed = b.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+        if (trimmed.isNotEmpty && !ResumeData._isPlaceholderValue(trimmed) && !cleanBullets.contains(trimmed) && !isKnownSectionHeader(trimmed)) {
+          cleanBullets.add(trimmed);
+        }
+      }
+
+      cleanExp.add(ExperienceEntry(
+        role: role,
+        company: company,
+        location: location,
+        startDate: startDate,
+        endDate: endDate,
+        description: cleanBullets,
+      ));
+    }
+
+    debugPrint('\n[EXPERIENCE VALIDATION]');
+    debugPrint('AI/raw returned: ${rawExp.length}');
+    debugPrint('Final normalized experience: ${cleanExp.length}');
+    for (int i = 0; i < cleanExp.length; i++) {
+      final ce = cleanExp[i];
+      debugPrint('\n[EXPERIENCE ${i + 1}] ${ce.role} at ${ce.company} (${ce.startDate} - ${ce.endDate})');
+      debugPrint('Bullets: ${ce.description.length}');
+    }
+
+    return cleanExp;
+  }
+
   // ---------------------------------------------------------------------------
   // Entity Validation & Pipeline Audit Layer
   // ---------------------------------------------------------------------------
@@ -1443,6 +1893,10 @@ class ResumeData {
     final name = p.name.trim();
     if (name.isEmpty) {
       debugPrint('[PROJECT SANITIZER] REJECTED: "${p.name}" (empty)');
+      return false;
+    }
+    if (isKnownSectionHeader(name)) {
+      debugPrint('[PROJECT SANITIZER] REJECTED: "${p.name}" (is known section header)');
       return false;
     }
     if (_isPlaceholderValue(name)) {
@@ -1461,7 +1915,7 @@ class ResumeData {
       debugPrint('[PROJECT SANITIZER] REJECTED: "${p.name}" (starts with lowercase/preposition)');
       return false;
     }
-    final isSingleTech = RegExp(r'^(flutter|gemini|gemini api|prompt engineering|llm|llm responses|react|supabase|riverpod|gstr-1|cgst|sgst|igst|python|docker|dart|c\+\+|api|tools|database|git)$', caseSensitive: false).hasMatch(name);
+    final isSingleTech = _isSingleTechnologyKeyword(name);
     if (isSingleTech && p.githubUrl.isEmpty && p.type.isEmpty) {
       debugPrint('[PROJECT SANITIZER] REJECTED: "${p.name}" (standalone tech keyword)');
       return false;
@@ -1472,25 +1926,27 @@ class ResumeData {
 
   static bool validateEducation(EducationEntry e) {
     if (e.institution.trim().isEmpty && e.degree.trim().isEmpty) return false;
+    if (isKnownSectionHeader(e.institution) || isKnownSectionHeader(e.degree)) return false;
     if (_isPlaceholderValue(e.institution) && _isPlaceholderValue(e.degree)) return false;
     return true;
   }
 
   static bool validateExperience(ExperienceEntry e) {
     if (e.company.trim().isEmpty && e.role.trim().isEmpty) return false;
+    if (isKnownSectionHeader(e.company) || isKnownSectionHeader(e.role)) return false;
     if (_isPlaceholderValue(e.company) && _isPlaceholderValue(e.role)) return false;
     return true;
   }
 
   static bool validateSkillGroup(SkillGroupEntry g) {
+    if (isKnownSectionHeader(g.category) && g.items.isEmpty) return false;
     return g.category.trim().isNotEmpty && g.items.isNotEmpty;
   }
 
   static ResumeData validateAndSanitizeAll(ResumeData data) {
     final validProjects = validateAndSanitizeProjects(data.projects);
-
     final validEducation = data.education.where(validateEducation).toList();
-    final validExperience = data.experience.where(validateExperience).toList();
+    final validExperience = validateAndSanitizeExperience(data.experience);
     final validSkillGroups = data.skillGroups.where(validateSkillGroup).toList();
 
     debugPrint('[PIPELINE STAGE 4: NORMALIZED RECORDS]');
@@ -1524,6 +1980,8 @@ class ResumeData {
         'certifications': certifications.map((e) => e.toJson()).toList(),
         'extracurriculars':
             extracurriculars.map((e) => e.toJson()).toList(),
+        'parserVersion': parserVersion.isNotEmpty ? parserVersion : currentParserVersion,
+        'fileHash': fileHash,
       };
 
   /// Returns a copy with optionally overridden fields.
@@ -1543,6 +2001,8 @@ class ResumeData {
     List<EducationEntry>? education,
     List<ExtracurricularEntry>? certifications,
     List<ExtracurricularEntry>? extracurriculars,
+    String? parserVersion,
+    String? fileHash,
   }) {
     return ResumeData(
       fullName: fullName ?? this.fullName,
@@ -1560,6 +2020,8 @@ class ResumeData {
       education: education ?? this.education,
       certifications: certifications ?? this.certifications,
       extracurriculars: extracurriculars ?? this.extracurriculars,
+      parserVersion: parserVersion ?? this.parserVersion,
+      fileHash: fileHash ?? this.fileHash,
     );
   }
 

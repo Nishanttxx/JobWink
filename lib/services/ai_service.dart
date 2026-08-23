@@ -908,7 +908,8 @@ Return ONLY valid JSON.
             .replaceAll(RegExp(r'\n{3,}'), '\n\n')
             .trim();
 
-        final resultText = extracted.length > 8000 ? extracted.substring(0, 8000) : extracted;
+        final normalized = normalizeExtractedText(extracted);
+        final resultText = normalized.length > 8000 ? normalized.substring(0, 8000) : normalized;
         debugPrint('PDF TEXT LENGTH: ${resultText.length}');
         if (resultText.isNotEmpty) {
           final safePreview = resultText.substring(0, resultText.length > 500 ? 500 : resultText.length);
@@ -923,10 +924,11 @@ Return ONLY valid JSON.
       final tokens = matches
           .map((m) => m.group(0)!.trim())
           .where((s) => s.length > 2 && !_isPdfSyntaxBoilerplate(s));
-      final resultText = tokens
+      final rawTokens = tokens
           .join('\n')
           .replaceAll(RegExp(r'[\uFFFD\u21D3\u27E8\u266A\u2225\u2309\u2308\u2207\u222B\u22A3\u21A1\u22C5\uE000-\uF8FF]'), ' ')
           .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F]'), '');
+      final resultText = normalizeExtractedText(rawTokens);
       debugPrint('PDF TEXT LENGTH: ${resultText.length}');
       if (resultText.isNotEmpty) {
         final safePreview = resultText.substring(0, resultText.length > 500 ? 500 : resultText.length);
@@ -1211,73 +1213,148 @@ Return ONLY valid JSON.
         .replaceAll(r'\f', '');
   }
 
+  static String normalizeExtractedText(String text) {
+    if (text.trim().isEmpty) return text;
+
+    // 1. Standardize all bullet variants to '• '
+    var cleaned = text
+        .replaceAll(RegExp(r'[\u25E6\u00B0\u25AA\u25AB\u25CF\u25CB\u2043\u2219\u25BA\u25B6\u25B8]'), '• ')
+        .replaceAll(RegExp(r'^[•\-\*–—]\s*', multiLine: true), '• ');
+
+    // 2. Clean up multiple empty lines
+    return cleaned
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+  }
+
   static String _decodePdfTextStream(String streamText, Map<int, String> cmap) {
     final sb = StringBuffer();
     final hasMultiByteKeys = cmap.keys.any((k) => k > 255);
 
-    final tjArrayRegex = RegExp(r'\[([\s\S]*?)\]\s*TJ');
-    for (final match in tjArrayRegex.allMatches(streamText)) {
-      final content = match.group(1)!;
-
-      final elemRegex = RegExp(r'(\((?:[^()\\]|\\.){1,300}\)|<[0-9a-fA-F]+>|[\-+]?\d+(?:\.\d+)?)');
-      for (final em in elemRegex.allMatches(content)) {
-        final elem = em.group(1)!;
-        if (elem.startsWith('(') && elem.endsWith(')')) {
-          final rawText = elem.substring(1, elem.length - 1);
-          final unescaped = _unescapePdfLiteralString(rawText);
-          for (int i = 0; i < unescaped.length; i++) {
-            final code = unescaped.codeUnitAt(i);
-            sb.write(_mapCode(code, cmap));
-          }
-        } else if (elem.startsWith('<') && elem.endsWith('>')) {
-          final hexStr = elem.substring(1, elem.length - 1);
-          final step = hasMultiByteKeys ? 4 : 2;
-          for (int i = 0; i < hexStr.length; i += step) {
-            if (i + step <= hexStr.length) {
-              final codeHex = hexStr.substring(i, i + step);
-              final code = int.tryParse(codeHex, radix: 16);
-              if (code != null) {
-                sb.write(_mapCode(code, cmap));
-              }
-            }
-          }
-        } else {
-          final num = double.tryParse(elem);
-          if (num != null && (num < -120 || num > 250)) {
-            sb.write(' ');
-          }
-        }
-      }
-      sb.write('\n');
-    }
-
-    final singleLitRegex = RegExp(r'\(([^)]{1,300})\)\s*(?:Tj|\x27|\x22)');
-    for (final match in singleLitRegex.allMatches(streamText)) {
-      final rawText = match.group(1)!;
-      final unescaped = _unescapePdfLiteralString(rawText);
+    String decodeLiteral(String raw) {
+      final unescaped = _unescapePdfLiteralString(raw);
+      final res = StringBuffer();
       for (int i = 0; i < unescaped.length; i++) {
         final code = unescaped.codeUnitAt(i);
-        sb.write(_mapCode(code, cmap));
+        res.write(_mapCode(code, cmap));
       }
-      sb.write('\n');
+      return res.toString();
     }
 
-    final singleHexRegex = RegExp(r'<([0-9a-fA-F]+)>\s*(?:Tj|\x27|\x22)');
-    for (final match in singleHexRegex.allMatches(streamText)) {
-      final hexStr = match.group(1)!;
+    String decodeHex(String hexStr) {
+      final res = StringBuffer();
       final step = hasMultiByteKeys ? 4 : 2;
       for (int i = 0; i < hexStr.length; i += step) {
         if (i + step <= hexStr.length) {
           final codeHex = hexStr.substring(i, i + step);
           final code = int.tryParse(codeHex, radix: 16);
           if (code != null) {
-            sb.write(_mapCode(code, cmap));
+            res.write(_mapCode(code, cmap));
           }
         }
       }
-      sb.write('\n');
+      return res.toString();
     }
 
+    // Tokenize stream elements in linear sequential order
+    final tokenRegex = RegExp(
+      r'\[([\s\S]*?)\]\s*TJ|'
+      r'\(((?:[^()\\]|\\.){1,500})\)\s*(Tj|\x27|\x22)|'
+      r'<([0-9a-fA-F]+)>\s*(Tj|\x27|\x22)|'
+      r'(?:[+\-]?\d+(?:\.\d+)?\s+){4}([+\-]?\d+(?:\.\d+)?)\s+([+\-]?\d+(?:\.\d+)?)\s+Tm|'
+      r'([+\-]?\d+(?:\.\d+)?)\s+([+\-]?\d+(?:\.\d+)?)\s+(Td|TD)|'
+      r'\b(T\*|BT|ET)\b',
+    );
+
+    double lastY = double.nan;
+    bool lineHasContent = false;
+
+    void lineBreak() {
+      if (lineHasContent) {
+        sb.write('\n');
+        lineHasContent = false;
+      }
+    }
+
+    for (final match in tokenRegex.allMatches(streamText)) {
+      if (match.group(1) != null) {
+        // [ ... ] TJ
+        final content = match.group(1)!;
+        final elemRegex = RegExp(r'(\((?:[^()\\]|\\.){1,500}\)|<[0-9a-fA-F]+>|[\-+]?\d+(?:\.\d+)?)');
+        for (final em in elemRegex.allMatches(content)) {
+          final elem = em.group(1)!;
+          if (elem.startsWith('(') && elem.endsWith(')')) {
+            final raw = elem.substring(1, elem.length - 1);
+            final decoded = decodeLiteral(raw);
+            if (decoded.isNotEmpty) {
+              sb.write(decoded);
+              lineHasContent = true;
+            }
+          } else if (elem.startsWith('<') && elem.endsWith('>')) {
+            final hex = elem.substring(1, elem.length - 1);
+            final decoded = decodeHex(hex);
+            if (decoded.isNotEmpty) {
+              sb.write(decoded);
+              lineHasContent = true;
+            }
+          } else {
+            final num = double.tryParse(elem);
+            if (num != null && (num < -140 || num > 250)) {
+              if (lineHasContent && !sb.toString().endsWith(' ') && !sb.toString().endsWith('\n')) {
+                sb.write(' ');
+              }
+            }
+          }
+        }
+      } else if (match.group(2) != null) {
+        // ( ... ) Tj or ' or "
+        final raw = match.group(2)!;
+        final op = match.group(3)!;
+        if (op == "'" || op == '"') {
+          lineBreak();
+        }
+        final decoded = decodeLiteral(raw);
+        if (decoded.isNotEmpty) {
+          sb.write(decoded);
+          lineHasContent = true;
+        }
+      } else if (match.group(4) != null) {
+        // < ... > Tj or ' or "
+        final hex = match.group(4)!;
+        final op = match.group(5)!;
+        if (op == "'" || op == '"') {
+          lineBreak();
+        }
+        final decoded = decodeHex(hex);
+        if (decoded.isNotEmpty) {
+          sb.write(decoded);
+          lineHasContent = true;
+        }
+      } else if (match.group(6) != null && match.group(7) != null) {
+        // Tm: a b c d tx ty
+        final ty = double.tryParse(match.group(7)!) ?? 0;
+        if (!lastY.isNaN && (ty - lastY).abs() > 2.0) {
+          lineBreak();
+        } else if (lineHasContent && !sb.toString().endsWith(' ') && !sb.toString().endsWith('\n')) {
+          sb.write(' ');
+        }
+        lastY = ty;
+      } else if (match.group(8) != null && match.group(9) != null) {
+        // Td / TD: tx ty
+        final ty = double.tryParse(match.group(9)!) ?? 0;
+        if (ty.abs() > 1.5) {
+          lineBreak();
+        } else if (lineHasContent && !sb.toString().endsWith(' ') && !sb.toString().endsWith('\n')) {
+          sb.write(' ');
+        }
+      } else if (match.group(11) != null) {
+        // T*, BT, ET
+        lineBreak();
+      }
+    }
+
+    lineBreak();
     return sb.toString();
   }
 
@@ -1298,7 +1375,7 @@ Return ONLY valid JSON.
           }
         }
       }
-      return buffer.toString().trim();
+      return normalizeExtractedText(buffer.toString().trim());
     } catch (_) {
       return '';
     }

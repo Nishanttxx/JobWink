@@ -452,6 +452,7 @@ CRITICAL RULES:
     - Experience: Exactly one object per job/internship/role. Group all its bullet points under "description".
     - Education: Exactly one object per degree/school. Group institution, degree, dates, and GPA together.
     - Extracurriculars: Group multi-line descriptions into a single extracurricular object.
-11. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
+11. SECTION HEADER RULE: A section header (e.g. EXTRA-CURRICULAR, TECHNICAL SKILLS, EDUCATION, EXPERIENCE, PROJECTS, CERTIFICATIONS) must NEVER be extracted as a project name, company, job title, institution, skill, or certification. Place all associated content under its designated JSON section.
+12. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
 ''';
 }

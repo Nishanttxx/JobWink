@@ -313,10 +313,11 @@ CRITICAL RULES FOR VERBATIM EXTRACTION & SECTION ACCURACY:
 4. "fullName", "email", "phone", "location", "linkedin", "github": Extract contact details ONLY if present in the document.
 5. "summary": Extract the summary / objective paragraph ONLY if explicitly present in the document verbatim. Leave empty "" if omitted.
 6. "skills": Extract ONLY technical / professional skills explicitly listed in the resume.
-7. "experience": Include ONLY employment / work history entries present in the resume, preserving original bullet point text verbatim.
-8. "projects": Include ONLY projects present in the resume, preserving original description text verbatim.
-9. "education": Include ONLY academic entries present in the resume. Leave missing fields (degree, field, dates) empty if not in text.
+7. "experience": Include ONLY employment / work history entries present in the resume. Each job/role MUST be exactly one object with all its description bullet points grouped under "description".
+8. "projects": Include ONLY projects present in the resume. Each project MUST be exactly one structured object with short title in "name", repo/link in "url", and all bullet points grouped under "description". NEVER split a project's bullet points, sentences, or bold keywords into multiple project objects.
+9. "education": Include ONLY academic entries present in the resume. Group institution, degree, dates, and GPA together.
 10. "certifications" & "extracurriculars": Include ONLY certifications, activities, or awards present in the resume.
-11. Return ONLY valid JSON adhering strictly to the schema above.
+11. CRITICAL GROUPING RULE: Return exactly one object per real project and one object per job role. Never create separate objects for description sentences, technologies, or keywords.
+12. Return ONLY valid JSON adhering strictly to the schema above.
 ''';
 }

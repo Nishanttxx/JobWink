@@ -130,8 +130,9 @@ class ResumePersistenceService {
 
   /// Loads the latest saved resume data for the authenticated user from Supabase.
   ///
-  /// ZERO AI calls (Gemini/OpenAI) are made.
-  Future<ResumeData?> loadLatestParsedResume() async {
+  /// Cache is valid ONLY when parserVersion matches [ResumeData.currentParserVersion]
+  /// and (if [fileHash] is specified) matches the expected PDF hash.
+  Future<ResumeData?> loadLatestParsedResume({String? fileHash}) async {
     final userId = _userId;
     if (userId == null) return null;
 
@@ -147,11 +148,17 @@ class ResumePersistenceService {
       if (versions.isNotEmpty && versions.first['parsed_content'] != null) {
         final content = versions.first['parsed_content'] as Map<String, dynamic>;
         final parsed = ResumeData.fromJson(content);
-        if (parsed.hasStructuredSections) {
+        final version = content['parserVersion'] as String? ?? content['parser_version'] as String? ?? '';
+        final cachedHash = content['fileHash'] as String? ?? content['file_hash'] as String? ?? '';
+
+        final isVersionValid = version == ResumeData.currentParserVersion;
+        final isHashValid = fileHash == null || fileHash.isEmpty || cachedHash.isEmpty || cachedHash == fileHash;
+
+        if (isVersionValid && isHashValid && parsed.hasStructuredSections) {
           debugPrint('[ResumePersistence] Loaded cached resume version from Supabase (0 AI calls)');
           return parsed;
         } else {
-          debugPrint('[ResumePersistence] Cached version lacks structured sections — skipping cache');
+          debugPrint('[ResumePersistence] Cached version stale or invalid (version="$version" vs "${ResumeData.currentParserVersion}", hashMatch=$isHashValid, hasStructured=${parsed.hasStructuredSections}) — skipping cache');
         }
       }
     } catch (vErr) {
@@ -170,11 +177,17 @@ class ResumePersistenceService {
       if (resumes.isNotEmpty && resumes.first['extracted_data'] != null) {
         final content = resumes.first['extracted_data'] as Map<String, dynamic>;
         final parsed = ResumeData.fromJson(content);
-        if (parsed.hasStructuredSections) {
+        final version = content['parserVersion'] as String? ?? content['parser_version'] as String? ?? '';
+        final cachedHash = content['fileHash'] as String? ?? content['file_hash'] as String? ?? '';
+
+        final isVersionValid = version == ResumeData.currentParserVersion;
+        final isHashValid = fileHash == null || fileHash.isEmpty || cachedHash.isEmpty || cachedHash == fileHash;
+
+        if (isVersionValid && isHashValid && parsed.hasStructuredSections) {
           debugPrint('[ResumePersistence] Loaded extracted_data from resumes table (0 AI calls)');
           return parsed;
         } else {
-          debugPrint('[ResumePersistence] Cached extracted_data lacks structured sections — skipping cache');
+          debugPrint('[ResumePersistence] Cached extracted_data stale or invalid (version="$version" vs "${ResumeData.currentParserVersion}", hashMatch=$isHashValid, hasStructured=${parsed.hasStructuredSections}) — skipping cache');
         }
       }
     } catch (rErr) {

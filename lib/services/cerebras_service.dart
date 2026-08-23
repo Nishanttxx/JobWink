@@ -317,11 +317,13 @@ CRITICAL RULES:
 2. "fullName": The candidate's full name as it appears at the top of the resume.
 3. "title": The candidate's job title, professional title, or headline if present.
 4. "skills": An array of individual skill strings (e.g. ["Python", "React", "AWS"]).
-5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings.
-6. "projects": Each entry MUST have "name", "description" as array of strings, "technologies" as array, and "url".
+5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings. Group all bullets under that single job object.
+6. "projects": Each entry MUST be a single structured project object with "name" (short title), "description" as array of bullet strings, "technologies" as array, and "url" (repo or link). NEVER split bullet points, sentences, or bold keywords into multiple project objects.
 7. "education": Each entry MUST have "institution", "degree", "fieldOfStudy", "startDate", "endDate", "gpa".
 8. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
 9. DO NOT invent, fabricate, or add placeholder data for missing sections.
-10. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
+10. CRITICAL GROUPING RULE: Return exactly one object per real project and one object per job role. Never create separate objects for description sentences, technologies, or keywords.
+11. SECTION HEADER RULE: A section header (e.g. EXTRA-CURRICULAR, TECHNICAL SKILLS, EDUCATION, EXPERIENCE, PROJECTS, CERTIFICATIONS) must NEVER be extracted as a project name, company, job title, institution, skill, or certification. Place all associated content under its designated JSON section.
+12. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
 ''';
 }

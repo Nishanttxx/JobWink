@@ -541,5 +541,76 @@ EXTRACURRICULARS
       expect(resume.projects[1].descriptionBullets.length, greaterThanOrEqualTo(2));
       expect(resume.projects[2].descriptionBullets.length, greaterThanOrEqualTo(3));
     });
+
+    test('Sanitizes and re-groups heavily fragmented project and experience entries', () {
+      final heavilyFragmentedJson = {
+        "fullName": "NISHANT ARYA",
+        "email": "nishaanttx15@gmail.com",
+        "projects": [
+          {"name": "Nexus Search", "type": "AI Search Platform", "description": []},
+          {"name": "Nishanttxx/Nexus-Searchh", "description": ["Engineered a dynamic AI search engine utilizing the"]},
+          {"name": "Gemini API", "description": ["and"]},
+          {"name": "Flutter", "description": [", implementing advanced"]},
+          {"name": "Prompt Engineering", "description": ["to optimize the accuracy and reliability of"]},
+          {"name": "LLM", "description": ["responses.", "Developed an interactive querying interface to handle real-time user interactions, focusing on the seamless integration of"]},
+          {"name": "Generative AI", "description": ["components into a high-performance"]},
+          {"name": "React", "description": ["frontend."]},
+          {"name": "AI Voice Digest", "type": "AI Content Summarizer", "description": []},
+          {"name": "Nishanttxx/Voice-Digest", "description": ["Architected an AI-powered summarization tool using Flutter, integrating real-time transcription and API orchestration for automated content processing and data synchronization."]},
+          {"name": "GST Billing", "type": "Invoice Automation Suite", "url": "https://github.com/Nishanttxx/Gst_billing", "description": [
+            "Developed a cross-platform invoicing suite using Flutter and Dart, implementing an automated tax engine to calculate CGST, SGST, and IGST in real-time for diverse clients.",
+            "Engineered a GSTR-1 reporting system that automates the generation of tax-compliant CSV/Excel files, reducing manual data entry and increasing filing efficiency for businesses.",
+            "Integrated Supabase as a Cloud backend for real-time synchronization of business profiles and inventory, utilizing Riverpod for reactive state management and global data caching."
+          ]}
+        ],
+        "experience": [
+          {"company": "3skill", "role": "AI/ML Intern", "location": "Remote", "startDate": "Jul 2026", "endDate": "Present", "description": ["Engineered a predictive ML model for quality classification using"]},
+          {"company": "", "role": "Logistic Regression", "description": [", KNN, and"]},
+          {"company": "", "role": "Decision Tree", "description": [", optimizing hyperparameters via"]},
+          {"company": "", "role": "GridSearchCV", "description": ["to boost accuracy.", "Developed an AI-based hiring prediction system to automate decision-making by analyzing candidate skills and experience, demonstrating the ability to build data-driven models for automated analysis"]},
+          {"company": "Finite Loop Club-NMAMIT", "role": "Member", "startDate": "Aug 2024", "endDate": "Aug 2025", "description": [
+            "Collaborated with a technical community to research emerging technologies and software development practices, establishing a foundation for designing intelligent systems and automation tools",
+            "Applied software engineering principles to solve complex problems through peer-led projects, focusing on the development of scalable solutions and collaborative technical design patterns."
+          ]}
+        ]
+      };
+
+      final resume = ResumeData.fromJson(heavilyFragmentedJson);
+
+      // Verify Projects
+      expect(resume.projects.length, equals(3));
+      expect(resume.projects[0].name, equals("Nexus Search"));
+      expect(resume.projects[0].type, equals("AI Search Platform"));
+      expect(resume.projects[0].effectiveGithubUrl, contains("Nexus-Searchh"));
+      expect(resume.projects[0].descriptionBullets.length, equals(2));
+      expect(resume.projects[0].descriptionBullets[0], contains("Gemini API"));
+      expect(resume.projects[0].descriptionBullets[0], contains("Flutter"));
+      expect(resume.projects[0].descriptionBullets[0], contains("Prompt Engineering"));
+      expect(resume.projects[0].descriptionBullets[0], contains("LLM responses."));
+      expect(resume.projects[0].descriptionBullets[1], contains("Generative AI"));
+      expect(resume.projects[0].descriptionBullets[1], contains("React frontend."));
+
+      expect(resume.projects[1].name, equals("AI Voice Digest"));
+      expect(resume.projects[1].effectiveGithubUrl, contains("Voice-Digest"));
+
+      expect(resume.projects[2].name, equals("GST Billing"));
+      expect(resume.projects[2].descriptionBullets.length, equals(3));
+
+      // Verify Experience
+      expect(resume.experience.length, equals(2));
+      expect(resume.experience[0].role, equals("AI/ML Intern"));
+      expect(resume.experience[0].company, equals("3skill"));
+      expect(resume.experience[0].location, equals("Remote"));
+      expect(resume.experience[0].description.length, equals(2));
+      expect(resume.experience[0].description[0], contains("Logistic Regression"));
+      expect(resume.experience[0].description[0], contains("KNN"));
+      expect(resume.experience[0].description[0], contains("Decision Tree"));
+      expect(resume.experience[0].description[0], contains("GridSearchCV"));
+      expect(resume.experience[0].description[0], contains("boost accuracy."));
+
+      expect(resume.experience[1].role, equals("Member"));
+      expect(resume.experience[1].company, equals("Finite Loop Club-NMAMIT"));
+      expect(resume.experience[1].description.length, equals(2));
+    });
   });
 }
