@@ -95,11 +95,16 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
           });
         },
         children: [
-          ResumeEditorScreen(key: _resumeEditorKey),
+          const ResumeEditorScreen(key: ValueKey('editor_overview_tab')),
           const SwipeMatcherScreen(),
-          ResumeEditorScreen(key: _resumeEditorKey),
+          ResumeEditorScreen(
+            key: _resumeEditorKey,
+            onSectionChanged: () {
+              if (mounted) setState(() {});
+            },
+          ),
           const JobPredictionScreen(),
-          const ResumeEditorScreen(initialTab: 3),
+          const ResumeEditorScreen(key: ValueKey('ats_score_editor'), initialTab: 3),
         ],
       ),
     );

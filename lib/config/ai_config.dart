@@ -24,16 +24,19 @@ class AIConfig {
   /// NVIDIA API Base URL
   static String nvidiaBaseUrl = 'https://integrate.api.nvidia.com/v1';
 
-  /// Primary AI provider ('gemini', 'openai', 'xai', 'groq', or 'nvidia')
-  static String primaryProvider = 'groq';
+  /// Primary AI provider ('gemini')
+  static String primaryProvider = 'gemini';
 
-  /// Fallback AI provider ('groq', 'openai', 'xai', 'gemini', or 'nvidia')
-  static String fallbackProvider = 'gemini';
+  /// Fallback AI provider 1 ('openai')
+  static String fallbackProvider = 'openai';
 
-  /// Secondary Fallback AI provider ('openai', 'xai', or 'nvidia')
-  static String secondaryFallbackProvider = 'openai';
+  /// Fallback AI provider 2 ('cerebras')
+  static String secondaryFallbackProvider = 'cerebras';
 
-  /// Forced AI provider for testing ('none', 'gemini', 'openai', 'xai', 'groq', 'nvidia')
+  /// Fallback AI provider 3 ('mistral')
+  static String tertiaryFallbackProvider = 'mistral';
+
+  /// Forced AI provider for testing ('none', 'gemini', 'openai', 'cerebras', 'mistral')
   static String forceProvider = 'none';
 
   /// OpenAI model to use for fallback operations
@@ -52,14 +55,16 @@ class AIConfig {
   static String nvidiaModel = 'nvidia/nemotron-3-ultra-550b-a55b';
 
   /// Mistral API Key
-  static String mistralApiKey = '';
+  static String mistralApiKey =
+      const String.fromEnvironment('MISTRAL_API_KEY', defaultValue: '');
   /// Mistral API Base URL
   static String mistralBaseUrl = 'https://api.mistral.ai/v1';
   /// Mistral model
   static String mistralModel = 'mistral-small-latest';
 
   /// Cerebras API Key
-  static String cerebrasApiKey = '';
+  static String cerebrasApiKey =
+      const String.fromEnvironment('CEREBRAS_API_KEY', defaultValue: '');
   /// Cerebras API Base URL
   static String cerebrasBaseUrl = 'https://api.cerebras.ai/v1';
   /// Cerebras model

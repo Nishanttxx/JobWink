@@ -8,8 +8,10 @@ import '../config/backend_config.dart';
 import '../config/gemini_config.dart';
 import '../models/resume_data.dart';
 import 'ai_usage_service.dart';
+import 'cerebras_service.dart';
 import 'gemini_service.dart';
 import 'groq_service.dart';
+import 'mistral_service.dart';
 import 'nvidia_service.dart';
 import 'openai_service.dart';
 import 'xai_service.dart';
@@ -25,10 +27,20 @@ class AIService {
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
-  /// Initializes Gemini, Groq, OpenAI, xAI (Grok), and NVIDIA (Nemotron) providers.
-  void initialize({String? geminiKey, String? openAiKey, String? xAiKey, String? groqKey, String? nvidiaKey}) {
+  /// Initializes Gemini, OpenAI, Cerebras, and Mistral providers.
+  void initialize({
+    String? geminiKey,
+    String? openAiKey,
+    String? cerebrasKey,
+    String? mistralKey,
+    String? xAiKey,
+    String? groqKey,
+    String? nvidiaKey,
+  }) {
     final gKey = geminiKey ?? AIConfig.geminiApiKey;
     final oKey = openAiKey ?? AIConfig.openAiApiKey;
+    final cKey = cerebrasKey ?? AIConfig.cerebrasApiKey;
+    final mKey = mistralKey ?? AIConfig.mistralApiKey;
     final xKey = xAiKey ?? AIConfig.xAiApiKey;
     final grKey = groqKey ?? AIConfig.groqApiKey;
     final nvKey = nvidiaKey ?? AIConfig.nvidiaApiKey;
@@ -36,11 +48,17 @@ class AIService {
     if (gKey.isNotEmpty) {
       GeminiService.instance.initialize(gKey, modelId: GeminiConfig.modelId);
     }
-    if (grKey.isNotEmpty) {
-      GroqService.instance.initialize(grKey);
-    }
     if (oKey.isNotEmpty) {
       OpenAIService.instance.initialize(oKey);
+    }
+    if (cKey.isNotEmpty) {
+      CerebrasService.instance.initialize(cKey);
+    }
+    if (mKey.isNotEmpty) {
+      MistralService.instance.initialize(mKey);
+    }
+    if (grKey.isNotEmpty) {
+      GroqService.instance.initialize(grKey);
     }
     if (xKey.isNotEmpty) {
       XAiService.instance.initialize(xKey);
@@ -50,7 +68,7 @@ class AIService {
     }
 
     _isInitialized = true;
-    debugPrint('[AIService] Provider manager initialized (Primary: ${AIConfig.primaryProvider}, Fallback: ${AIConfig.fallbackProvider}, SecondaryFallback: ${AIConfig.secondaryFallbackProvider}, Forced: ${AIConfig.forceProvider})');
+    debugPrint('[AIService] Provider manager initialized (Primary: ${AIConfig.primaryProvider}, Fallback 1: ${AIConfig.fallbackProvider}, Fallback 2: ${AIConfig.secondaryFallbackProvider}, Fallback 3: ${AIConfig.tertiaryFallbackProvider}, Forced: ${AIConfig.forceProvider})');
   }
 
   // ---------------------------------------------------------------------------
@@ -70,23 +88,16 @@ class AIService {
     }
 
     final force = AIConfig.forceProvider.toLowerCase();
-    if (force == 'nvidia' || force == 'nemotron') {
-      debugPrint('[AIService] Forced provider: NVIDIA (Nemotron)');
-      final result = await NvidiaService.instance.parseResume(bytes, mimeType);
+    if (force == 'cerebras') {
+      debugPrint('[AIService] Forced provider: Cerebras');
+      final result = await CerebrasService.instance.parseResume(bytes, mimeType);
       if (result != null && result.hasUsableData) return result;
       final local = await _localFallbackParseAsync(bytes);
       return local.hasUsableData ? local : null;
     }
-    if (force == 'groq') {
-      debugPrint('[AIService] Forced provider: Groq');
-      final result = await GroqService.instance.parseResume(bytes, mimeType);
-      if (result != null && result.hasUsableData) return result;
-      final local = await _localFallbackParseAsync(bytes);
-      return local.hasUsableData ? local : null;
-    }
-    if (force == 'xai' || force == 'grok') {
-      debugPrint('[AIService] Forced provider: xAI (Grok)');
-      final result = await XAiService.instance.parseResume(bytes, mimeType);
+    if (force == 'mistral') {
+      debugPrint('[AIService] Forced provider: Mistral');
+      final result = await MistralService.instance.parseResume(bytes, mimeType);
       if (result != null && result.hasUsableData) return result;
       final local = await _localFallbackParseAsync(bytes);
       return local.hasUsableData ? local : null;
@@ -106,70 +117,75 @@ class AIService {
       return local.hasUsableData ? local : null;
     }
 
-    // Default primary provider flow (Gemini -> Groq -> OpenAI -> xAI -> NVIDIA -> Local Smart Extraction)
+    // Pre-extract & validate PDF text before calling AI providers to avoid sending corrupted text
+    if (mimeType.contains('pdf')) {
+      final extractedText = await extractTextFromBytesAsyncStatic(bytes);
+      if (extractedText.trim().isEmpty) {
+        debugPrint('[AIService] PDF text extraction yielded unreadable or corrupted text. Aborting AI parsing.');
+        return null;
+      }
+    }
+
+    // Default provider priority chain (Gemini -> OpenAI -> Cerebras -> Mistral)
+    // Stops immediately on the first successful, valid result!
+    // Quality gate: a result must contain structured sections (not just email/phone)
+    // to be accepted from primary providers. The last fallback is more lenient.
+
+    // 1. Gemini (Primary)
     debugPrint('[AIService] Primary provider: Gemini (isInitialized=${GeminiService.instance.isInitialized})');
     try {
       final result = await GeminiService.instance.parseResume(bytes, mimeType);
-      if (result != null && result.hasUsableData) {
+      if (result != null && _hasStructuredData(result)) {
         debugPrint('[AIService] Gemini SUCCESS: name="${result.fullName}", exp=${result.experience.length}, edu=${result.education.length}, proj=${result.projects.length}');
         return result;
       }
-      debugPrint('[AIService] Gemini returned empty/null data — falling back to Groq');
+      debugPrint('[AIService] Gemini returned insufficient structured data — falling back to OpenAI');
     } on GeminiQuotaExceededException catch (qErr) {
-      debugPrint('[AIService] Gemini quota exceeded: $qErr — falling back to Groq');
+      debugPrint('[AIService] Gemini quota exceeded: $qErr — falling back to OpenAI');
     } catch (e) {
-      debugPrint('[AIService] Gemini parse error: $e — falling back to Groq');
+      debugPrint('[AIService] Gemini parse error: $e — falling back to OpenAI');
     }
 
-    debugPrint('[AIService] Attempting Groq fallback (isInitialized=${GroqService.instance.isInitialized})');
-    try {
-      final groqResult = await GroqService.instance.parseResume(bytes, mimeType);
-      if (groqResult != null && groqResult.hasUsableData) {
-        debugPrint('[AIService] Groq SUCCESS: name="${groqResult.fullName}", exp=${groqResult.experience.length}, edu=${groqResult.education.length}, proj=${groqResult.projects.length}');
-        return groqResult;
-      }
-      debugPrint('[AIService] Groq returned empty/null data — falling back to OpenAI');
-    } catch (e) {
-      debugPrint('[AIService] Groq fallback error: $e — falling back to OpenAI');
-    }
-
-    debugPrint('[AIService] Attempting OpenAI fallback (isInitialized=${OpenAIService.instance.isInitialized})');
+    // 2. OpenAI (Fallback 1)
+    debugPrint('[AIService] Fallback 1 provider: OpenAI (isInitialized=${OpenAIService.instance.isInitialized})');
     try {
       final openAiResult = await OpenAIService.instance.parseResume(bytes, mimeType);
-      if (openAiResult != null && openAiResult.hasUsableData) {
+      if (openAiResult != null && _hasStructuredData(openAiResult)) {
         debugPrint('[AIService] OpenAI SUCCESS: name="${openAiResult.fullName}", exp=${openAiResult.experience.length}, edu=${openAiResult.education.length}, proj=${openAiResult.projects.length}');
         return openAiResult;
       }
-      debugPrint('[AIService] OpenAI returned empty/null data — falling back to xAI (Grok)');
+      debugPrint('[AIService] OpenAI returned insufficient structured data — falling back to Cerebras');
     } catch (e) {
-      debugPrint('[AIService] OpenAI fallback error: $e — falling back to xAI (Grok)');
+      debugPrint('[AIService] OpenAI fallback error: $e — falling back to Cerebras');
     }
 
-    debugPrint('[AIService] Attempting xAI (Grok) fallback (isInitialized=${XAiService.instance.isInitialized})');
+    // 3. Cerebras (Fallback 2)
+    debugPrint('[AIService] Fallback 2 provider: Cerebras (isInitialized=${CerebrasService.instance.isInitialized})');
     try {
-      final xAiResult = await XAiService.instance.parseResume(bytes, mimeType);
-      if (xAiResult != null && xAiResult.hasUsableData) {
-        debugPrint('[AIService] xAI SUCCESS: name="${xAiResult.fullName}", exp=${xAiResult.experience.length}, edu=${xAiResult.education.length}, proj=${xAiResult.projects.length}');
-        return xAiResult;
+      final cerebrasResult = await CerebrasService.instance.parseResume(bytes, mimeType);
+      if (cerebrasResult != null && _hasStructuredData(cerebrasResult)) {
+        debugPrint('[AIService] Cerebras SUCCESS: name="${cerebrasResult.fullName}", exp=${cerebrasResult.experience.length}, edu=${cerebrasResult.education.length}, proj=${cerebrasResult.projects.length}');
+        return cerebrasResult;
       }
-      debugPrint('[AIService] xAI returned empty/null data — falling back to NVIDIA');
+      debugPrint('[AIService] Cerebras returned insufficient structured data — falling back to Mistral');
     } catch (e) {
-      debugPrint('[AIService] xAI fallback error: $e — falling back to NVIDIA');
+      debugPrint('[AIService] Cerebras fallback error: $e — falling back to Mistral');
     }
 
-    debugPrint('[AIService] Attempting NVIDIA (Nemotron) fallback (isInitialized=${NvidiaService.instance.isInitialized})');
+    // 4. Mistral (Fallback 3) — use looser hasUsableData check since this is the last AI provider
+    debugPrint('[AIService] Fallback 3 provider: Mistral (isInitialized=${MistralService.instance.isInitialized})');
     try {
-      final nvidiaResult = await NvidiaService.instance.parseResume(bytes, mimeType);
-      if (nvidiaResult != null && nvidiaResult.hasUsableData) {
-        debugPrint('[AIService] NVIDIA SUCCESS: name="${nvidiaResult.fullName}", exp=${nvidiaResult.experience.length}, edu=${nvidiaResult.education.length}, proj=${nvidiaResult.projects.length}');
-        return nvidiaResult;
+      final mistralResult = await MistralService.instance.parseResume(bytes, mimeType);
+      if (mistralResult != null && mistralResult.hasUsableData) {
+        debugPrint('[AIService] Mistral SUCCESS: name="${mistralResult.fullName}", exp=${mistralResult.experience.length}, edu=${mistralResult.education.length}, proj=${mistralResult.projects.length}');
+        return mistralResult;
       }
-      debugPrint('[AIService] NVIDIA returned empty/null data');
+      debugPrint('[AIService] Mistral returned empty/null data');
     } catch (e) {
-      debugPrint('[AIService] NVIDIA fallback error: $e');
+      debugPrint('[AIService] Mistral fallback error: $e');
     }
 
-    debugPrint('[AIService] All AI providers failed. Executing local smart extraction...');
+    debugPrint('[AIService] All configured AI providers failed. Using local extraction fallback...');
     final localResult = await _localFallbackParseAsync(bytes);
     debugPrint('[AIService] Local fallback result: name="${localResult.fullName}", exp=${localResult.experience.length}, edu=${localResult.education.length}');
     if (localResult.hasUsableData) {
@@ -178,6 +194,20 @@ class AIService {
     
     debugPrint('[AIService] Local fallback could not extract usable resume data.');
     return null;
+  }
+
+  /// Returns true if the resume has meaningful structured content (identity or section data).
+  /// This ensures valid AI extraction results are accepted rather than rejected.
+  bool _hasStructuredData(ResumeData data) {
+    return data.fullName.trim().isNotEmpty ||
+        data.title.trim().isNotEmpty ||
+        data.summary.trim().isNotEmpty ||
+        data.skills.isNotEmpty ||
+        data.experience.isNotEmpty ||
+        data.education.isNotEmpty ||
+        data.projects.isNotEmpty ||
+        data.certifications.isNotEmpty ||
+        data.extracurriculars.isNotEmpty;
   }
 
   // ---------------------------------------------------------------------------
@@ -238,44 +268,34 @@ class AIService {
       debugPrint('[AIService] Gemini request successful');
       return result;
     } catch (e) {
-      debugPrint('[AIService] Primary provider error ($e). Attempting Groq fallback...');
+      debugPrint('[AIService] Gemini error ($e). Attempting OpenAI fallback...');
       try {
-        final groqResult = await GroqService.instance.tailorResume(
+        final openAiResult = await OpenAIService.instance.tailorResume(
           currentResume,
           targetJobTitle,
           jobDescription,
         );
-        return groqResult;
-      } catch (gErr) {
-        debugPrint('[AIService] Groq fallback failed ($gErr). Attempting OpenAI fallback...');
+        return openAiResult;
+      } catch (oErr) {
+        debugPrint('[AIService] OpenAI fallback failed ($oErr). Attempting Cerebras fallback...');
         try {
-          final openAiResult = await OpenAIService.instance.tailorResume(
+          final cerebrasResult = await CerebrasService.instance.tailorResume(
             currentResume,
             targetJobTitle,
             jobDescription,
           );
-          return openAiResult;
-        } catch (oErr) {
-          debugPrint('[AIService] OpenAI fallback failed ($oErr). Attempting xAI (Grok) fallback...');
+          return cerebrasResult;
+        } catch (cErr) {
+          debugPrint('[AIService] Cerebras fallback failed ($cErr). Attempting Mistral fallback...');
           try {
-            final xAiResult = await XAiService.instance.tailorResume(
+            final mistralResult = await MistralService.instance.tailorResume(
               currentResume,
               targetJobTitle,
               jobDescription,
             );
-            return xAiResult;
-          } catch (xErr) {
-            debugPrint('[AIService] xAI fallback failed ($xErr). Attempting NVIDIA fallback...');
-            try {
-              final nvidiaResult = await NvidiaService.instance.tailorResume(
-                currentResume,
-                targetJobTitle,
-                jobDescription,
-              );
-              return nvidiaResult;
-            } catch (nvErr) {
-              debugPrint('[AIService] NVIDIA fallback failed ($nvErr). Using local fallback...');
-            }
+            return mistralResult;
+          } catch (mErr) {
+            debugPrint('[AIService] All AI providers failed for tailoring. Using local fallback...');
           }
         }
       }
@@ -373,28 +393,22 @@ class AIService {
       debugPrint('[AIService] Gemini request successful');
       return result;
     } catch (e) {
-      debugPrint('[AIService] Primary provider error ($e). Attempting Groq fallback...');
+      debugPrint('[AIService] Gemini error ($e). Attempting OpenAI fallback...');
       try {
-        final groqResult = await GroqService.instance.analyzeAts(resume, jobDescription: jobDescription);
-        return groqResult;
-      } catch (gErr) {
-        debugPrint('[AIService] Groq fallback failed ($gErr). Attempting OpenAI fallback...');
+        final openAiResult = await OpenAIService.instance.analyzeAts(resume, jobDescription: jobDescription);
+        return openAiResult;
+      } catch (oErr) {
+        debugPrint('[AIService] OpenAI fallback failed ($oErr). Attempting Cerebras fallback...');
         try {
-          final openAiResult = await OpenAIService.instance.analyzeAts(resume, jobDescription: jobDescription);
-          return openAiResult;
-        } catch (oErr) {
-          debugPrint('[AIService] OpenAI fallback failed ($oErr). Attempting xAI (Grok) fallback...');
+          final cerebrasResult = await CerebrasService.instance.analyzeAts(resume, jobDescription: jobDescription);
+          return cerebrasResult;
+        } catch (cErr) {
+          debugPrint('[AIService] Cerebras fallback failed ($cErr). Attempting Mistral fallback...');
           try {
-            final xAiResult = await XAiService.instance.analyzeAts(resume, jobDescription: jobDescription);
-            return xAiResult;
-          } catch (xErr) {
-            debugPrint('[AIService] xAI fallback failed ($xErr). Attempting NVIDIA fallback...');
-            try {
-              final nvidiaResult = await NvidiaService.instance.analyzeAts(resume, jobDescription: jobDescription);
-              return nvidiaResult;
-            } catch (nvErr) {
-              debugPrint('[AIService] NVIDIA fallback failed ($nvErr). Using local ATS fallback...');
-            }
+            final mistralResult = await MistralService.instance.analyzeAts(resume, jobDescription: jobDescription);
+            return mistralResult;
+          } catch (mErr) {
+            debugPrint('[AIService] All AI providers failed for ATS analysis. Using local ATS fallback...');
           }
         }
       }
@@ -450,23 +464,18 @@ class AIService {
       debugPrint('[AIService] Gemini request successful');
       return result;
     } catch (e) {
-      debugPrint('[AIService] Primary provider error ($e). Attempting Groq fallback...');
+      debugPrint('[AIService] Gemini error ($e). Attempting OpenAI fallback...');
       try {
-        return await GroqService.instance.enhanceSummary(currentSummary, skills);
+        return await OpenAIService.instance.enhanceSummary(currentSummary, skills);
       } catch (_) {
-        debugPrint('[AIService] Groq fallback failed. Attempting OpenAI fallback...');
+        debugPrint('[AIService] OpenAI fallback failed. Attempting Cerebras fallback...');
         try {
-          return await OpenAIService.instance.enhanceSummary(currentSummary, skills);
+          return await CerebrasService.instance.enhanceSummary(currentSummary, skills);
         } catch (_) {
-          debugPrint('[AIService] OpenAI fallback failed. Attempting xAI (Grok) fallback...');
+          debugPrint('[AIService] Cerebras fallback failed. Attempting Mistral fallback...');
           try {
-            return await XAiService.instance.enhanceSummary(currentSummary, skills);
-          } catch (_) {
-            debugPrint('[AIService] xAI fallback failed. Attempting NVIDIA fallback...');
-            try {
-              return await NvidiaService.instance.enhanceSummary(currentSummary, skills);
-            } catch (_) {}
-          }
+            return await MistralService.instance.enhanceSummary(currentSummary, skills);
+          } catch (_) {}
         }
       }
     }
@@ -950,51 +959,59 @@ Return ONLY valid JSON.
     String text = extractTextFromBytes(bytes);
     bool isReadable = validateExtractedText(text);
 
-    // 2. Secondary Extraction if Primary was corrupted or unreadable
+    // 2. Backend Extraction Fallback if Primary was corrupted or unreadable
     if (!isReadable) {
-      debugPrint('[PDFExtraction] Primary extraction text failed validation. Attempting secondary extraction...');
+      debugPrint('[PDFExtraction] Primary extraction text failed validation. Attempting backend extraction fallback...');
       final backendText = await extractPdfTextWithBackend(bytes, fileName: fileName);
       if (backendText != null && backendText.trim().isNotEmpty && validateExtractedText(backendText)) {
         method = 'backend_pypdf_extraction';
         text = backendText;
         isReadable = true;
-      } else {
-        // Local secondary stream parsing fallback
-        final secondaryText = _secondaryStreamTextExtraction(bytes);
-        if (validateExtractedText(secondaryText)) {
-          method = 'secondary_local_stream_decoding';
-          text = secondaryText;
-          isReadable = true;
-        }
       }
     }
 
-    // 3. OCR / Structural Token Fallback if still unreadable
+    // 3. Secondary Local Stream Parsing Fallback if Backend was unavailable or failed
     if (!isReadable) {
-      debugPrint('[PDFExtraction] Secondary extraction failed. Executing clean token fallback...');
+      debugPrint('[PDFExtraction] Attempting secondary local stream decoding...');
+      final secondaryText = _secondaryStreamTextExtraction(bytes);
+      if (validateExtractedText(secondaryText)) {
+        method = 'secondary_local_stream_decoding';
+        text = secondaryText;
+        isReadable = true;
+      }
+    }
+
+    // 4. OCR / Clean Token Fallback if still unreadable
+    if (!isReadable) {
+      debugPrint('[PDFExtraction] Stream extraction failed. Executing clean token fallback...');
       final cleanTokens = _sanitizeAndExtractCleanTokens(text.isNotEmpty ? text : Latin1Decoder().convert(bytes));
-      if (cleanTokens.isNotEmpty) {
+      if (validateExtractedText(cleanTokens)) {
         method = 'ocr_clean_token_fallback';
         text = cleanTokens;
-        isReadable = validateExtractedText(text);
+        isReadable = true;
       }
     }
 
-    // Sanitize final text to remove any remaining corrupted unicode or math symbols
     final cleanText = _sanitizeFinalExtractedText(text);
     final alphaNumCount = RegExp(r'[a-zA-Z0-9]').allMatches(cleanText).length;
     final alphaRatio = cleanText.isEmpty ? 0.0 : alphaNumCount / cleanText.length;
-    final quality = isReadable ? 'good' : 'bad';
+    final wordCount = RegExp(r'\b[a-zA-Z]{2,}\b').allMatches(cleanText).length;
+    final isFinalReadable = isReadable && validateExtractedText(cleanText);
 
-    // Required Debug Logging (Requirement 10)
-    debugPrint('[PDFExtraction]');
+    // Diagnostics Logging (Step 7)
+    final previewSnippet = cleanText.length > 200 ? cleanText.substring(0, 200) : cleanText;
+    debugPrint('\n[RESUME-AI-INPUT]');
     debugPrint('method=$method');
-    debugPrint('characters=${cleanText.length}');
+    debugPrint('textLength=${cleanText.length}');
+    debugPrint('readable=$isFinalReadable');
+    debugPrint('wordCount=$wordCount');
     debugPrint('alphaRatio=${alphaRatio.toStringAsFixed(2)}');
-    debugPrint('quality=$quality');
-    debugPrint('\n===== EXTRACTED RESUME TEXT =====');
-    debugPrint(cleanText);
-    debugPrint('=================================\n');
+    debugPrint('preview="$previewSnippet"\n');
+
+    if (!isFinalReadable) {
+      debugPrint('[PDFExtraction] REJECTED: Extracted text is unreadable or corrupted. Will NOT send to AI.');
+      return '';
+    }
 
     return cleanText;
   }
@@ -1004,15 +1021,11 @@ Return ONLY valid JSON.
     final trimmed = text.trim();
     if (trimmed.length < 20) return false;
 
-    // Count alphanumeric characters
-    final alphaNumCount = RegExp(r'[a-zA-Z0-9]').allMatches(trimmed).length;
-    final alphaRatio = alphaNumCount / trimmed.length;
-
     // Count corrupted, replacement, math, or private use symbols typical of unparsed font streams
     final corruptCount = RegExp(r'[\uFFFD\u2100-\u2BFF\u2200-\u22FF\u2700-\u27BF\uE000-\uF8FF\x00-\x08\x0B\x0C\x0E-\x1F]').allMatches(trimmed).length;
 
-    if (corruptCount > 5 || alphaRatio < 0.40) {
-      debugPrint('[AIService] validateExtractedText: REJECTED text. alphaRatio=${alphaRatio.toStringAsFixed(2)}, corruptCount=$corruptCount, totalLen=${trimmed.length}');
+    if (corruptCount > 10) {
+      debugPrint('[AIService] validateExtractedText: REJECTED text. corruptCount=$corruptCount, totalLen=${trimmed.length}');
       return false;
     }
 
@@ -1303,230 +1316,6 @@ Return ONLY valid JSON.
 
   Future<ResumeData> _localFallbackParseAsync(Uint8List bytes, {String fileName = 'resume.pdf'}) async {
     final rawText = await extractTextFromBytesAsync(bytes, fileName: fileName);
-    return _parseResumeTextFromRaw(rawText);
-  }
-
-  ResumeData _parseResumeTextFromRaw(String rawText) {
-    final emailMatch = RegExp(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b').firstMatch(rawText);
-
-    String phone = '';
-    final phoneMatches = RegExp(r'\+?\d[\d\s\-\(\)]{7,}\d').allMatches(rawText);
-    for (final pm in phoneMatches) {
-      final candidate = pm.group(0)!.trim();
-      final digitCount = candidate.replaceAll(RegExp(r'\D'), '').length;
-      if (digitCount >= 7 && digitCount <= 15) {
-        phone = candidate;
-        break;
-      }
-    }
-
-    final linkedinMatch = RegExp(r'(?:https?:\/\/)?(?:www\.)?linkedin\.com\/in\/[\w\-]+', caseSensitive: false).firstMatch(rawText);
-    final githubMatch = RegExp(r'(?:https?:\/\/)?(?:www\.)?github\.com\/[\w\-]+', caseSensitive: false).firstMatch(rawText);
-
-    final lines = rawText.split(RegExp(r'[\r\n]+')).where((l) => l.trim().isNotEmpty).toList();
-
-    String name = '';
-    for (final line in lines.take(15)) {
-      final l = line.trim();
-      if (l.isEmpty) continue;
-      final lower = l.toLowerCase();
-      if (lower.contains('@') ||
-          lower.contains('linkedin') ||
-          lower.contains('github') ||
-          lower.contains('resume') ||
-          lower.contains('http') ||
-          lower.contains('stream') ||
-          lower.contains('pdf') ||
-          lower.contains('flate') ||
-          lower.contains('page') ||
-          _isPdfSyntaxBoilerplate(l)) {
-        continue;
-      }
-      if (RegExp(r'^[A-Za-z\s\.\-]{2,40}$').hasMatch(l)) {
-        final words = l.split(RegExp(r'\s+')).where((w) => w.length > 1).toList();
-        if (words.length >= 2 && words.length <= 4) {
-          name = l;
-          break;
-        }
-      }
-    }
-
-    String summary = '';
-    final extractedSkills = <String>{};
-    final experience = <ExperienceEntry>[];
-    final education = <EducationEntry>[];
-    final projects = <ProjectEntry>[];
-    final extracurriculars = <ExtracurricularEntry>[];
-
-    String currentSection = '';
-    String currentCompany = '';
-    String currentRole = '';
-    List<String> currentBullets = [];
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      final lower = line.toLowerCase();
-
-      if (lower.contains('skill') || lower.contains('competencies') || lower.contains('technologies')) {
-        currentSection = 'skills';
-        continue;
-      } else if (lower.contains('summary') || lower.contains('about me') || lower.startsWith('profile') || lower == 'personal profile' || lower == 'executive profile' || lower == 'professional profile') {
-        currentSection = 'summary';
-        continue;
-      } else if (lower.contains('experience') || lower.contains('employment') || lower.contains('work history')) {
-        currentSection = 'experience';
-        continue;
-      } else if (lower.contains('education') || lower.contains('academic')) {
-        currentSection = 'education';
-        continue;
-      } else if (lower.contains('project')) {
-        currentSection = 'projects';
-        continue;
-      } else if (lower.contains('certificat') || lower.contains('extracurricular') || lower.contains('activities') || lower.contains('achievements') || lower.contains('awards') || lower.contains('licenses')) {
-        currentSection = 'extracurriculars';
-        continue;
-      }
-
-      if (currentSection == 'summary') {
-        if (line.length > 10 && !line.startsWith('•')) {
-          summary += (summary.isEmpty ? '' : ' ') + line;
-        }
-      } else if (currentSection == 'skills') {
-        final tokens = line.split(RegExp(r'[,;•|\/]+')).map((s) => s.trim()).where((s) => s.length > 1 && s.length < 30);
-        extractedSkills.addAll(tokens);
-      } else if (currentSection == 'experience') {
-        if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
-          final bullet = line.replaceFirst(RegExp(r'^[•\-\*]\s*'), '').trim();
-          if (bullet.isNotEmpty) currentBullets.add(bullet);
-        } else if (line.length > 3 && line.length < 60) {
-          if (currentCompany.isNotEmpty || currentRole.isNotEmpty) {
-            experience.add(ExperienceEntry(
-              company: currentCompany,
-              role: currentRole,
-              startDate: '2022',
-              endDate: 'Present',
-              description: List.from(currentBullets),
-            ));
-            currentBullets.clear();
-          }
-          if (currentCompany.isEmpty) {
-            currentCompany = line;
-          } else {
-            currentRole = line;
-          }
-        } else if (line.length >= 60) {
-          currentBullets.add(line);
-        }
-      } else if (currentSection == 'education') {
-        if (line.isNotEmpty && line.length > 2) {
-          education.add(EducationEntry(
-            institution: line,
-            degree: '',
-            fieldOfStudy: '',
-            startDate: '',
-            endDate: '',
-          ));
-        }
-      } else if (currentSection == 'projects') {
-        final isUrl = line.contains('github.com') ||
-            line.contains('http') ||
-            line.startsWith('github.com') ||
-            (line.contains('/') && !line.contains(' ') && line.length < 80);
-
-        if (isUrl && projects.isNotEmpty) {
-          final lastProj = projects.last;
-          projects[projects.length - 1] = ProjectEntry(
-            name: lastProj.name,
-            description: lastProj.description,
-            technologies: lastProj.technologies,
-            url: line,
-          );
-        } else if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
-          final bullet = line.replaceFirst(RegExp(r'^[•\-\*]\s*'), '').trim();
-          if (bullet.isNotEmpty && projects.isNotEmpty) {
-            final lastProj = projects.last;
-            final updatedDesc = lastProj.description.isEmpty
-                ? '• $bullet'
-                : '${lastProj.description}\n• $bullet';
-            projects[projects.length - 1] = ProjectEntry(
-              name: lastProj.name,
-              description: updatedDesc,
-              technologies: lastProj.technologies,
-              url: lastProj.url,
-            );
-          }
-        } else if (line.length > 2) {
-          if (projects.isNotEmpty) {
-            final lastProj = projects.last;
-            final isDescriptionSentence = line.endsWith('.') ||
-                RegExp(r'^(built|developed|created|engineered|designed|implemented|integrated|used|leveraged|maintained|constructed|features|allows|provides|includes|an|a|the|with|using|in|for)\b', caseSensitive: false).hasMatch(line);
-
-            if (lastProj.description.isEmpty) {
-              projects[projects.length - 1] = ProjectEntry(
-                name: lastProj.name,
-                description: line,
-                technologies: lastProj.technologies,
-                url: lastProj.url,
-              );
-            } else if (isDescriptionSentence || line.length >= 30 || lastProj.url.isNotEmpty || lastProj.description.length < 150) {
-              final updatedDesc = '${lastProj.description}\n$line';
-              projects[projects.length - 1] = ProjectEntry(
-                name: lastProj.name,
-                description: updatedDesc,
-                technologies: lastProj.technologies,
-                url: lastProj.url,
-              );
-            } else {
-              projects.add(ProjectEntry(
-                name: line,
-                description: '',
-              ));
-            }
-          } else {
-            projects.add(ProjectEntry(
-              name: line,
-              description: '',
-            ));
-          }
-        }
-      } else if (currentSection == 'extracurriculars') {
-        if (line.isNotEmpty && line.length > 2) {
-          final cleanLine = line.replaceFirst(RegExp(r'^[•\-\*]\s*'), '').trim();
-          if (cleanLine.isNotEmpty) {
-            extracurriculars.add(ExtracurricularEntry(activity: cleanLine));
-          }
-        }
-      }
-    }
-
-    if (currentCompany.isNotEmpty || currentRole.isNotEmpty || currentBullets.isNotEmpty) {
-      experience.add(ExperienceEntry(
-        company: currentCompany,
-        role: currentRole,
-        startDate: '',
-        endDate: '',
-        description: currentBullets,
-      ));
-    }
-
-    final emailStr = emailMatch?.group(0) ?? '';
-    final linkedinStr = linkedinMatch?.group(0) ?? '';
-    final githubStr = githubMatch?.group(0) ?? '';
-
-    return ResumeData(
-      fullName: name,
-      email: emailStr,
-      phone: phone,
-      location: '',
-      linkedin: linkedinStr,
-      github: githubStr,
-      title: '',
-      summary: summary,
-      skills: extractedSkills.toList(),
-      experience: experience,
-      education: education,
-      projects: projects,
-      extracurriculars: extracurriculars,
-    );
+    return ResumeData.parseFromRawText(rawText);
   }
 }

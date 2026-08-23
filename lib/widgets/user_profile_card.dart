@@ -26,7 +26,6 @@ class UserProfileCard extends StatefulWidget {
 class _UserProfileCardState extends State<UserProfileCard> {
   bool _isHoveringAvatar = false;
   bool _isUploadingAvatar = false;
-  bool _hasAvatarImageError = false;
 
   static const List<String> _allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
   static const int _maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
@@ -124,7 +123,6 @@ class _UserProfileCardState extends State<UserProfileCard> {
       return _buildSkeletonCard(context);
     }
 
-    final hasPhoto = effectiveUser.avatarUrl != null && effectiveUser.avatarUrl!.isNotEmpty;
     final initials = effectiveUser.initials;
     final displayName = effectiveUser.displayName;
     final email = effectiveUser.email;

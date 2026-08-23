@@ -56,7 +56,7 @@ ${textExtract.isNotEmpty ? textExtract : "[Binary document uploaded. Extract det
         debugPrint('[HuggingFaceService] parseResume succeeded in ${stopwatch.elapsedMilliseconds}ms');
         final data = ResumeData.fromJson(jsonMap);
         if (data.hasUsableData) {
-          data.logPipelineSummary();
+          data.logResumeMappingDebug(stage: 'HuggingFace Parsing');
         }
         return data;
       }

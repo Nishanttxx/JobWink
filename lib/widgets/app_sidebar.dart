@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/app_user.dart';
 import '../providers/auth_provider.dart';
 import '../services/theme_service.dart';
 import '../theme/app_theme.dart';
@@ -38,7 +37,6 @@ class AppSidebar extends StatefulWidget {
 }
 
 class _AppSidebarState extends State<AppSidebar> {
-  bool _hasAvatarError = false;
   static const List<_SidebarItemData> _navItems = [];
 
   @override

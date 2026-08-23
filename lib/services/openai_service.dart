@@ -39,7 +39,6 @@ class OpenAIService {
   // ---------------------------------------------------------------------------
 
   Future<ResumeData?> parseResume(Uint8List bytes, String mimeType) async {
-    final stopwatch = Stopwatch()..start();
     debugPrint('[OpenAIService] Processing resume...');
 
     final cleanText = await AIService.instance.extractTextFromBytesAsync(bytes);
@@ -50,11 +49,17 @@ RESUME CONTENT / TEXT EXTRACT:
 ${cleanText.isNotEmpty ? cleanText : "[Binary document uploaded. Extract details accurately.]"}
 ''';
 
+    debugPrint('[DEBUG-PIPELINE-3] AI REQUEST SENT: provider=OpenAI, cleanTextLength=${cleanText.length}');
+
     try {
       final jsonMap = await generateJsonResponse(prompt);
+      final jsonStr = jsonMap != null ? jsonEncode(jsonMap) : null;
+      debugPrint('[DEBUG-PIPELINE-4] AI RAW RESPONSE: provider=OpenAI, length=${jsonStr?.length ?? 0}, snippet=${jsonStr != null && jsonStr.length > 200 ? jsonStr.substring(0, 200) : jsonStr}');
       if (jsonMap != null) {
-        debugPrint('[OpenAIService] parseResume succeeded in ${stopwatch.elapsedMilliseconds}ms');
-        return ResumeData.fromJson(jsonMap);
+        debugPrint('[DEBUG-PIPELINE-5] AI JSON: provider=OpenAI, keys=${jsonMap.keys.toList()}');
+        final res = ResumeData.fromJson(jsonMap, rawText: cleanText);
+        debugPrint('[DEBUG-PIPELINE-6] RESUME MODEL: provider=OpenAI, name="${res.fullName}", email="${res.email}", phone="${res.phone}", title="${res.title}", exp=${res.experience.length}');
+        return res;
       }
     } catch (e) {
       debugPrint('[OpenAIService] parseResume error: $e');
@@ -369,16 +374,18 @@ Rules:
   }
 
   static const String _parseResumePrompt = '''
-Analyse this resume document completely and extract candidate information into JSON:
+Analyse this resume document completely and extract ALL candidate information into a single flat JSON object.
+
+Return ONLY a JSON object with EXACTLY this structure:
 
 {
   "fullName": "",
+  "title": "",
   "email": "",
   "phone": "",
   "location": "",
   "linkedin": "",
   "github": "",
-  "title": "",
   "summary": "",
   "skills": [],
   "experience": [
@@ -426,17 +433,16 @@ Analyse this resume document completely and extract candidate information into J
   ]
 }
 
-CRITICAL RULES FOR VERBATIM EXTRACTION & SECTION ACCURACY:
-1. VERBATIM TEXT EXTRACTION: Extract text EXACTLY as written in the uploaded resume document. DO NOT rewrite, paraphrase, rephrase, summarize, embellish, improve grammar, or alter wordings.
-2. ONLY FILL AVAILABLE SECTIONS: Extract and populate ONLY the sections that are explicitly present in the uploaded resume document. If a section (such as Education, Experience, Projects, Skills, Summary, Certifications, or Extracurriculars) is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
-3. ABSOLUTELY NO FABRICATION OR DUMMY DATA: DO NOT invent, assume, infer, extrapolate, or populate dummy, placeholder, synthetic, or default data for missing fields or missing sections.
-4. "fullName", "email", "phone", "location", "linkedin", "github": Extract contact details ONLY if present in the document.
-5. "summary": Extract the summary / objective paragraph ONLY if explicitly present in the document verbatim. Leave empty "" if omitted.
-6. "skills": Extract ONLY technical / professional skills explicitly listed in the resume.
-7. "experience": Include ONLY employment / work history entries present in the resume, preserving original bullet point text verbatim.
-8. "projects": Include ONLY projects present in the resume, preserving original description text verbatim.
-9. "education": Include ONLY academic entries present in the resume. Leave missing fields (degree, field, dates) empty if not in text.
-10. "certifications" & "extracurriculars": Include ONLY certifications, activities, or awards present in the resume.
-11. Return ONLY valid JSON adhering strictly to the schema above.
+CRITICAL RULES:
+1. Extract text EXACTLY as written. DO NOT rewrite, paraphrase, or alter wordings.
+2. "fullName": The candidate's full name as it appears at the top of the resume.
+3. "title": The candidate's job title, professional title, or headline if present.
+4. "skills": An array of individual skill strings (e.g. ["Python", "React", "AWS"]).
+5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings.
+6. "projects": Each entry MUST have "name", "description" as array of strings, "technologies" as array, and "url".
+7. "education": Each entry MUST have "institution", "degree", "fieldOfStudy", "startDate", "endDate", "gpa".
+8. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
+9. DO NOT invent, fabricate, or add placeholder data for missing sections.
+10. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
 ''';
 }

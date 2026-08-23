@@ -27,11 +27,13 @@ import '../widgets/page_container.dart';
 class ResumeEditorScreen extends StatefulWidget {
   final CvTemplateType? initialTemplate;
   final int initialTab;
+  final VoidCallback? onSectionChanged;
 
   const ResumeEditorScreen({
     super.key,
     this.initialTemplate,
     this.initialTab = 0,
+    this.onSectionChanged,
   });
 
   @override
@@ -106,7 +108,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     'skills': _skills.length,
     'projects': _parsedResumeData?.projects.length ?? 0,
     'experience': _parsedResumeData?.experience.length ?? 0,
-    'certifications': 1,
+    'certifications': _parsedResumeData?.certifications.length ?? 0,
     'extracurriculars': _parsedResumeData?.extracurriculars.length ?? 0,
   };
 
@@ -115,6 +117,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       _activeSubSectionIndex = subIndex;
       _activeSubTab = subIndex;
     });
+    widget.onSectionChanged?.call();
   }
 
   void handleGenerate() {
@@ -275,17 +278,12 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       return false;
     }
 
-    // Accept if any resume data section contains content
-    return data.fullName.isNotEmpty ||
-        data.email.isNotEmpty ||
-        data.skills.isNotEmpty ||
-        data.experience.isNotEmpty ||
-        data.summary.isNotEmpty;
+    // Require structured sections (skills, experience, education, projects, etc.) for cached resume reuse
+    return data.hasStructuredSections;
   }
 
   void populateFormFromResume(ResumeData data) {
     debugPrint('[ResumeEditor] BEFORE POPULATE: name="${_nameController.text}", email="${_emailController.text}", phone="${_phoneController.text}"');
-    debugPrint('[ResumeEditor] POPULATING FROM ResumeData: fullName="${data.fullName}", email="${data.email}", phone="${data.phone}", exp=${data.experience.length}, edu=${data.education.length}, proj=${data.projects.length}, skills=${data.skills.length}');
 
     _parsedResumeData = data;
 
@@ -299,12 +297,12 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     if (data.title.isNotEmpty) {
       _titleController.text = data.title;
       _targetJobTitleController.text = data.title;
-    } else if (data.fullName.isNotEmpty) {
-      _titleController.text = '${data.fullName} Resume';
     } else if (data.experience.isNotEmpty && data.experience.first.role.isNotEmpty) {
       _targetJobTitleController.text = data.experience.first.role;
+      _titleController.text = data.experience.first.role;
     } else {
       _titleController.text = '';
+      _targetJobTitleController.text = '';
     }
 
     _summaryController.text = data.summary;
@@ -334,35 +332,46 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     _sectionExpanded['education'] = true;
     _sectionExpanded['extracurriculars'] = true;
 
-    debugPrint('[ResumeEditor] AFTER POPULATE: name="${_nameController.text}", email="${_emailController.text}", phone="${_phoneController.text}", location="${_locationController.text}", linkedin="${_linkedinController.text}", github="${_githubController.text}"');
+    debugPrint('[DEBUG-PIPELINE-7] CONTROLLER STATE: name="${_nameController.text}", email="${_emailController.text}", phone="${_phoneController.text}", location="${_locationController.text}", title="${_titleController.text}", summary="${_summaryController.text}", skillsCount=${_skills.length}');
+    debugPrint('[DEBUG-PIPELINE-8] UI MODEL: parsedName="${_parsedResumeData?.fullName}", parsedEmail="${_parsedResumeData?.email}", parsedPhone="${_parsedResumeData?.phone}"');
+
+    data.logResumeMappingDebug(
+      stage: 'ResumeEditor Form Population',
+      extractedTextLength: _rawExtractedText?.length,
+    );
+
+    widget.onSectionChanged?.call();
   }
 
   Future<void> _loadCachedResume() async {
     final cached = await ResumePersistenceService.instance.loadLatestParsedResume();
     if (!mounted) return;
 
-    final auth = AuthProviderScope.read(context);
-    final userName = auth.currentUser?.fullName ?? 'John Doe';
-    final userEmail = auth.currentUser?.email ?? 'john.doe@example.com';
+    // Do NOT overwrite newly uploaded/extracted data if user uploaded a file or is currently parsing
+    if (_uploadedFileBytes != null || _isUploading || _isParsing) return;
 
-    if (cached != null && _isValidResumeData(cached) && cached.hasUsableData) {
+    final auth = AuthProviderScope.read(context);
+    final userName = auth.currentUser?.fullName ?? '';
+    final userEmail = auth.currentUser?.email ?? '';
+
+    if (cached != null && _isValidResumeData(cached) && cached.hasStructuredSections) {
       debugPrint('[ResumePipeline] Using cached resume');
       setState(() {
         populateFormFromResume(cached);
       });
       debugPrint('[ResumeEditor] Loaded valid cached resume: name="${_nameController.text}", exp=${cached.experience.length}');
     } else {
-      // If no cached resume exists yet, populate fields only with user profile data if empty
+      // If no valid cached resume exists yet, populate fields only with user profile data if non-empty
       setState(() {
-        if (_nameController.text.isEmpty) _nameController.text = userName;
-        if (_emailController.text.isEmpty) _emailController.text = userEmail;
+        if (_nameController.text.isEmpty && userName.isNotEmpty) _nameController.text = userName;
+        if (_emailController.text.isEmpty && userEmail.isNotEmpty) _emailController.text = userEmail;
 
         double score = 0;
         if (_nameController.text.isNotEmpty) score += 10;
         if (_emailController.text.isNotEmpty) score += 5;
         _atsScore = score.clamp(0.0, 100.0);
       });
-      debugPrint('[ResumeEditor] Initialized identity fields with profile data');
+      debugPrint('[ResumeEditor] Initialized identity fields with user profile data');
     }
   }
 
@@ -522,7 +531,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         fileName: pickedFile.name,
       );
       _rawExtractedText = rawExtracted;
-      debugPrint('[ResumeEditor] PDF raw text extraction complete: ${rawExtracted.length} chars');
+      debugPrint('[DEBUG-PIPELINE-1] PDF TEXT LENGTH: ${rawExtracted.length}');
+      debugPrint('[DEBUG-PIPELINE-2] PDF TEXT PREVIEW: ${rawExtracted.length > 200 ? rawExtracted.substring(0, 200) : rawExtracted}');
 
       final resumeData = await AIService.instance.parseResume(
         Uint8List.fromList(fileBytes),
@@ -595,6 +605,34 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         }
       } else {
         debugPrint('[ResumeEditor] AI extraction result: EXTRACTION_FAILED');
+        if (_rawExtractedText != null && _rawExtractedText!.isNotEmpty) {
+          final fallbackData = ResumeData.parseFromRawText(_rawExtractedText!);
+          if (fallbackData.hasUsableData) {
+            debugPrint('[ResumeEditor] AI returned null/empty data, but local raw-text fallback parser extracted sections successfully!');
+            setState(() {
+              _isUploading = false;
+              _isParsing = false;
+              populateFormFromResume(fallbackData);
+            });
+            ResumePersistenceService.instance.saveParsedResume(fallbackData);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  backgroundColor: const Color(0xFF10B981),
+                  content: Text(
+                    'Resume "${pickedFile.name}" extracted & parsed successfully!',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              );
+            }
+            return;
+          }
+        }
+
         setState(() {
           _isUploading = false;
           _isParsing = false;
@@ -695,6 +733,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       experience: _parsedResumeData?.experience ?? [],
       projects: _parsedResumeData?.projects ?? [],
       education: _parsedResumeData?.education ?? [],
+      certifications: _parsedResumeData?.certifications ?? [],
       extracurriculars: _parsedResumeData?.extracurriculars ?? [],
     );
   }
@@ -1311,8 +1350,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               sectionKey: 'certifications',
               icon: Icons.workspace_premium_outlined,
               title: 'Certifications & Credentials',
-              subtitle: '${_parsedResumeData?.extracurriculars.length ?? 0} entries',
-              child: _buildExtracurricularsSection(context, isDarkMode),
+              subtitle: '${_parsedResumeData?.certifications.length ?? 0} entries',
+              child: _buildCertificationsSection(context, isDarkMode),
             ),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
@@ -2805,6 +2844,17 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     _persistCurrentResume();
   }
 
+  void _deleteCertification(int index) {
+    setState(() {
+      final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.certifications ?? []);
+      if (index >= 0 && index < currentList.length) {
+        currentList.removeAt(index);
+        _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(certifications: currentList);
+      }
+    });
+    _persistCurrentResume();
+  }
+
   // ── Section Modal Dialogs ──
 
   void _showExperienceDialog(BuildContext context, {ExperienceEntry? initial, int? index}) {
@@ -3762,57 +3812,60 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                               itemBuilder: (c, i) {
                                 final repo = fetchedRepos[i];
                                 final isSelected = selectedRepo?.name == repo.name;
-                                return ListTile(
-                                  dense: true,
-                                  selected: isSelected,
-                                  selectedTileColor: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                                  title: Text(
-                                    repo.name,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
-                                      color: isSelected ? AppTheme.primaryOrange : AppTheme.getTextColor(ctx),
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: ListTile(
+                                    dense: true,
+                                    selected: isSelected,
+                                    selectedTileColor: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                                    title: Text(
+                                      repo.name,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13,
+                                        color: isSelected ? AppTheme.primaryOrange : AppTheme.getTextColor(ctx),
+                                      ),
                                     ),
-                                  ),
-                                  subtitle: Text(
-                                    repo.description.isNotEmpty ? repo.description : repo.fullName,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      color: AppTheme.getMutedTextColor(ctx),
+                                    subtitle: Text(
+                                      repo.description.isNotEmpty ? repo.description : repo.fullName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 11,
+                                        color: AppTheme.getMutedTextColor(ctx),
+                                      ),
                                     ),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (repo.language.isNotEmpty)
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(
-                                            color: AppTheme.getBorderColor(ctx),
-                                            borderRadius: BorderRadius.circular(4),
-                                          ),
-                                          child: Text(
-                                            repo.language,
-                                            style: GoogleFonts.plusJakartaSans(
-                                              fontSize: 10,
-                                              color: AppTheme.getTextColor(ctx),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        if (repo.language.isNotEmpty)
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.getBorderColor(ctx),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              repo.language,
+                                              style: GoogleFonts.plusJakartaSans(
+                                                fontSize: 10,
+                                                color: AppTheme.getTextColor(ctx),
+                                              ),
                                             ),
                                           ),
+                                        IconButton(
+                                          icon: const Icon(Icons.open_in_new_rounded, size: 14, color: AppTheme.primaryOrange),
+                                          tooltip: 'Open in GitHub',
+                                          onPressed: () => _launchExternalUrl(repo.htmlUrl),
                                         ),
-                                      IconButton(
-                                        icon: const Icon(Icons.open_in_new_rounded, size: 14, color: AppTheme.primaryOrange),
-                                        tooltip: 'Open in GitHub',
-                                        onPressed: () => _launchExternalUrl(repo.htmlUrl),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                    onTap: () {
+                                      setModalState(() {
+                                        selectedRepo = repo;
+                                      });
+                                    },
                                   ),
-                                  onTap: () {
-                                    setModalState(() {
-                                      selectedRepo = repo;
-                                    });
-                                  },
                                 );
                               },
                             ),
@@ -4782,7 +4835,150 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
-  // ── Section 7: Certifications & Activities ──
+  // ── Section 7: Certifications & Credentials ──
+
+  Widget _buildCertificationsSection(BuildContext context, bool isDarkMode) {
+    final certList = _parsedResumeData?.certifications ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (certList.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'No certification entries available.',
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: AppTheme.getMutedTextColor(context),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          )
+        else
+          ...certList.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final item = entry.value;
+            final heading = item.activity.isNotEmpty
+                ? item.activity
+                : (item.role.isNotEmpty ? item.role : 'Certification');
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.getBgColor(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.getBorderColor(context)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          heading,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.getTextColor(context),
+                          ),
+                        ),
+                      ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined,
+                                size: 18, color: AppTheme.primaryOrange),
+                            onPressed: () => _showExtracurricularDialog(context, initial: item, index: idx),
+                            tooltip: 'Edit certification entry',
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18, color: Color(0xFFEF4444)),
+                            onPressed: () => _deleteCertification(idx),
+                            tooltip: 'Remove certification entry',
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  if (item.organization.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      item.organization,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primaryOrange,
+                      ),
+                    ),
+                  ],
+                  if (item.description.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    ...item.description.split('\n').map((line) {
+                      final cleaned = _cleanBulletString(line);
+                      if (cleaned.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.only(top: 6, right: 8),
+                              width: 5,
+                              height: 5,
+                              decoration: const BoxDecoration(
+                                color: AppTheme.primaryOrange,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                cleaned,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: AppTheme.getTextColor(context),
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ],
+              ),
+            );
+          }),
+        const SizedBox(height: 4),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: () => _showExtracurricularDialog(context),
+            icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
+            label: Text(
+              '+ Add Certification',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.primaryOrange,
+                fontSize: 13,
+              ),
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.5)),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ── Section 8: Extracurricular Activities ──
 
   Widget _buildExtracurricularsSection(BuildContext context, bool isDarkMode) {
     final extraList = _parsedResumeData?.extracurriculars ?? [];

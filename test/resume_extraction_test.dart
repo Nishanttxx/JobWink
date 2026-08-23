@@ -89,13 +89,33 @@ void main() {
       expect(proj.effectiveBullets.length, equals(2));
       expect(proj.technologies, contains("Flutter"));
 
-      expect(resume.extracurriculars.length, equals(1));
-      expect(resume.extracurriculars.first.activity, equals("AWS Certified Solutions Architect"));
+      expect(resume.certifications.length, equals(1));
+      expect(resume.certifications.first.activity, equals("AWS Certified Solutions Architect"));
     });
 
     test('hasUsableData returns false for completely empty ResumeData', () {
       const emptyResume = ResumeData();
       expect(emptyResume.hasUsableData, isFalse);
+    });
+
+    test('Sanitizes "Not specified" placeholders and recovers candidate name from raw text', () {
+      final placeholderJson = {
+        "fullName": "Not specified",
+        "email": "arunsinghkatal123@gmail.com",
+        "phone": "+91 9103506279",
+        "location": "Not specified",
+        "title": "Not specified",
+        "summary": "No professional summary provided."
+      };
+      const rawText = "ARUN SINGH\n+91 9103506279 | arunsinghkatal123@gmail.com\nSUMMARY\nSoftware Engineer with experience...";
+
+      final resume = ResumeData.fromJson(placeholderJson, rawText: rawText);
+
+      expect(resume.fullName, equals("ARUN SINGH"));
+      expect(resume.email, equals("arunsinghkatal123@gmail.com"));
+      expect(resume.phone, equals("+91 9103506279"));
+      expect(resume.location, isEmpty);
+      expect(resume.summary, equals("Software Engineer with experience..."));
     });
   });
 }

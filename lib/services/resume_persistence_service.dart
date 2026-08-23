@@ -146,8 +146,13 @@ class ResumePersistenceService {
 
       if (versions.isNotEmpty && versions.first['parsed_content'] != null) {
         final content = versions.first['parsed_content'] as Map<String, dynamic>;
-        debugPrint('[ResumePersistence] Loaded cached resume version from Supabase (0 AI calls)');
-        return ResumeData.fromJson(content);
+        final parsed = ResumeData.fromJson(content);
+        if (parsed.hasStructuredSections) {
+          debugPrint('[ResumePersistence] Loaded cached resume version from Supabase (0 AI calls)');
+          return parsed;
+        } else {
+          debugPrint('[ResumePersistence] Cached version lacks structured sections — skipping cache');
+        }
       }
     } catch (vErr) {
       debugPrint('[ResumePersistence] resume_versions load note: $vErr');
@@ -164,8 +169,13 @@ class ResumePersistenceService {
 
       if (resumes.isNotEmpty && resumes.first['extracted_data'] != null) {
         final content = resumes.first['extracted_data'] as Map<String, dynamic>;
-        debugPrint('[ResumePersistence] Loaded extracted_data from resumes table (0 AI calls)');
-        return ResumeData.fromJson(content);
+        final parsed = ResumeData.fromJson(content);
+        if (parsed.hasStructuredSections) {
+          debugPrint('[ResumePersistence] Loaded extracted_data from resumes table (0 AI calls)');
+          return parsed;
+        } else {
+          debugPrint('[ResumePersistence] Cached extracted_data lacks structured sections — skipping cache');
+        }
       }
     } catch (rErr) {
       debugPrint('[ResumePersistence] resumes extracted_data load note: $rErr');
