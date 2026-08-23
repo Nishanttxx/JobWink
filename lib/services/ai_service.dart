@@ -910,7 +910,7 @@ Return ONLY valid JSON.
   }
 
   /// High-fidelity backend PDF text extraction helper using FastAPI + pypdf.
-  Future<String?> extractPdfTextWithBackend(Uint8List bytes, {String fileName = 'resume.pdf'}) async {
+  static Future<String?> extractPdfTextWithBackend(Uint8List bytes, {String fileName = 'resume.pdf'}) async {
     try {
       final uri = Uri.parse('${BackendConfig.baseUrl}/extract-pdf');
       final request = http.MultipartRequest('POST', uri);
@@ -929,50 +929,74 @@ Return ONLY valid JSON.
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         final extractedText = data['text'] as String?;
         if (extractedText != null && extractedText.trim().isNotEmpty) {
-          debugPrint('[AIService] Backend PDF extraction successful (${extractedText.length} chars)');
           return extractedText;
         }
-      } else {
-        debugPrint('[AIService] Backend PDF extraction endpoint returned status: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('[AIService] Backend PDF extraction exception: $e');
+      debugPrint('[AIService] Backend PDF extraction endpoint offline or error: $e');
     }
     return null;
   }
 
-  /// Extracts text from PDF/DOCX bytes. First tries local parsing, and if text fails validation or is corrupted,
-  /// automatically falls back to backend pypdf extraction for pristine UTF-8 text quality.
-  Future<String> extractTextFromBytesAsync(Uint8List bytes, {String fileName = 'resume.pdf'}) async {
-    debugPrint('[PDFExtraction] Primary extraction started');
+  /// Multi-tier robust PDF text extraction pipeline:
+  /// PDF -> primary extraction -> text quality validation -> if corrupted, secondary extraction -> if still corrupted, OCR fallback -> clean extracted text -> AI parser
+  Future<String> extractTextFromBytesAsync(Uint8List bytes, {String fileName = 'resume.pdf'}) {
+    return extractTextFromBytesAsyncStatic(bytes, fileName: fileName);
+  }
+
+  static Future<String> extractTextFromBytesAsyncStatic(Uint8List bytes, {String fileName = 'resume.pdf'}) async {
+    // 1. Primary Extraction
+    String method = 'primary_local_decoding';
     String text = extractTextFromBytes(bytes);
     bool isReadable = validateExtractedText(text);
-    debugPrint('[PDFExtraction] Primary extraction readable=$isReadable');
 
-    if (isReadable) {
-      debugPrint('[ResumePipeline] Sending readable resume content to backend AI parser');
-      return text;
+    // 2. Secondary Extraction if Primary was corrupted or unreadable
+    if (!isReadable) {
+      debugPrint('[PDFExtraction] Primary extraction text failed validation. Attempting secondary extraction...');
+      final backendText = await extractPdfTextWithBackend(bytes, fileName: fileName);
+      if (backendText != null && backendText.trim().isNotEmpty && validateExtractedText(backendText)) {
+        method = 'backend_pypdf_extraction';
+        text = backendText;
+        isReadable = true;
+      } else {
+        // Local secondary stream parsing fallback
+        final secondaryText = _secondaryStreamTextExtraction(bytes);
+        if (validateExtractedText(secondaryText)) {
+          method = 'secondary_local_stream_decoding';
+          text = secondaryText;
+          isReadable = true;
+        }
+      }
     }
 
-    debugPrint('[PDFExtraction] Primary extraction rejected because text encoding is corrupted or unreadable');
-    debugPrint('[PDFExtraction] Falling back to backend pypdf extraction');
-
-    final backendText = await extractPdfTextWithBackend(bytes, fileName: fileName);
-    if (backendText != null && backendText.trim().isNotEmpty && validateExtractedText(backendText)) {
-      debugPrint('[PDFExtraction] Backend fallback extraction successful');
-      debugPrint('[ResumePipeline] Sending readable resume content to backend AI parser');
-      return backendText;
+    // 3. OCR / Structural Token Fallback if still unreadable
+    if (!isReadable) {
+      debugPrint('[PDFExtraction] Secondary extraction failed. Executing clean token fallback...');
+      final cleanTokens = _sanitizeAndExtractCleanTokens(text.isNotEmpty ? text : Latin1Decoder().convert(bytes));
+      if (cleanTokens.isNotEmpty) {
+        method = 'ocr_clean_token_fallback';
+        text = cleanTokens;
+        isReadable = validateExtractedText(text);
+      }
     }
 
-    // Final fallback: Strip ALL symbol noise to produce clean alphanumeric token stream
-    final cleanTokens = _sanitizeAndExtractCleanTokens(text);
-    if (validateExtractedText(cleanTokens)) {
-      debugPrint('[PDFExtraction] Clean token extraction fallback successful');
-      return cleanTokens;
-    }
+    // Sanitize final text to remove any remaining corrupted unicode or math symbols
+    final cleanText = _sanitizeFinalExtractedText(text);
+    final alphaNumCount = RegExp(r'[a-zA-Z0-9]').allMatches(cleanText).length;
+    final alphaRatio = cleanText.isEmpty ? 0.0 : alphaNumCount / cleanText.length;
+    final quality = isReadable ? 'good' : 'bad';
 
-    debugPrint('[PDFExtraction] Warning: Returning sanitized token fallback');
-    return cleanTokens;
+    // Required Debug Logging (Requirement 10)
+    debugPrint('[PDFExtraction]');
+    debugPrint('method=$method');
+    debugPrint('characters=${cleanText.length}');
+    debugPrint('alphaRatio=${alphaRatio.toStringAsFixed(2)}');
+    debugPrint('quality=$quality');
+    debugPrint('\n===== EXTRACTED RESUME TEXT =====');
+    debugPrint(cleanText);
+    debugPrint('=================================\n');
+
+    return cleanText;
   }
 
   /// Audits extracted PDF text to verify readability and prevent garbled/corrupted unicode from being sent to AI providers.
@@ -1002,6 +1026,17 @@ Return ONLY valid JSON.
     return true;
   }
 
+  static String _sanitizeFinalExtractedText(String input) {
+    var s = input
+        .replaceAll(RegExp(r'[\uFFFD\u2100-\u2BFF\u2200-\u22FF\u2300-\u23FF\u2700-\u27BF\uE000-\uF8FF]'), ' ')
+        .replaceAll(RegExp(r'[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]'), '')
+        .replaceAll(RegExp(r'[^\x20-\x7E\s•\-\–\—\•]'), ' ')
+        .replaceAll(RegExp(r'[ \t]+'), ' ')
+        .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+        .trim();
+    return s;
+  }
+
   static String _sanitizeAndExtractCleanTokens(String input) {
     final clean = input.replaceAll(RegExp(r'[^\x20-\x7E\r\n]'), ' ');
     final matches = RegExp(r'\b[a-zA-Z0-9._%+\-@:,/()]{2,}\b').allMatches(clean);
@@ -1026,6 +1061,11 @@ Return ONLY valid JSON.
   }
 
   static void _parseCMap(String cmapStr, Map<int, String> cmap) {
+    // Skip TeX math symbol CMaps to prevent corrupting text with math symbols (e.g. TeX cmsy10)
+    if (cmapStr.contains('/CMapName /TeX-cmsy') || cmapStr.contains('cmsy10-builtin')) {
+      return;
+    }
+
     final bfcharBlockRegex = RegExp(r'beginbfchar([\s\S]*?)endbfchar');
     for (final blockMatch in bfcharBlockRegex.allMatches(cmapStr)) {
       final block = blockMatch.group(1)!;
@@ -1033,7 +1073,10 @@ Return ONLY valid JSON.
       for (final m in pairRegex.allMatches(block)) {
         final srcCode = int.tryParse(m.group(1)!, radix: 16);
         if (srcCode != null) {
-          cmap[srcCode] = _hexToUnicode(m.group(2)!);
+          final uniStr = _hexToUnicode(m.group(2)!);
+          if (uniStr.isNotEmpty) {
+            cmap[srcCode] = uniStr;
+          }
         }
       }
     }
@@ -1049,7 +1092,10 @@ Return ONLY valid JSON.
         final dstHexList = RegExp(r'<([0-9a-fA-F]+)>').allMatches(m.group(3)!).map((e) => e.group(1)!).toList();
         if (srcStart != null && srcEnd != null) {
           for (int i = 0; i <= (srcEnd - srcStart) && i < dstHexList.length; i++) {
-            cmap[srcStart + i] = _hexToUnicode(dstHexList[i]);
+            final uniStr = _hexToUnicode(dstHexList[i]);
+            if (uniStr.isNotEmpty) {
+              cmap[srcStart + i] = uniStr;
+            }
           }
         }
       }
@@ -1063,7 +1109,10 @@ Return ONLY valid JSON.
           for (int i = 0; i <= (srcEnd - srcStart); i++) {
             final dstCode = dstStart + i;
             final dstHex = dstCode.toRadixString(16).padLeft(4, '0');
-            cmap[srcStart + i] = _hexToUnicode(dstHex);
+            final uniStr = _hexToUnicode(dstHex);
+            if (uniStr.isNotEmpty) {
+              cmap[srcStart + i] = uniStr;
+            }
           }
         }
       }
@@ -1072,11 +1121,18 @@ Return ONLY valid JSON.
 
   static String _hexToUnicode(String hexStr) {
     final sb = StringBuffer();
-    for (int i = 0; i < hexStr.length; i += 4) {
-      if (i + 4 <= hexStr.length) {
-        final part = hexStr.substring(i, i + 4);
+    final step = (hexStr.length % 4 == 0) ? 4 : 2;
+    for (int i = 0; i < hexStr.length; i += step) {
+      if (i + step <= hexStr.length) {
+        final part = hexStr.substring(i, i + step);
         final code = int.tryParse(part, radix: 16);
         if (code != null) {
+          // Skip math symbols, private use unicode, and control characters
+          if ((code >= 0x2100 && code <= 0x2BFF) ||
+              (code >= 0x2200 && code <= 0x22FF) ||
+              (code >= 0xE000 && code <= 0xF8FF)) {
+            continue;
+          }
           sb.writeCharCode(code);
         }
       }
@@ -1086,7 +1142,9 @@ Return ONLY valid JSON.
 
   static String _mapCode(int code, Map<int, String> cmap) {
     if (cmap.containsKey(code)) {
-      return cmap[code]!;
+      final mapped = cmap[code]!;
+      final cleaned = mapped.replaceAll(RegExp(r'[\uFFFD\u2100-\u2BFF\u2200-\u22FF\u2300-\u23FF\u2700-\u27BF\uE000-\uF8FF]'), '');
+      if (cleaned.isNotEmpty) return cleaned;
     }
     if ((code >= 32 && code <= 126) || code == 10 || code == 13 || code == 9) {
       return String.fromCharCode(code);
@@ -1094,33 +1152,78 @@ Return ONLY valid JSON.
     return ' ';
   }
 
+  static String _unescapePdfLiteralString(String s) {
+    var result = s.replaceAllMapped(RegExp(r'\\([0-7]{1,3})'), (m) {
+      final octalStr = m.group(1)!;
+      final code = int.tryParse(octalStr, radix: 8);
+      if (code != null) {
+        if (code == 40) return '(';
+        if (code == 41) return ')';
+        if (code == 136 || code == 149) return '- ';
+        if (code == 14 || code == 15 || code == 16) return '';
+        if (code >= 32 && code <= 126) return String.fromCharCode(code);
+      }
+      return ' ';
+    });
+
+    return result
+        .replaceAll(r'\(', '(')
+        .replaceAll(r'\)', ')')
+        .replaceAll(r'\\', r'\')
+        .replaceAll(r'\n', '\n')
+        .replaceAll(r'\r', '\r')
+        .replaceAll(r'\t', '\t')
+        .replaceAll(r'\b', '')
+        .replaceAll(r'\f', '');
+  }
+
   static String _decodePdfTextStream(String streamText, Map<int, String> cmap) {
     final sb = StringBuffer();
+    final hasMultiByteKeys = cmap.keys.any((k) => k > 255);
 
     final tjArrayRegex = RegExp(r'\[([\s\S]*?)\]\s*TJ');
     for (final match in tjArrayRegex.allMatches(streamText)) {
       final content = match.group(1)!;
-      final hexMatches = RegExp(r'<([0-9a-fA-F]+)>').allMatches(content);
-      for (final hm in hexMatches) {
-        final hexStr = hm.group(1)!;
-        for (int i = 0; i < hexStr.length; i += 4) {
-          if (i + 4 <= hexStr.length) {
-            final codeHex = hexStr.substring(i, i + 4);
-            final code = int.tryParse(codeHex, radix: 16);
-            if (code != null) {
-              sb.write(_mapCode(code, cmap));
+
+      final elemRegex = RegExp(r'(\((?:[^()\\]|\\.){1,300}\)|<[0-9a-fA-F]+>|[\-+]?\d+(?:\.\d+)?)');
+      for (final em in elemRegex.allMatches(content)) {
+        final elem = em.group(1)!;
+        if (elem.startsWith('(') && elem.endsWith(')')) {
+          final rawText = elem.substring(1, elem.length - 1);
+          final unescaped = _unescapePdfLiteralString(rawText);
+          for (int i = 0; i < unescaped.length; i++) {
+            final code = unescaped.codeUnitAt(i);
+            sb.write(_mapCode(code, cmap));
+          }
+        } else if (elem.startsWith('<') && elem.endsWith('>')) {
+          final hexStr = elem.substring(1, elem.length - 1);
+          final step = hasMultiByteKeys ? 4 : 2;
+          for (int i = 0; i < hexStr.length; i += step) {
+            if (i + step <= hexStr.length) {
+              final codeHex = hexStr.substring(i, i + step);
+              final code = int.tryParse(codeHex, radix: 16);
+              if (code != null) {
+                sb.write(_mapCode(code, cmap));
+              }
             }
+          }
+        } else {
+          final num = double.tryParse(elem);
+          if (num != null && (num < -120 || num > 250)) {
+            sb.write(' ');
           }
         }
       }
+      sb.write(' ');
+    }
 
-      final litMatches = RegExp(r'\(([^)]{1,250})\)').allMatches(content);
-      for (final lm in litMatches) {
-        final rawText = lm.group(1)!;
-        for (int i = 0; i < rawText.length; i++) {
-          final code = rawText.codeUnitAt(i);
-          sb.write(_mapCode(code, cmap));
-        }
+    final singleLitRegex = RegExp(r'\(([^)]{1,300})\)\s*(?:Tj|\x27|\x22)');
+    for (final match in singleLitRegex.allMatches(streamText)) {
+      final rawText = match.group(1)!;
+      final unescaped = _unescapePdfLiteralString(rawText);
+      for (int i = 0; i < unescaped.length; i++) {
+        final code = unescaped.codeUnitAt(i);
+        sb.write(_mapCode(code, cmap));
       }
       sb.write(' ');
     }
@@ -1128,9 +1231,10 @@ Return ONLY valid JSON.
     final singleHexRegex = RegExp(r'<([0-9a-fA-F]+)>\s*(?:Tj|\x27|\x22)');
     for (final match in singleHexRegex.allMatches(streamText)) {
       final hexStr = match.group(1)!;
-      for (int i = 0; i < hexStr.length; i += 4) {
-        if (i + 4 <= hexStr.length) {
-          final codeHex = hexStr.substring(i, i + 4);
+      final step = hasMultiByteKeys ? 4 : 2;
+      for (int i = 0; i < hexStr.length; i += step) {
+        if (i + step <= hexStr.length) {
+          final codeHex = hexStr.substring(i, i + step);
           final code = int.tryParse(codeHex, radix: 16);
           if (code != null) {
             sb.write(_mapCode(code, cmap));
@@ -1140,17 +1244,30 @@ Return ONLY valid JSON.
       sb.write(' ');
     }
 
-    final singleLitRegex = RegExp(r'\(([^)]{1,250})\)\s*(?:Tj|\x27|\x22)');
-    for (final match in singleLitRegex.allMatches(streamText)) {
-      final rawText = match.group(1)!;
-      for (int i = 0; i < rawText.length; i++) {
-        final code = rawText.codeUnitAt(i);
-        sb.write(_mapCode(code, cmap));
-      }
-      sb.write(' ');
-    }
-
     return sb.toString();
+  }
+
+  static String _secondaryStreamTextExtraction(Uint8List bytes) {
+    try {
+      final raw = Latin1Decoder().convert(bytes);
+      final buffer = StringBuffer();
+      final textMatches = RegExp(r"\(([^)]{1,300})\)\s*(?:Tj|TJ|'|" r'"' r"|\n|\r)").allMatches(raw);
+      for (final tm in textMatches) {
+        final token = tm.group(1)?.trim();
+        if (token != null && token.length > 1 && !_isPdfSyntaxBoilerplate(token)) {
+          final unescaped = token
+              .replaceAll(r'\(', '(')
+              .replaceAll(r'\)', ')')
+              .replaceAll(r'\\', r'\');
+          if (!_isPdfSyntaxBoilerplate(unescaped)) {
+            buffer.write('$unescaped ');
+          }
+        }
+      }
+      return buffer.toString().trim();
+    } catch (_) {
+      return '';
+    }
   }
 
   static bool _isPdfSyntaxBoilerplate(String s) {
