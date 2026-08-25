@@ -16,6 +16,8 @@ class AppLayout extends StatefulWidget {
   final Map<String, int>? sectionCounts;
   final VoidCallback? onResumePreview;
   final VoidCallback? onGenerate;
+  final VoidCallback? onAtsScore;
+  final VoidCallback? onUploadResume;
 
   const AppLayout({
     super.key,
@@ -27,6 +29,8 @@ class AppLayout extends StatefulWidget {
     this.sectionCounts,
     this.onResumePreview,
     this.onGenerate,
+    this.onAtsScore,
+    this.onUploadResume,
   });
 
   @override
@@ -59,10 +63,37 @@ class _AppLayoutState extends State<AppLayout> {
                 activeIndex: widget.activeIndex,
                 onTabSelected: _handleTabSelected,
                 activeSubSectionIndex: widget.activeSubSectionIndex,
-                onSubSectionSelected: widget.onSubSectionSelected,
+                onSubSectionSelected: (subIndex) {
+                  if (_scaffoldKey.currentState?.isDrawerOpen == true) {
+                    Navigator.pop(context);
+                  }
+                  widget.onSubSectionSelected?.call(subIndex);
+                },
                 sectionCounts: widget.sectionCounts,
-                onResumePreview: widget.onResumePreview,
-                onGenerate: widget.onGenerate,
+                onResumePreview: () {
+                  if (_scaffoldKey.currentState?.isDrawerOpen == true) {
+                    Navigator.pop(context);
+                  }
+                  widget.onResumePreview?.call();
+                },
+                onGenerate: () {
+                  if (_scaffoldKey.currentState?.isDrawerOpen == true) {
+                    Navigator.pop(context);
+                  }
+                  widget.onGenerate?.call();
+                },
+                onAtsScore: () {
+                  if (_scaffoldKey.currentState?.isDrawerOpen == true) {
+                    Navigator.pop(context);
+                  }
+                  widget.onAtsScore?.call();
+                },
+                onUploadResume: () {
+                  if (_scaffoldKey.currentState?.isDrawerOpen == true) {
+                    Navigator.pop(context);
+                  }
+                  widget.onUploadResume?.call();
+                },
               ),
             )
           : null,
@@ -84,6 +115,8 @@ class _AppLayoutState extends State<AppLayout> {
               sectionCounts: widget.sectionCounts,
               onResumePreview: widget.onResumePreview,
               onGenerate: widget.onGenerate,
+              onAtsScore: widget.onAtsScore,
+              onUploadResume: widget.onUploadResume,
             ),
 
           // 2. Main Page Content Shell

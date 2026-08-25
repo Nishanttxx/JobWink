@@ -23,27 +23,31 @@ void main() {
 
       final resume = ResumeData.fromJson(jsonMap);
 
-      expect(resume.extracurriculars.length, equals(5));
+      expect(resume.certifications.length, equals(3));
+      expect(resume.extracurriculars.length, equals(2));
 
-      final activities = resume.extracurriculars.map((e) => e.activity).toList();
-
-      expect(activities, containsAll([
+      final certNames = resume.certifications.map((e) => e.activity).toList();
+      expect(certNames, containsAll([
         'AWS Certified Developer',
         'Google Cloud Professional Architect',
-        'Hackathon Lead',
         'Scrum Master',
+      ]));
+
+      final extraNames = resume.extracurriculars.map((e) => e.activity).toList();
+      expect(extraNames, containsAll([
+        'Hackathon Lead',
         'Best Innovation Award 2022',
       ]));
 
       // Verify specific details parsed
-      final aws = resume.extracurriculars.firstWhere((e) => e.activity == 'AWS Certified Developer');
+      final aws = resume.certifications.firstWhere((e) => e.activity == 'AWS Certified Developer');
       expect(aws.organization, equals('Amazon'));
 
       final hackathon = resume.extracurriculars.firstWhere((e) => e.activity == 'Hackathon Lead');
       expect(hackathon.organization, equals('Tech Club'));
       expect(hackathon.role, equals('Organizer'));
 
-      final scrum = resume.extracurriculars.firstWhere((e) => e.activity == 'Scrum Master');
+      final scrum = resume.certifications.firstWhere((e) => e.activity == 'Scrum Master');
       expect(scrum.organization, equals('Scrum.org'));
     });
 

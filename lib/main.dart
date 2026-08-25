@@ -53,6 +53,8 @@ void main() async {
   AIService.instance.initialize(
     geminiKey: AIConfig.geminiApiKey,
     openAiKey: AIConfig.openAiApiKey,
+    cerebrasKey: AIConfig.cerebrasApiKey,
+    mistralKey: AIConfig.mistralApiKey,
     xAiKey: AIConfig.xAiApiKey,
     groqKey: AIConfig.groqApiKey,
     nvidiaKey: AIConfig.nvidiaApiKey,

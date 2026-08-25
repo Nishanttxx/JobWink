@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../main.dart';
 import '../providers/auth_provider.dart';
+import '../screens/admin_dashboard_screen.dart';
 import '../screens/email_verify_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../screens/main_dashboard_wrapper.dart';
@@ -18,6 +19,12 @@ class AppRouteTransitions {
     Widget targetScreen;
 
     switch (settings.name) {
+      case '/admin':
+        targetScreen = const _AuthGate(
+          allowDemoMode: false,
+          child: AdminDashboardScreen(),
+        );
+        break;
       case '/dashboard':
       case '/cv-studio':
       case '/national':

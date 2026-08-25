@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:google_generative_ai/google_generative_ai.dart';
+import '../config/ai_config.dart';
 import '../config/gemini_config.dart';
 import '../models/resume_data.dart';
 import 'ai_service.dart';
@@ -21,15 +22,25 @@ class GeminiService {
 
   GenerativeModel? _model;
   bool _isInitialized = false;
+  String? _apiKey;
+  String _modelId = GeminiConfig.modelId;
 
-  bool get isInitialized => _isInitialized;
+  bool get isInitialized => _isInitialized && _model != null && _apiKey != null && _apiKey!.isNotEmpty;
 
-  /// Initialises the Gemini model. Call once at app startup.
-  void initialize(String apiKey, {String modelId = GeminiConfig.modelId}) {
-    if (_isInitialized && _model != null) return;
+  /// Initialises the Gemini model with API Key.
+  void initialize(String apiKey, {String? modelId}) {
+    final key = apiKey.trim();
+    if (key.isEmpty) {
+      debugPrint('[GeminiService] Gemini API key is not configured');
+      return;
+    }
+    if (_isInitialized && _model != null && _apiKey == key) return;
+
+    _apiKey = key;
+    _modelId = modelId ?? GeminiConfig.modelId;
     _model = GenerativeModel(
-      model: modelId,
-      apiKey: apiKey,
+      model: _modelId,
+      apiKey: _apiKey!,
       generationConfig: GenerationConfig(
         temperature: 0.1,
         topP: 0.95,
@@ -37,13 +48,33 @@ class GeminiService {
       ),
     );
     _isInitialized = true;
-    debugPrint('[GeminiService] Initialized with model: $modelId');
+    debugPrint('[GeminiService] Initialized with model: $_modelId');
+  }
+
+  /// Ensures that the model is properly initialized with valid credentials.
+  bool _ensureInitialized() {
+    if (_model != null && _apiKey != null && _apiKey!.isNotEmpty) {
+      return true;
+    }
+
+    final key = AIConfig.geminiApiKey.trim().isNotEmpty
+        ? AIConfig.geminiApiKey.trim()
+        : GeminiConfig.apiKey.trim();
+
+    if (key.isNotEmpty) {
+      initialize(key, modelId: GeminiConfig.modelId);
+      return _model != null && _apiKey != null && _apiKey!.isNotEmpty;
+    }
+
+    debugPrint('[GeminiService] Gemini API key is not configured');
+    return false;
   }
 
   /// Public method to execute a text prompt and return raw text response.
   Future<String?> generatePrompt(String promptText) async {
-    if (_model == null) {
-      initialize(GeminiConfig.apiKey, modelId: GeminiConfig.modelId);
+    if (!_ensureInitialized()) {
+      debugPrint('[GeminiService] generatePrompt: Gemini credentials not available');
+      return null;
     }
     try {
       final res = await _generateContentWithRetry([Content.text(promptText)]);
@@ -89,12 +120,12 @@ class GeminiService {
     List<Content> contents, {
     Duration timeout = const Duration(seconds: 15),
   }) async {
+    if (!_ensureInitialized()) {
+      throw Exception('Gemini API key is not configured');
+    }
     const maxAttempts = 3;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        if (_model == null) {
-          initialize(GeminiConfig.apiKey, modelId: GeminiConfig.modelId);
-        }
         return await _model!.generateContent(contents).timeout(timeout);
       } catch (e) {
         final errStr = e.toString().toLowerCase();
@@ -116,10 +147,6 @@ class GeminiService {
         if ((is503 || isTimeout) && attempt < maxAttempts) {
           debugPrint('[GeminiService] API spike/timeout (attempt $attempt/$maxAttempts). Retrying in ${attempt * 1000}ms...');
           await Future.delayed(Duration(milliseconds: attempt * 1000));
-          
-          try {
-            initialize(GeminiConfig.apiKey, modelId: GeminiConfig.modelId);
-          } catch (_) {}
           continue;
         }
         rethrow;
@@ -133,9 +160,8 @@ class GeminiService {
   // ---------------------------------------------------------------------------
 
   Future<ResumeData?> parseResume(Uint8List bytes, String mimeType) async {
-    if (_model == null) {
-      debugPrint('[GeminiService] Not initialized — auto-initializing with GeminiConfig');
-      initialize(GeminiConfig.apiKey, modelId: GeminiConfig.modelId);
+    if (!_ensureInitialized()) {
+      return null;
     }
 
     try {
@@ -226,7 +252,7 @@ class GeminiService {
     String targetJobTitle,
     String jobDescription,
   ) async {
-    if (_model == null) {
+    if (!_ensureInitialized()) {
       return const TailoredResult(matchScore: 50, atsScore: 50);
     }
 
@@ -296,7 +322,7 @@ Rules:
     ResumeData resume, {
     String? jobDescription,
   }) async {
-    if (_model == null) {
+    if (!_ensureInitialized()) {
       return const AtsResult(
           overallScore: 50,
           keywordScore: 50,
@@ -384,7 +410,7 @@ Rules:
     String currentSummary,
     List<String> skills,
   ) async {
-    if (_model == null) return currentSummary;
+    if (!_ensureInitialized()) return currentSummary;
 
     try {
       final prompt = '''
@@ -451,6 +477,8 @@ Rules:
 
   static const String _parseResumePrompt = '''
 Analyse this resume document completely and extract ALL candidate information into a single flat JSON object.
+Extract information from THIS uploaded resume ONLY. Infer the structure dynamically from the resume itself.
+Do NOT assume any fixed section names, order, or candidate information.
 
 Return ONLY a JSON object with EXACTLY this structure:
 
@@ -470,6 +498,7 @@ Return ONLY a JSON object with EXACTLY this structure:
       "role": "",
       "startDate": "",
       "endDate": "",
+      "location": "",
       "description": []
     }
   ],
@@ -510,25 +539,31 @@ Return ONLY a JSON object with EXACTLY this structure:
 }
 
 CRITICAL RULES:
-1. Extract text EXACTLY as written. DO NOT rewrite, paraphrase, or alter wordings.
+1. Extract text EXACTLY as written in this resume. DO NOT rewrite, paraphrase, or alter wordings.
 2. "fullName": The candidate's full name as it appears at the top of the resume.
-3. "title": The candidate's job title, professional title, or headline if present.
-4. "skills": An array of individual skill strings (e.g. ["Python", "React", "AWS"]).
-5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings.
-6. "projects": Each project entry MUST be an independent structured object:
-   - "name": Short title of the project ONLY (e.g. "Nexus Search", "AI Search Platform"). NEVER put long descriptions, sentences, or repository URLs into "name".
-   - "description": Array of description bullet strings ONLY.
-   - "url": Project or GitHub repository URL (e.g. "github.com/Nishanttxx/Nexus-Searchh").
-   - "technologies": Array of technologies used in that project.
-7. "education": Each entry MUST have "institution", "degree", "fieldOfStudy", "startDate", "endDate", "gpa".
-8. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
-9. DO NOT invent, fabricate, or add placeholder data for missing sections.
-10. CRITICAL GROUPING RULE: Return exactly one object per semantic resume record. NEVER create objects for individual description sentences, technologies, keywords, or line fragments.
-    - Projects: Exactly one project object per actual project. Group all description bullets and details under that single project object.
-    - Experience: Exactly one object per job/internship/role. Group all its bullet points under "description".
-    - Education: Exactly one object per degree/school. Group institution, degree, dates, and GPA together.
-    - Extracurriculars: Group multi-line descriptions into a single extracurricular object.
-11. SECTION HEADER RULE: A section header (e.g. EXTRA-CURRICULAR, TECHNICAL SKILLS, EDUCATION, EXPERIENCE, PROJECTS, CERTIFICATIONS) must NEVER be extracted as a project name, company, job title, institution, skill, or certification. Place all associated content under its designated JSON section.
-12. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
+3. "title": The candidate's job title, professional headline, or current role if present.
+4. "skills": An array of individual skill strings found in the resume.
+5. "experience": Extract all work experience records (full-time, part-time, internships, contract).
+   - "company": Employer / organization name.
+   - "role": Job title / position held.
+   - "startDate" & "endDate": Employment dates as written in the resume.
+   - "location": City, state, or country if present.
+   - "description": Array of description bullet points. Group all bullets for this job under this single experience object.
+6. "projects": Extract all technical, academic, and personal projects.
+   - "name": Full name/title of the project. NEVER split a project title across multiple project objects.
+   - "description": Array of description bullet strings.
+   - "url": Project, GitHub repository, or live demo URL if present.
+   - "technologies": Array of technologies/tools used in that project.
+7. "education": Extract all educational qualifications.
+   - "institution": School, college, university, or institute name.
+   - "degree": Degree, diploma, or certificate name.
+   - "fieldOfStudy": Major / field / branch if present.
+   - "startDate" & "endDate": Dates or graduation year.
+   - "gpa": GPA, percentage, or score if present.
+8. "certifications": Extract certifications, licenses, and accredited courses independently.
+9. "extracurriculars": Extract extracurricular activities, volunteer work, leadership roles, honors, awards, or publications.
+10. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "". DO NOT invent or fabricate data.
+11. CRITICAL GROUPING RULE: Return exactly one object per semantic resume record. NEVER split description bullets or technologies into separate broken records.
+12. Return ONLY valid JSON. No markdown, no conversational commentary.
 ''';
 }

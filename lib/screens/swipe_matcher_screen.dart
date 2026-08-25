@@ -17,7 +17,7 @@ class SwipeMatcherScreen extends StatefulWidget {
   State<SwipeMatcherScreen> createState() => _SwipeMatcherScreenState();
 }
 
-class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
+class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTickerProviderStateMixin {
   // Pre-initialize with fast queue so UI renders instantly (0ms delay)
   List<JobMatch> _jobQueue = [];
   bool _isRefreshing = false;
@@ -28,10 +28,35 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
   Offset _cardOffset = Offset.zero;
   double _cardRotation = 0.0;
 
+  late AnimationController _swipeAnimController;
+  late Animation<Offset> _cardOffsetAnimation;
+  late Animation<double> _cardRotationAnimation;
+  bool _isAnimating = false;
+
   @override
   void initState() {
     super.initState();
+    _swipeAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 280),
+    );
+    _cardOffsetAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero).animate(_swipeAnimController);
+    _cardRotationAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(_swipeAnimController);
+
+    _swipeAnimController.addListener(() {
+      setState(() {
+        _cardOffset = _cardOffsetAnimation.value;
+        _cardRotation = _cardRotationAnimation.value;
+      });
+    });
+
     _loadJobsInstant();
+  }
+
+  @override
+  void dispose() {
+    _swipeAnimController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadJobsInstant({bool forceRefresh = false}) async {
@@ -118,13 +143,37 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
     }
   }
 
-  void _animateAndSwipe(bool isRight) async {
-    setState(() {
-      _cardOffset = Offset(isRight ? 400 : -400, 0);
-      _cardRotation = isRight ? 0.3 : -0.3;
+  void _animateAndSwipe(bool isRight) {
+    if (_isAnimating || _currentIndex >= _jobQueue.length) return;
+    _isAnimating = true;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final targetX = isRight ? (screenWidth > 600 ? 700.0 : 450.0) : (screenWidth > 600 ? -700.0 : -450.0);
+    final targetRotation = isRight ? 0.35 : -0.35;
+
+    _cardOffsetAnimation = Tween<Offset>(
+      begin: _cardOffset,
+      end: Offset(targetX, _cardOffset.dy + 35.0),
+    ).animate(CurvedAnimation(
+      parent: _swipeAnimController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _cardRotationAnimation = Tween<double>(
+      begin: _cardRotation,
+      end: targetRotation,
+    ).animate(CurvedAnimation(
+      parent: _swipeAnimController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _swipeAnimController.forward(from: 0.0).then((_) {
+      _handleSwipe(isRight);
+      _cardOffset = Offset.zero;
+      _cardRotation = 0.0;
+      _isAnimating = false;
+      _swipeAnimController.reset();
     });
-    await Future.delayed(const Duration(milliseconds: 180));
-    _handleSwipe(isRight);
   }
 
   void _showSavedJobsModal(BuildContext context) {
@@ -276,6 +325,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
         const DemoBanner(),
         Expanded(
           child: PageContainer(
+            maxWidth: 1200,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -311,59 +361,81 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
                 ),
                 const SizedBox(height: 16),
 
+                // Centered Cards and Actions Section
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: SizedBox(
+                    width: isDesktop ? 620 : double.infinity,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
                         // Main Interactive Card Stack View
                         if (_currentIndex < _jobQueue.length)
                           _buildInteractiveCard(context, isDesktop, isDarkMode)
                         else
                           _buildCompletedState(context, isDarkMode),
 
-                        const SizedBox(height: 32),
+                        const SizedBox(height: 28),
 
-                        // Action Buttons Row (Pass / Refresh / Save)
+                        // Action Buttons Row (Pass / Refresh / Save) Centered Directly Under Card
                         if (_currentIndex < _jobQueue.length)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               // Pass Button (Left)
-                              IconButton.filled(
-                                onPressed: () => _animateAndSwipe(false),
-                                icon: const Icon(Icons.close_rounded, size: 28),
-                                iconSize: 28,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: isDarkMode ? const Color(0xFF262933) : const Color(0xFFF1F5F9),
-                                  foregroundColor: const Color(0xFFEF4444),
-                                  padding: const EdgeInsets.all(18),
-                                  elevation: 4,
+                              Tooltip(
+                                message: 'Pass (Swipe Left)',
+                                child: IconButton.filled(
+                                  onPressed: () => _animateAndSwipe(false),
+                                  icon: const Icon(Icons.close_rounded, size: 28),
+                                  iconSize: 28,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: isDarkMode ? const Color(0xFF262933) : const Color(0xFFF1F5F9),
+                                    foregroundColor: const Color(0xFFEF4444),
+                                    padding: const EdgeInsets.all(18),
+                                    elevation: 4,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 24),
                               // Instant Refresh Stack Button
-                              IconButton.filled(
-                                onPressed: () => _loadJobsInstant(forceRefresh: true),
-                                icon: const Icon(Icons.refresh_rounded, size: 22),
-                                style: IconButton.styleFrom(
-                                  backgroundColor: AppTheme.getSurfaceColor(context),
-                                  foregroundColor: AppTheme.getMutedTextColor(context),
-                                  padding: const EdgeInsets.all(14),
-                                  side: BorderSide(color: AppTheme.getBorderColor(context)),
+                              Tooltip(
+                                message: 'Refresh Feed',
+                                child: IconButton.filled(
+                                  onPressed: () => _loadJobsInstant(forceRefresh: true),
+                                  icon: const Icon(Icons.refresh_rounded, size: 22),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: AppTheme.getSurfaceColor(context),
+                                    foregroundColor: AppTheme.getMutedTextColor(context),
+                                    padding: const EdgeInsets.all(14),
+                                    side: BorderSide(color: AppTheme.getBorderColor(context)),
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 24),
                               // Save Button (Right)
-                              IconButton.filled(
-                                onPressed: () => _animateAndSwipe(true),
-                                icon: const Icon(Icons.favorite_rounded, size: 28),
-                                iconSize: 28,
-                                style: IconButton.styleFrom(
-                                  backgroundColor: AppTheme.primaryOrange,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.all(18),
-                                  elevation: 6,
-                                  shadowColor: AppTheme.primaryOrange.withValues(alpha: 0.4),
+                              Tooltip(
+                                message: 'Save & Apply (Swipe Right)',
+                                child: IconButton.filled(
+                                  onPressed: () => _animateAndSwipe(true),
+                                  icon: const Icon(Icons.favorite_rounded, size: 28),
+                                  iconSize: 28,
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: AppTheme.primaryOrange,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.all(18),
+                                    elevation: 6,
+                                    shadowColor: AppTheme.primaryOrange.withValues(alpha: 0.4),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -375,18 +447,22 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
   Widget _buildInteractiveCard(BuildContext context, bool isDesktop, bool isDarkMode) {
     final currentJob = _jobQueue[_currentIndex];
     final nextJob = (_currentIndex + 1 < _jobQueue.length) ? _jobQueue[_currentIndex + 1] : null;
+    final dragProgress = (_cardOffset.dx.abs() / 250.0).clamp(0.0, 1.0);
 
-    return Stack(
-      alignment: Alignment.topCenter,
+    return SizedBox(
+      width: isDesktop ? 620 : double.infinity,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        clipBehavior: Clip.none,
       children: [
-        // Stacked Background Card (3D Deck Effect)
+        // Stacked Background Card (3D Deck Effect with smooth scaling during drag)
         if (nextJob != null)
           Transform.translate(
-            offset: const Offset(0, 14),
+            offset: Offset(0, 14 - (8 * dragProgress)),
             child: Transform.scale(
-              scale: 0.94,
+              scale: 0.94 + (0.06 * dragProgress),
               child: Opacity(
-                opacity: 0.6,
+                opacity: 0.6 + (0.4 * dragProgress),
                 child: _buildCardContent(context, nextJob, isDesktop, isDarkMode),
               ),
             ),
@@ -395,20 +471,45 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
         // Foreground Active Drag Card
         GestureDetector(
           onPanUpdate: (details) {
+            if (_isAnimating) return;
             setState(() {
               _cardOffset += details.delta;
-              _cardRotation = _cardOffset.dx / 300;
+              _cardRotation = (_cardOffset.dx / 320.0).clamp(-0.4, 0.4);
             });
           },
           onPanEnd: (details) {
-            if (_cardOffset.dx > 120) {
-              _handleSwipe(true);
-            } else if (_cardOffset.dx < -120) {
-              _handleSwipe(false);
+            if (_isAnimating) return;
+
+            final vx = details.velocity.pixelsPerSecond.dx;
+            final dx = _cardOffset.dx;
+
+            if (dx > 110 || vx > 600) {
+              _animateAndSwipe(true);
+            } else if (dx < -110 || vx < -600) {
+              _animateAndSwipe(false);
             } else {
-              setState(() {
+              _isAnimating = true;
+              _cardOffsetAnimation = Tween<Offset>(
+                begin: _cardOffset,
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: _swipeAnimController,
+                curve: Curves.easeOutBack,
+              ));
+
+              _cardRotationAnimation = Tween<double>(
+                begin: _cardRotation,
+                end: 0.0,
+              ).animate(CurvedAnimation(
+                parent: _swipeAnimController,
+                curve: Curves.easeOutBack,
+              ));
+
+              _swipeAnimController.forward(from: 0.0).then((_) {
                 _cardOffset = Offset.zero;
                 _cardRotation = 0.0;
+                _isAnimating = false;
+                _swipeAnimController.reset();
               });
             }
           },
@@ -421,7 +522,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
                   _buildCardContent(context, currentJob, isDesktop, isDarkMode),
 
                   // LIKE Stamp Overlay
-                  if (_cardOffset.dx > 20)
+                  if (_cardOffset.dx > 15)
                     Positioned(
                       top: 32,
                       left: 32,
@@ -451,7 +552,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
                     ),
 
                   // PASS Stamp Overlay
-                  if (_cardOffset.dx < -20)
+                  if (_cardOffset.dx < -15)
                     Positioned(
                       top: 32,
                       right: 32,
@@ -485,8 +586,9 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> {
           ),
         ),
       ],
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildCardContent(BuildContext context, JobMatch job, bool isDesktop, bool isDarkMode) {
     return Container(

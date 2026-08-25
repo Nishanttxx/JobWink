@@ -57,11 +57,15 @@ class SupabaseJobDatabase:
         except Exception:
             pass
 
-    def is_job_existing(self, external_job_id: str, normalized_hash: str) -> bool:
+    def is_job_existing(self, external_job_id: str, normalized_hash: str, clean_url: Optional[str] = None) -> bool:
         # Check local cache first
         for item in self._local_cache:
             if item.get("external_job_id") == external_job_id or item.get("normalized_hash") == normalized_hash:
                 return True
+            if clean_url:
+                cached_url = item.get("apply_url") or item.get("job_url") or ""
+                if cached_url and clean_url in cached_url.lower():
+                    return True
 
         # Check cloud DB
         try:

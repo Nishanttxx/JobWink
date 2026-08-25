@@ -17,6 +17,14 @@ class Config:
     AGENTIC_ENGINEERING_API_URL = os.getenv("AGENTIC_ENGINEERING_API_URL", "https://agentic-engineering-jobs.com/api/v1/jobs")
     HIMALAYAS_API_URL = os.getenv("HIMALAYAS_API_URL", "https://himalayas.app/jobs/api")
     
+    # Newly Integrated Job Source API Credentials
+    SERPAPI_API_KEY = os.getenv("SERPAPI_API_KEY", "")
+    JSEARCH_API_KEY = os.getenv("JSEARCH_API_KEY", "")
+    RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY", "")
+    RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "linkedin-job-search-api.p.rapidapi.com")
+    THEIRSTACK_API_KEY = os.getenv("THEIRSTACK_API_KEY", "")
+    
     # System settings
     MAX_JOB_AGE_HOURS = 48
+
 

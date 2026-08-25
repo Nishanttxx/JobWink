@@ -18,6 +18,8 @@ class AppSidebar extends StatefulWidget {
   final Map<String, int>? sectionCounts;
   final VoidCallback? onResumePreview;
   final VoidCallback? onGenerate;
+  final VoidCallback? onAtsScore;
+  final VoidCallback? onUploadResume;
 
   const AppSidebar({
     super.key,
@@ -30,6 +32,8 @@ class AppSidebar extends StatefulWidget {
     this.sectionCounts,
     this.onResumePreview,
     this.onGenerate,
+    this.onAtsScore,
+    this.onUploadResume,
   });
 
   @override
@@ -236,16 +240,9 @@ class _AppSidebarState extends State<AppSidebar> {
                   ),
                   _buildSubNavButton(
                     context: context,
-                    label: 'Certifications',
-                    icon: Icons.workspace_premium_outlined,
-                    subIndex: 5,
-                    count: widget.sectionCounts?['certifications'],
-                  ),
-                  _buildSubNavButton(
-                    context: context,
                     label: 'Extracurriculars',
                     icon: Icons.interests_outlined,
-                    subIndex: 6,
+                    subIndex: 5,
                     count: widget.sectionCounts?['extracurriculars'],
                   ),
 
@@ -253,8 +250,47 @@ class _AppSidebarState extends State<AppSidebar> {
                   const Divider(height: 1, indent: 8, endIndent: 8),
                   const SizedBox(height: 16),
 
-                  // Sidebar Actions: Resume Preview & Generate
-                  if (!widget.isCollapsed) ...[
+                  // Sidebar Actions: Resume Preview, Generate Resume, ATS Score
+                  if (widget.isCollapsed) ...[
+                    _SidebarActionButton(
+                      label: 'Resume Preview',
+                      icon: Icons.visibility_outlined,
+                      isPrimary: false,
+                      isCollapsed: true,
+                      onTap: () {
+                        if (widget.onResumePreview != null) {
+                          widget.onResumePreview!();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _SidebarActionButton(
+                      label: 'Generate Resume',
+                      icon: Icons.auto_awesome,
+                      isPrimary: true,
+                      isCollapsed: true,
+                      onTap: () {
+                        if (widget.onGenerate != null) {
+                          widget.onGenerate!();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 6),
+                    _SidebarActionButton(
+                      label: 'ATS Score',
+                      icon: Icons.analytics_outlined,
+                      isPrimary: false,
+                      isActive: widget.activeSubSectionIndex == 7 || widget.activeIndex == 4,
+                      isCollapsed: true,
+                      onTap: () {
+                        if (widget.onAtsScore != null) {
+                          widget.onAtsScore!();
+                        } else if (widget.onSubSectionSelected != null) {
+                          widget.onSubSectionSelected!(7);
+                        }
+                      },
+                    ),
+                  ] else ...[
                     _SidebarActionButton(
                       label: 'Resume Preview',
                       icon: Icons.visibility_outlined,
@@ -267,12 +303,26 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                     const SizedBox(height: 8),
                     _SidebarActionButton(
-                      label: 'Generate',
+                      label: 'Generate Resume',
                       icon: Icons.auto_awesome,
                       isPrimary: true,
                       onTap: () {
                         if (widget.onGenerate != null) {
                           widget.onGenerate!();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    _SidebarActionButton(
+                      label: 'ATS Score',
+                      icon: Icons.analytics_outlined,
+                      isPrimary: false,
+                      isActive: widget.activeSubSectionIndex == 7 || widget.activeIndex == 4,
+                      onTap: () {
+                        if (widget.onAtsScore != null) {
+                          widget.onAtsScore!();
+                        } else if (widget.onSubSectionSelected != null) {
+                          widget.onSubSectionSelected!(7);
                         }
                       },
                     ),
@@ -311,6 +361,16 @@ class _AppSidebarState extends State<AppSidebar> {
                   accentColor: const Color(0xFF3B82F6),
                   onTap: () => Navigator.pushNamed(context, '/profile'),
                 ),
+
+                // Admin Dashboard Menu Item (Exposed STRICTLY to na6236786@gmail.com)
+                if (auth.isAdmin)
+                  _SidebarCustomActionButton(
+                    label: 'Admin Dashboard',
+                    icon: Icons.admin_panel_settings_rounded,
+                    isCollapsed: widget.isCollapsed,
+                    accentColor: const Color(0xFF8B5CF6),
+                    onTap: () => Navigator.pushNamed(context, '/admin'),
+                  ),
               ],
             ),
           ),
@@ -438,7 +498,9 @@ class _AppSidebarState extends State<AppSidebar> {
                           color: Color(0xFF8B949E),
                         ),
                         onSelected: (val) async {
-                          if (val == 'profile') {
+                          if (val == 'admin') {
+                            Navigator.pushNamed(context, '/admin');
+                          } else if (val == 'profile') {
                             Navigator.pushNamed(context, '/profile');
                           } else if (val == 'logout') {
                             await auth.signOut();
@@ -448,6 +510,17 @@ class _AppSidebarState extends State<AppSidebar> {
                           }
                         },
                         itemBuilder: (ctx) => [
+                          if (auth.isAdmin)
+                            const PopupMenuItem(
+                              value: 'admin',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.admin_panel_settings_rounded, size: 16, color: Color(0xFF8B5CF6)),
+                                  SizedBox(width: 8),
+                                  Text('Admin Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
                           const PopupMenuItem(
                             value: 'profile',
                             child: Row(
@@ -749,12 +822,16 @@ class _SidebarActionButton extends StatefulWidget {
   final String label;
   final IconData icon;
   final bool isPrimary;
+  final bool isActive;
+  final bool isCollapsed;
   final VoidCallback onTap;
 
   const _SidebarActionButton({
     required this.label,
     required this.icon,
-    required this.isPrimary,
+    this.isPrimary = false,
+    this.isActive = false,
+    this.isCollapsed = false,
     required this.onTap,
   });
 
@@ -770,7 +847,7 @@ class _SidebarActionButtonState extends State<_SidebarActionButton> {
     final isDarkMode = AppTheme.isDarkMode(context);
 
     if (widget.isPrimary) {
-      return MouseRegion(
+      final btn = MouseRegion(
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: AnimatedScale(
@@ -797,20 +874,25 @@ class _SidebarActionButtonState extends State<_SidebarActionButton> {
                 onTap: widget.onTap,
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  padding: EdgeInsets.symmetric(
+                    vertical: widget.isCollapsed ? 9 : 11,
+                    horizontal: widget.isCollapsed ? 0 : 12,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(widget.icon, size: 16, color: Colors.white),
-                      const SizedBox(width: 8),
-                      Text(
-                        widget.label,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                      if (!widget.isCollapsed) ...[
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.label,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
@@ -819,21 +901,32 @@ class _SidebarActionButtonState extends State<_SidebarActionButton> {
           ),
         ),
       );
+
+      if (widget.isCollapsed) {
+        return Tooltip(message: widget.label, child: btn);
+      }
+      return btn;
     }
 
-    return MouseRegion(
+    final btn = MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         width: double.infinity,
         decoration: BoxDecoration(
-          color: _isHovered
-              ? (isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04))
-              : Colors.transparent,
+          color: widget.isActive
+              ? AppTheme.primaryOrange.withValues(alpha: isDarkMode ? 0.22 : 0.12)
+              : _isHovered
+                  ? (isDarkMode ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04))
+                  : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: AppTheme.getBorderColor(context),
+            color: widget.isActive
+                ? AppTheme.primaryOrange.withValues(alpha: 0.5)
+                : (_isHovered
+                    ? AppTheme.primaryOrange.withValues(alpha: 0.3)
+                    : AppTheme.getBorderColor(context)),
             width: 1.2,
           ),
         ),
@@ -843,24 +936,37 @@ class _SidebarActionButtonState extends State<_SidebarActionButton> {
             onTap: widget.onTap,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
+              padding: EdgeInsets.symmetric(
+                vertical: widget.isCollapsed ? 9 : 10,
+                horizontal: widget.isCollapsed ? 0 : 12,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(
                     widget.icon,
                     size: 16,
-                    color: AppTheme.getTextColor(context),
+                    color: widget.isActive
+                        ? AppTheme.primaryOrange
+                        : (_isHovered
+                            ? AppTheme.primaryOrange
+                            : AppTheme.getTextColor(context)),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.label,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.getTextColor(context),
+                  if (!widget.isCollapsed) ...[
+                    const SizedBox(width: 8),
+                    Text(
+                      widget.label,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13,
+                        fontWeight: widget.isActive ? FontWeight.bold : FontWeight.w600,
+                        color: widget.isActive
+                            ? AppTheme.primaryOrange
+                            : (_isHovered
+                                ? AppTheme.primaryOrange
+                                : AppTheme.getTextColor(context)),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -868,5 +974,10 @@ class _SidebarActionButtonState extends State<_SidebarActionButton> {
         ),
       ),
     );
+
+    if (widget.isCollapsed) {
+      return Tooltip(message: widget.label, child: btn);
+    }
+    return btn;
   }
 }

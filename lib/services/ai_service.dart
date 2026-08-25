@@ -117,13 +117,10 @@ class AIService {
       return local.hasUsableData ? local : null;
     }
 
-    // Pre-extract & validate PDF text before calling AI providers to avoid sending corrupted text
+    // Pre-extract PDF text for text-based fallback providers
     if (mimeType.contains('pdf')) {
       final extractedText = await extractTextFromBytesAsyncStatic(bytes);
-      if (extractedText.trim().isEmpty) {
-        debugPrint('[AIService] PDF text extraction yielded unreadable or corrupted text. Aborting AI parsing.');
-        return null;
-      }
+      debugPrint('[AIService] PDF text extraction yielded ${extractedText.length} characters.');
     }
 
     // Default provider priority chain (Gemini -> OpenAI -> Cerebras -> Mistral)
@@ -449,6 +446,642 @@ class AIService {
   }
 
   // ---------------------------------------------------------------------------
+  // 3b. AUTOMATIC JOB DESCRIPTION KEYWORDS & ATS MATCH ANALYSIS
+  // ---------------------------------------------------------------------------
+
+  final Map<String, JobKeywordsAnalysisResult> _atsAnalysisCache = {};
+
+  String _computeAtsCacheKey(ResumeData resume, String jd, String title) {
+    final expCount = resume.experience.length;
+    final projCount = resume.projects.length;
+    final eduCount = resume.education.length;
+    final certCount = resume.certifications.length;
+    final extraCount = resume.extracurriculars.length;
+    return '${resume.fullName.hashCode}_${resume.title.hashCode}_${resume.summary.hashCode}_${resume.skills.join(",")}_${expCount}_${projCount}_${eduCount}_${certCount}_${extraCount}___${jd.trim().hashCode}___${title.trim().hashCode}';
+  }
+
+  /// Builds a clean, normalized textual representation of the CURRENT resume for AI evaluation
+  String _buildNormalizedResumeRepresentation(ResumeData resume) {
+    final sb = StringBuffer();
+    if (resume.fullName.isNotEmpty) sb.writeln('CANDIDATE NAME: ${resume.fullName}');
+    if (resume.title.isNotEmpty) sb.writeln('CURRENT / TARGET TITLE: ${resume.title}');
+    final contactInfo = [resume.email, resume.phone, resume.location].where((s) => s.isNotEmpty).join(' | ');
+    if (contactInfo.isNotEmpty) sb.writeln('CONTACT: $contactInfo');
+    if (resume.linkedin.isNotEmpty) sb.writeln('LINKEDIN: ${resume.linkedin}');
+    if (resume.github.isNotEmpty) sb.writeln('GITHUB: ${resume.github}');
+
+    if (resume.summary.isNotEmpty) {
+      sb.writeln('\n--- PROFESSIONAL SUMMARY ---');
+      sb.writeln(resume.summary);
+    }
+
+    if (resume.skills.isNotEmpty || resume.skillGroups.isNotEmpty) {
+      sb.writeln('\n--- SKILLS & TECHNOLOGIES ---');
+      if (resume.skills.isNotEmpty) sb.writeln('Skills: ${resume.skills.join(', ')}');
+      for (final g in resume.skillGroups) {
+        if (g.items.isNotEmpty) sb.writeln('${g.category}: ${g.items.join(', ')}');
+      }
+    }
+
+    if (resume.experience.isNotEmpty) {
+      sb.writeln('\n--- WORK EXPERIENCE ---');
+      for (final exp in resume.experience) {
+        sb.writeln('${exp.role} at ${exp.company} (${exp.startDate} - ${exp.endDate}) ${exp.location}');
+        for (final b in exp.description) {
+          if (b.trim().isNotEmpty) sb.writeln('- $b');
+        }
+      }
+    }
+
+    if (resume.projects.isNotEmpty) {
+      sb.writeln('\n--- PROJECTS ---');
+      for (final proj in resume.projects) {
+        final tech = proj.technologies.isNotEmpty ? ' [${proj.technologies.join(', ')}]' : '';
+        final link = proj.url.isNotEmpty ? ' (${proj.url})' : '';
+        sb.writeln('${proj.name}$tech$link');
+        if (proj.description.isNotEmpty) sb.writeln(proj.description);
+        for (final b in proj.descriptionBullets) {
+          if (b.trim().isNotEmpty) sb.writeln('- $b');
+        }
+      }
+    }
+
+    if (resume.education.isNotEmpty) {
+      sb.writeln('\n--- EDUCATION ---');
+      for (final edu in resume.education) {
+        final gpaStr = edu.gpa.isNotEmpty ? ' | GPA: ${edu.gpa}' : '';
+        sb.writeln('${edu.degree} in ${edu.fieldOfStudy} | ${edu.institution} (${edu.startDate} - ${edu.endDate})$gpaStr');
+      }
+    }
+
+    if (resume.certifications.isNotEmpty) {
+      sb.writeln('\n--- CERTIFICATIONS ---');
+      for (final cert in resume.certifications) {
+        sb.writeln('${cert.activity} | ${cert.organization} | ${cert.description}');
+      }
+    }
+
+    if (resume.extracurriculars.isNotEmpty) {
+      sb.writeln('\n--- EXTRACURRICULAR ACTIVITIES ---');
+      for (final extra in resume.extracurriculars) {
+        sb.writeln('${extra.activity} | ${extra.role} | ${extra.organization} | ${extra.description}');
+      }
+    }
+
+    return sb.toString();
+  }
+
+  Future<JobKeywordsAnalysisResult> analyzeJobKeywords({
+    required String jobDescription,
+    required ResumeData currentResume,
+    String targetJobTitle = '',
+  }) async {
+    final jd = jobDescription.trim();
+    if (jd.isEmpty) {
+      return const JobKeywordsAnalysisResult();
+    }
+
+    final hasResumeData = currentResume.fullName.isNotEmpty ||
+        currentResume.summary.isNotEmpty ||
+        currentResume.skills.isNotEmpty ||
+        currentResume.experience.isNotEmpty ||
+        currentResume.projects.isNotEmpty ||
+        currentResume.education.isNotEmpty;
+
+    if (!hasResumeData) {
+      return const JobKeywordsAnalysisResult();
+    }
+
+    final cacheKey = _computeAtsCacheKey(currentResume, jd, targetJobTitle);
+    if (_atsAnalysisCache.containsKey(cacheKey)) {
+      return _atsAnalysisCache[cacheKey]!;
+    }
+
+    final normalizedResumeText = _buildNormalizedResumeRepresentation(currentResume);
+    final resumeCorpus = _buildResumeSearchCorpus(currentResume);
+
+    // 1. Prompt the AI evaluator to analyze both the current resume and current job description
+    final prompt = '''
+You are an expert ATS (Applicant Tracking System) resume evaluator.
+
+Evaluate ONLY the supplied CURRENT RESUME against ONLY the supplied TARGET JOB DESCRIPTION.
+Do not assume information that is not present.
+Do not invent skills, experience, education, projects, certifications, or achievements.
+Identify meaningful job requirements (do not score generic words like "intern", "responsible", "systems", "services").
+
+Distinguish carefully between:
+- Required skills vs Preferred/Nice-to-have skills.
+- FOUND keywords: explicitly or semantically present in resume (e.g. "RESTful API development" matches "REST API development").
+- PARTIALLY_MATCHED keywords: partial or related evidence (e.g. "Machine Learning" matching "ML").
+- MISSING keywords: not present in the resume. (e.g. If JD requires "AWS" and resume does not have it, AWS is MISSING. "Java" does NOT match "JavaScript").
+
+EVALUATION & SCORING CATEGORIES (Total Max 100 points):
+1. keywordSkillMatch (Max 30 points): Core technical skills, tools, languages, and frameworks alignment.
+2. experienceMatch (Max 20 points): Relevant professional/internship experience demonstrating job requirements.
+3. projectMatch (Max 15 points): Relevant practical project evidence, repositories, and technical deliverables.
+4. responsibilityMatch (Max 15 points): Alignment of daily tasks, impact, and job responsibilities.
+5. educationMatch (Max 10 points): Degree and academic background alignment (do not penalize if JD specifies no degree requirement).
+6. overallRelevance (Max 10 points): Overall suitability and readiness for this specific job.
+
+SCORING CONSISTENCY RULE:
+The atsScore MUST equal the sum of the 6 category scores:
+atsScore = keywordSkillMatch + experienceMatch + projectMatch + responsibilityMatch + educationMatch + overallRelevance.
+Ensure atsScore is between 0 and 100.
+
+TARGET JOB TITLE:
+$targetJobTitle
+
+TARGET JOB DESCRIPTION:
+"""
+$jd
+"""
+
+CURRENT RESUME:
+"""
+$normalizedResumeText
+"""
+
+Return ONLY a valid JSON object matching this exact schema:
+{
+  "atsScore": 78,
+  "summary": "Concise 1-2 sentence assessment of overall resume fit for the job.",
+  "categoryScores": {
+    "keywordSkillMatch": 24,
+    "experienceMatch": 16,
+    "projectMatch": 12,
+    "responsibilityMatch": 11,
+    "educationMatch": 8,
+    "overallRelevance": 7
+  },
+  "matchedKeywords": [
+    "Python",
+    "Docker",
+    "REST APIs"
+  ],
+  "partiallyMatchedKeywords": [
+    "Machine Learning"
+  ],
+  "missingKeywords": [
+    "AWS",
+    "TensorFlow"
+  ],
+  "strengths": [
+    "Strong Python experience",
+    "Relevant API development experience"
+  ],
+  "gaps": [
+    "AWS experience is not present",
+    "TensorFlow experience is not present"
+  ]
+}
+''';
+
+    try {
+      final jsonMap = await generateJsonWithFallback(prompt);
+      if (jsonMap != null && (jsonMap['atsScore'] != null || jsonMap['categoryScores'] != null)) {
+        final parsed = JobKeywordsAnalysisResult.fromJson(jsonMap);
+
+        // Sanitize matched keywords against actual resume corpus to eliminate any hallucination
+        final verifiedMatched = <String>[];
+        final verifiedMissing = <String>[...parsed.missingKeywords];
+
+        for (final kw in parsed.matchedKeywords) {
+          if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
+            verifiedMatched.add(kw);
+          } else {
+            if (!verifiedMissing.contains(kw)) verifiedMissing.add(kw);
+          }
+        }
+
+        final verifiedPartial = <String>[];
+        for (final kw in parsed.partiallyMatchedKeywords) {
+          if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
+            if (!verifiedMatched.contains(kw)) verifiedMatched.add(kw);
+          } else {
+            verifiedPartial.add(kw);
+          }
+        }
+
+        final validatedResult = JobKeywordsAnalysisResult(
+          atsScore: parsed.atsScore,
+          matchScore: parsed.atsScore,
+          summary: parsed.summary.isNotEmpty
+              ? parsed.summary
+              : 'Resume evaluated against job requirements with an overall ATS score of ${parsed.atsScore.toInt()}%.',
+          categoryScores: parsed.categoryScores,
+          extractedJobKeywords: [...verifiedMatched, ...verifiedPartial, ...verifiedMissing],
+          matchedKeywords: verifiedMatched,
+          partiallyMatchedKeywords: verifiedPartial,
+          missingKeywords: verifiedMissing,
+          strengths: parsed.strengths,
+          gaps: parsed.gaps,
+        );
+
+        _atsAnalysisCache[cacheKey] = validatedResult;
+        return validatedResult;
+      }
+    } catch (e) {
+      debugPrint('[AIService] AI ATS evaluation error: $e. Using deterministic scoring model.');
+    }
+
+    // 2. Deterministic Fallback Scoring Model if AI provider call encounters errors
+    final fallbackResult = _calculateDeterministicAtsScore(
+      jobDescription: jd,
+      targetJobTitle: targetJobTitle,
+      currentResume: currentResume,
+      resumeCorpus: resumeCorpus,
+    );
+
+    _atsAnalysisCache[cacheKey] = fallbackResult;
+    return fallbackResult;
+  }
+
+  /// Evaluates ATS Score deterministically using the exact same 6-category weighted scoring formula (Max 100 points)
+  JobKeywordsAnalysisResult _calculateDeterministicAtsScore({
+    required String jobDescription,
+    required String targetJobTitle,
+    required ResumeData currentResume,
+    required String resumeCorpus,
+  }) {
+    final extracted = _filterMeaningfulKeywords(_extractKeywordsFromText(jobDescription));
+    if (extracted.isEmpty) {
+      return const JobKeywordsAnalysisResult();
+    }
+
+    final matched = <String>[];
+    final missing = <String>[];
+
+    for (final kw in extracted) {
+      if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
+        matched.add(kw);
+      } else {
+        missing.add(kw);
+      }
+    }
+
+    final totalKeywords = extracted.length;
+    final matchedCount = matched.length;
+
+    if (matchedCount == 0) {
+      return JobKeywordsAnalysisResult(
+        atsScore: 0.0,
+        matchScore: 0.0,
+        summary: 'No overlapping skills or requirements found for this job description.',
+        categoryScores: const {
+          'keywordSkillMatch': 0,
+          'experienceMatch': 0,
+          'projectMatch': 0,
+          'responsibilityMatch': 0,
+          'educationMatch': 0,
+          'overallRelevance': 0,
+        },
+        extractedJobKeywords: extracted,
+        matchedKeywords: const [],
+        partiallyMatchedKeywords: const [],
+        missingKeywords: missing,
+        strengths: const [],
+        gaps: missing.map((m) => '$m is not present in resume').toList(),
+      );
+    }
+
+    // 1. keywordSkillMatch (Max 30)
+    final keywordRatio = totalKeywords > 0 ? (matchedCount / totalKeywords) : 0.0;
+    final int keywordSkillScore = (keywordRatio * 30.0).round().clamp(0, 30);
+
+    // 2. experienceMatch (Max 20)
+    int expEvidenceCount = 0;
+    for (final kw in matched) {
+      for (final exp in currentResume.experience) {
+        if (exp.role.toLowerCase().contains(kw.toLowerCase()) ||
+            exp.description.any((d) => d.toLowerCase().contains(kw.toLowerCase()))) {
+          expEvidenceCount++;
+          break;
+        }
+      }
+    }
+    final expRatio = matchedCount > 0 ? (expEvidenceCount / matchedCount) : 0.0;
+    final int experienceScore = (expRatio * 20.0).round().clamp(0, 20);
+
+    // 3. projectMatch (Max 15)
+    int projEvidenceCount = 0;
+    for (final kw in matched) {
+      for (final proj in currentResume.projects) {
+        if (proj.name.toLowerCase().contains(kw.toLowerCase()) ||
+            proj.technologies.any((t) => t.toLowerCase().contains(kw.toLowerCase())) ||
+            proj.description.toLowerCase().contains(kw.toLowerCase()) ||
+            proj.descriptionBullets.any((b) => b.toLowerCase().contains(kw.toLowerCase()))) {
+          projEvidenceCount++;
+          break;
+        }
+      }
+    }
+    final projRatio = matchedCount > 0 ? (projEvidenceCount / matchedCount) : 0.0;
+    final int projectScore = (projRatio * 15.0).round().clamp(0, 15);
+
+    // 4. responsibilityMatch (Max 15)
+    int responsibilityScore = 0;
+    if (matchedCount >= 3) {
+      responsibilityScore += 8;
+    } else if (matchedCount >= 1) {
+      responsibilityScore += 4;
+    }
+    if (targetJobTitle.isNotEmpty &&
+        (currentResume.title.toLowerCase().contains(targetJobTitle.toLowerCase()) ||
+            currentResume.experience.any((e) => e.role.toLowerCase().contains(targetJobTitle.toLowerCase())))) {
+      responsibilityScore += 7;
+    } else if (currentResume.experience.isNotEmpty) {
+      responsibilityScore += 4;
+    }
+    responsibilityScore = responsibilityScore.clamp(0, 15);
+
+    // 5. educationMatch (Max 10)
+    int educationScore = 0;
+    if (currentResume.education.isNotEmpty) {
+      final hasRelevantField = currentResume.education.any((e) =>
+          e.fieldOfStudy.toLowerCase().contains('computer') ||
+          e.fieldOfStudy.toLowerCase().contains('science') ||
+          e.fieldOfStudy.toLowerCase().contains('engineering') ||
+          e.fieldOfStudy.toLowerCase().contains('information') ||
+          e.fieldOfStudy.toLowerCase().contains('technology') ||
+          e.fieldOfStudy.toLowerCase().contains('data'));
+      educationScore = hasRelevantField ? 10 : 7;
+    }
+    educationScore = educationScore.clamp(0, 10);
+
+    // 6. overallRelevance (Max 10)
+    final completeness = _computeProfileCompleteness(currentResume);
+    final int overallRelevanceScore = (completeness * 10.0).round().clamp(0, 10);
+
+    final finalScore = (keywordSkillScore +
+            experienceScore +
+            projectScore +
+            responsibilityScore +
+            educationScore +
+            overallRelevanceScore)
+        .toDouble()
+        .clamp(0.0, 100.0);
+
+    final strengths = <String>[];
+    for (final kw in matched.take(4)) {
+      strengths.add('Demonstrated competence in $kw');
+    }
+
+    final gaps = <String>[];
+    for (final kw in missing.take(4)) {
+      gaps.add('$kw experience is not present in resume');
+    }
+
+    return JobKeywordsAnalysisResult(
+      atsScore: finalScore,
+      matchScore: finalScore,
+      summary: 'Evaluated resume match against job requirements ($matchedCount of $totalKeywords key requirements found).',
+      categoryScores: {
+        'keywordSkillMatch': keywordSkillScore,
+        'experienceMatch': experienceScore,
+        'projectMatch': projectScore,
+        'responsibilityMatch': responsibilityScore,
+        'educationMatch': educationScore,
+        'overallRelevance': overallRelevanceScore,
+      },
+      extractedJobKeywords: extracted,
+      matchedKeywords: matched,
+      partiallyMatchedKeywords: const [],
+      missingKeywords: missing,
+      strengths: strengths,
+      gaps: gaps,
+    );
+  }
+
+  /// Builds a complete searchable text corpus from all sections of current ResumeData
+  String _buildResumeSearchCorpus(ResumeData resume) {
+    final sb = StringBuffer();
+    sb.writeln(resume.fullName);
+    sb.writeln(resume.title);
+    sb.writeln(resume.summary);
+    for (final s in resume.skills) {
+      sb.writeln(s);
+    }
+    for (final g in resume.skillGroups) {
+      for (final item in g.items) {
+        sb.writeln(item);
+      }
+    }
+    for (final exp in resume.experience) {
+      sb.writeln('${exp.role} ${exp.company} ${exp.location}');
+      for (final b in exp.description) {
+        sb.writeln(b);
+      }
+    }
+    for (final proj in resume.projects) {
+      sb.writeln('${proj.name} ${proj.type} ${proj.technologies.join(' ')}');
+      sb.writeln(proj.description);
+      for (final b in proj.descriptionBullets) {
+        sb.writeln(b);
+      }
+    }
+    for (final edu in resume.education) {
+      sb.writeln('${edu.degree} ${edu.fieldOfStudy} ${edu.institution}');
+    }
+    for (final cert in resume.certifications) {
+      sb.writeln('${cert.activity} ${cert.role} ${cert.organization} ${cert.description}');
+    }
+    for (final extra in resume.extracurriculars) {
+      sb.writeln('${extra.activity} ${extra.role} ${extra.organization} ${extra.description}');
+    }
+    return sb.toString().toLowerCase();
+  }
+
+  /// Check if a keyword is matched in the resume with word-boundary awareness and semantic technical aliases
+  bool _isKeywordInResume(String kw, ResumeData resume, String corpus) {
+    final lowerKw = kw.trim().toLowerCase();
+    if (lowerKw.isEmpty) return false;
+
+    // Check direct skills list
+    for (final s in resume.skills) {
+      final ls = s.trim().toLowerCase();
+      if (ls == lowerKw || ls.contains(lowerKw) || lowerKw.contains(ls)) {
+        if (_isSafeSemanticMatch(lowerKw, ls)) return true;
+      }
+    }
+    for (final g in resume.skillGroups) {
+      for (final s in g.items) {
+        final ls = s.trim().toLowerCase();
+        if (ls == lowerKw || ls.contains(lowerKw) || lowerKw.contains(ls)) {
+          if (_isSafeSemanticMatch(lowerKw, ls)) return true;
+        }
+      }
+    }
+
+    // Boundary-aware regex match in full resume corpus
+    final escaped = RegExp.escape(lowerKw);
+    final pattern = RegExp('(?<=^|[^a-z0-9])$escaped(?=[^a-z0-9]|\$)', caseSensitive: false);
+    if (pattern.hasMatch(corpus)) {
+      return true;
+    }
+
+    // Semantic technical equivalences
+    final aliases = _getTechnicalAliases(lowerKw);
+    for (final alias in aliases) {
+      final aliasEscaped = RegExp.escape(alias);
+      final aliasPattern = RegExp('(?<=^|[^a-z0-9])$aliasEscaped(?=[^a-z0-9]|\$)', caseSensitive: false);
+      if (aliasPattern.hasMatch(corpus)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  bool _isSafeSemanticMatch(String kw, String text) {
+    if (kw == text) return true;
+    // Disallow false substring matches (e.g. Java vs JavaScript, C vs Cloud)
+    if (kw == 'java' && text.contains('javascript')) return false;
+    if (kw == 'c' && text != 'c' && text != 'c/c++') return false;
+    if (kw == 'go' && text != 'go' && text != 'golang') return false;
+    if (kw == 'r' && text != 'r' && !text.contains('r language')) return false;
+    return true;
+  }
+
+  List<String> _getTechnicalAliases(String kw) {
+    switch (kw) {
+      case 'rest api':
+      case 'rest apis':
+      case 'restful api':
+      case 'restful apis':
+      case 'rest':
+        return ['rest api', 'rest apis', 'restful api', 'restful apis', 'restful', 'rest'];
+      case 'machine learning':
+      case 'ml':
+        return ['machine learning', 'ml'];
+      case 'artificial intelligence':
+      case 'ai':
+      case 'ai/ml':
+        return ['artificial intelligence', 'ai', 'ai/ml', 'genai', 'generative ai'];
+      case 'react':
+      case 'react.js':
+      case 'reactjs':
+        return ['react', 'react.js', 'reactjs'];
+      case 'node':
+      case 'node.js':
+      case 'nodejs':
+        return ['node', 'node.js', 'nodejs'];
+      case 'postgres':
+      case 'postgresql':
+        return ['postgres', 'postgresql'];
+      case 'k8s':
+      case 'kubernetes':
+        return ['k8s', 'kubernetes'];
+      case 'ci/cd':
+      case 'continuous integration':
+        return ['ci/cd', 'ci / cd', 'continuous integration', 'github actions'];
+      case 'aws':
+      case 'amazon web services':
+        return ['aws', 'amazon web services'];
+      case 'gcp':
+      case 'google cloud':
+      case 'google cloud platform':
+        return ['gcp', 'google cloud', 'google cloud platform'];
+      default:
+        return [];
+    }
+  }
+
+  double _computeProfileCompleteness(ResumeData resume) {
+    double score = 0.0;
+    if (resume.fullName.isNotEmpty) score += 0.15;
+    if (resume.email.isNotEmpty) score += 0.1;
+    if (resume.phone.isNotEmpty) score += 0.1;
+    if (resume.summary.isNotEmpty) score += 0.2;
+    if (resume.skills.isNotEmpty) score += 0.2;
+    if (resume.experience.isNotEmpty) score += 0.15;
+    if (resume.education.isNotEmpty) score += 0.1;
+    return score.clamp(0.0, 1.0);
+  }
+
+  List<String> _extractKeywordsFromText(String text) {
+    const knownTerms = [
+      'python', 'javascript', 'typescript', 'dart', 'flutter', 'react', 'react.js',
+      'node', 'node.js', 'java', 'c++', 'c#', 'golang', 'rust', 'ruby', 'php', 'swift', 'kotlin',
+      'docker', 'kubernetes', 'k8s', 'aws', 'azure', 'gcp', 'terraform', 'ci/cd',
+      'git', 'github', 'rest api', 'rest apis', 'graphql', 'grpc', 'sql', 'postgresql',
+      'mysql', 'mongodb', 'redis', 'firebase', 'supabase', 'sqlite', 'kafka', 'rabbitmq',
+      'machine learning', 'deep learning', 'nlp', 'pytorch', 'tensorflow', 'keras',
+      'scikit-learn', 'pandas', 'numpy', 'opencv', 'llm', 'generative ai', 'ai/ml',
+      'data structures', 'algorithms', 'agile', 'scrum', 'unit testing', 'microservices',
+      'linux', 'html', 'css', 'tailwind', 'redux', 'next.js', 'vue', 'angular',
+    ];
+
+    final found = <String>{};
+    final lower = text.toLowerCase();
+    for (final term in knownTerms) {
+      final escaped = RegExp.escape(term);
+      final pat = RegExp('(?<=^|[^a-z0-9])$escaped(?=[^a-z0-9]|\$)', caseSensitive: false);
+      if (pat.hasMatch(lower)) {
+        found.add(_capitalizeTerm(term));
+      }
+    }
+    return found.toList();
+  }
+
+  String _capitalizeTerm(String term) {
+    if (term == 'ci/cd') return 'CI/CD';
+    if (term == 'aws') return 'AWS';
+    if (term == 'gcp') return 'GCP';
+    if (term == 'sql') return 'SQL';
+    if (term == 'rest api' || term == 'rest apis') return 'REST APIs';
+    if (term == 'ai/ml') return 'AI/ML';
+    if (term == 'html') return 'HTML';
+    if (term == 'css') return 'CSS';
+    if (term == 'nlp') return 'NLP';
+    if (term == 'llm') return 'LLM';
+    if (term == 'grpc') return 'gRPC';
+    if (term == 'mongodb') return 'MongoDB';
+    if (term == 'postgresql') return 'PostgreSQL';
+    if (term == 'mysql') return 'MySQL';
+    if (term == 'sqlite') return 'SQLite';
+    if (term == 'next.js') return 'Next.js';
+    if (term == 'node.js') return 'Node.js';
+    if (term == 'react.js') return 'React.js';
+    if (term == 'pytorch') return 'PyTorch';
+    if (term == 'tensorflow') return 'TensorFlow';
+    if (term == 'kubernetes') return 'Kubernetes';
+    if (term == 'docker') return 'Docker';
+    if (term == 'python') return 'Python';
+    if (term == 'javascript') return 'JavaScript';
+    if (term == 'typescript') return 'TypeScript';
+    if (term == 'flutter') return 'Flutter';
+    if (term == 'dart') return 'Dart';
+    if (term == 'golang') return 'Go';
+    return term.split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' ');
+  }
+
+  List<String> _filterMeaningfulKeywords(List<String> list) {
+    const stopwords = {
+      'the', 'and', 'with', 'for', 'in', 'to', 'of', 'a', 'an', 'from', 'this',
+      'that', 'will', 'should', 'have', 'has', 'are', 'is', 'looking', 'experience',
+      'years', 'work', 'team', 'candidate', 'job', 'role', 'responsibilities',
+      'skills', 'required', 'we', 'you', 'our', 'must', 'be', 'on', 'at', 'by',
+      'as', 'or', 'but', 'not', 'all', 'any', 'who', 'what', 'when', 'where',
+      'why', 'how', 'strong', 'good', 'ability', 'knowledge', 'understanding',
+      'preferred', 'plus', 'familiarity', 'background', 'opportunity', 'company',
+      'join', 'working', 'help', 'building', 'develop', 'create',
+    };
+
+    final result = <String>[];
+    final seen = <String>{};
+
+    for (final item in list) {
+      final trimmed = item.trim();
+      if (trimmed.length < 2) continue;
+      final lower = trimmed.toLowerCase();
+      if (stopwords.contains(lower)) continue;
+      if (!seen.add(lower)) continue;
+      result.add(trimmed);
+    }
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------
   // 4. ENHANCE SUMMARY
   // ---------------------------------------------------------------------------
 
@@ -586,14 +1219,9 @@ class AIService {
     // 1. Remove base64 image data strings
     text = text.replaceAll(RegExp(r'data:image\/[^;]+;base64,[A-Za-z0-9+/=]+'), '');
 
-    // 2. Remove HTML image/link tags and layout containers
-    text = text.replaceAll(RegExp(r'<img[^>]*>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<p[^>]*>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<\/p>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<div[^>]*>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<\/div>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<a[^>]*>', caseSensitive: false), '');
-    text = text.replaceAll(RegExp(r'<\/a>', caseSensitive: false), '');
+    // 2. Remove HTML comments and tags
+    text = text.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '');
+    text = text.replaceAll(RegExp(r'<[^>]*>'), ' ');
 
     // 3. Remove Markdown badges: [![alt](image_url)](link_url)
     text = text.replaceAll(RegExp(r'\[!\[[^\]]*\]\([^\)]*\)\]\([^\)]*\)'), '');
@@ -604,7 +1232,7 @@ class AIService {
     // 5. Remove shields.io / badge URLs
     text = text.replaceAll(RegExp(r'https?:\/\/(img\.)?shields\.io\/[^\s\)]+'), '');
 
-    // 6. Split lines and filter out TOC, badge lines, and setup command spam
+    // 6. Split lines and filter out TOC links, badge lines, and separator noise
     final lines = text.split(RegExp(r'[\r\n]+'));
     final filtered = <String>[];
 
@@ -614,18 +1242,18 @@ class AIService {
       // Skip markdown table of contents links e.g. - [Section](#section)
       if (RegExp(r'^[\-\*\+]\s*\[[^\]]+\]\(#[^\)]+\)').hasMatch(trimmed)) continue;
       // Skip license or badge-only lines
-      if (RegExp(r'^(license|build|coverage|npm|version|workflow|ci|badge):', caseSensitive: false).hasMatch(trimmed)) continue;
+      if (RegExp(r'^(license|build|coverage|npm|version|workflow|ci|badge|downloads):', caseSensitive: false).hasMatch(trimmed)) continue;
       filtered.add(trimmed);
     }
 
     text = filtered.join('\n');
 
-    // 7. Limit length to 3500 characters cleanly
-    if (text.length > 3500) {
-      text = text.substring(0, 3500);
-      final lastDot = text.lastIndexOf('.');
-      if (lastDot > 2000) {
-        text = text.substring(0, lastDot + 1);
+    // 7. Limit length to 15,000 characters to capture the COMPLETE README without truncation
+    if (text.length > 15000) {
+      text = text.substring(0, 15000);
+      final lastNewline = text.lastIndexOf('\n');
+      if (lastNewline > 12000) {
+        text = text.substring(0, lastNewline);
       }
     }
 
@@ -699,36 +1327,68 @@ RULES:
     required String owner,
     required String repo,
   }) async {
+    debugPrint('[GitHubProject] Repository extracted');
+
     final cleanReadme = _sanitizeReadmeContent(readmeContent);
+
+    if (cleanReadme.isEmpty) {
+      debugPrint('[GitHubProject] README.md not found');
+    } else if (cleanReadme.length < 40) {
+      debugPrint('[GitHubProject] README.md contains insufficient project information');
+    } else {
+      debugPrint('[GitHubProject] README.md found');
+      debugPrint('[GitHubProject] README length: ${cleanReadme.length}');
+      debugPrint('[GitHubProject] README analyzed');
+    }
+
+    debugPrint('[GitHubProject] Generating 2–3 project bullets');
 
     final prompt = '''
 You are a senior technical resume writer and engineering career expert.
-Analyze this GitHub repository metadata and README snippet to create a high-impact, ATS-optimized project entry for a professional software engineer's resume.
+Analyze this GitHub repository's README.md (PRIMARY SOURCE) and metadata to create an accurate, high-impact, ATS-optimized project entry for a professional software engineer's resume.
 
-REPOSITORY METADATA:
+==================================================
+README.md CONTENT (PRIMARY SOURCE):
+==================================================
+${cleanReadme.isNotEmpty ? cleanReadme : "(README.md not available)"}
+
+==================================================
+REPOSITORY METADATA (SECONDARY SOURCE):
+==================================================
 - Repository Name: $repoName
 - Short Description: ${repoDescription.isNotEmpty ? repoDescription : "(None provided)"}
 - Primary Language: ${language.isNotEmpty ? language : "Not specified"}
 - Topics/Tags: ${topics.isNotEmpty ? topics.join(', ') : "None"}
 
-README CONTENT (CLEANED & SANITIZED):
-${cleanReadme.isNotEmpty ? cleanReadme : "(No README content available)"}
+==================================================
+STRICT INSTRUCTIONS & ACCURACY RULES:
+==================================================
+1. README.md IS THE PRIMARY SOURCE:
+   - Base all bullets strictly on features, capabilities, architecture, and technologies documented in README.md.
+   - Do NOT invent, assume, or hallucinate functionality (e.g. do NOT claim authentication, database integration, AI summarization, microservices, or specific metrics unless explicitly present in the README or repository).
+   - If a feature is not mentioned in README.md or repository metadata, DO NOT include it.
 
-REQUIREMENTS FOR ATS RESUME:
-1. "name": Clean, professional, Title Case project title (e.g. convert "jobwink-mobile-v2" to "JobWink Mobile App" or "CV Studio Engine").
-2. "type": Specific classification (e.g. "Full-Stack Web App", "Mobile Application", "AI Service", "CLI Tool", "Developer Library", "REST API Backend").
-3. "technologies": Comprehensive array of technologies, frameworks, tools, state management, databases, and APIs detected (e.g. ["Flutter", "Dart", "Gemini AI", "Supabase", "REST API"]).
-4. "bullets": 2-4 professional, outcome-driven bullet points describing what was built, core architecture, key features, and engineering accomplishments. MUST start with past-tense action verbs (e.g., "Architected", "Engineered", "Developed", "Integrated", "Optimized", "Designed"). DO NOT copy installation commands, license text, or badge noise.
+2. BULLETS REQUIREMENT (STRICTLY 2 OR 3 BULLETS):
+   - You MUST generate EXACTLY 2 or 3 concise, resume-ready bullet points. NEVER generate 1, and NEVER generate 4 or more.
+   - Target 12–25 words per bullet. Keep bullets concise, technical, and high-impact.
+   - Prefer bullets containing: ACTION + ACTUAL FEATURE + RELEVANT TECHNOLOGY.
+   - Start each bullet with a strong past-tense action verb (e.g. "Developed", "Engineered", "Implemented", "Architected", "Built", "Integrated", "Designed").
+   - Do NOT include bullet symbols (•, -, *) inside the strings.
+   - Do NOT include installation commands, setup instructions, license text, or contributor lists.
+
+3. "name": Clean, professional Title Case project title (e.g. "JobWink Mobile App").
+4. "type": Specific classification (e.g. "Mobile Application", "Full-Stack Web App", "Developer Tool", "REST API Backend", "AI Service", "CLI Utility").
+5. "technologies": Comprehensive list of actual technologies, frameworks, libraries, tools, and databases explicitly used or mentioned in the project.
 
 Return a JSON object matching this schema EXACTLY:
 {
   "name": "Project Name",
   "type": "Project Type",
-  "technologies": ["Tech1", "Tech2"],
+  "technologies": ["Tech1", "Tech2", "Tech3"],
   "bullets": [
-    "Action-driven bullet point 1 describing project purpose and value",
-    "Action-driven bullet point 2 detailing technical architecture and features",
-    "Action-driven bullet point 3 highlighting performance, capabilities, or tech stack"
+    "Action-driven bullet point 1 describing project purpose and core feature (12-25 words)",
+    "Action-driven bullet point 2 detailing technical implementation or architecture (12-25 words)",
+    "Action-driven bullet point 3 highlighting key capabilities or integrated technologies (12-25 words)"
   ]
 }
 
@@ -745,16 +1405,23 @@ Return ONLY valid JSON.
             ? techsVal.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList()
             : <String>[];
         final bulletsVal = jsonMap['bullets'];
-        final bullets = bulletsVal is List
-            ? bulletsVal.map((e) => e.toString().trim()).where((s) => s.isNotEmpty).toList()
+        final rawBullets = bulletsVal is List
+            ? bulletsVal.map((e) => _cleanBulletText(e.toString())).where((s) => s.isNotEmpty).toList()
             : <String>[];
 
-        if (bullets.isNotEmpty) {
+        final finalizedBullets = _normalizeToTwoOrThreeBullets(
+          bullets: rawBullets,
+          repoName: repoName,
+          repoDescription: repoDescription,
+          technologies: techs.isNotEmpty ? techs : (language.isNotEmpty ? [language, ...topics] : topics),
+        );
+
+        if (finalizedBullets.length >= 2 && finalizedBullets.length <= 3) {
           return ProjectEntry(
             name: name.isNotEmpty ? name : _formatRepoTitle(repoName),
             type: type.isNotEmpty ? type : (language.isNotEmpty ? '$language Application' : 'GitHub Project'),
             technologies: techs.isNotEmpty ? techs : [if (language.isNotEmpty) language, ...topics],
-            descriptionBullets: bullets,
+            descriptionBullets: finalizedBullets,
             githubUrl: githubUrl,
             source: 'github',
             githubOwner: owner,
@@ -766,7 +1433,7 @@ Return ONLY valid JSON.
       debugPrint('[AIService] analyzeGithubRepo error: $e');
     }
 
-    // Local Smart Fallback if AI fails or returns empty response
+    // Local Smart Fallback if AI fails or returns empty/invalid response
     final fallbackTechs = <String>[];
     if (language.isNotEmpty) fallbackTechs.add(language);
     for (final t in topics) {
@@ -774,18 +1441,12 @@ Return ONLY valid JSON.
     }
 
     final formattedName = _formatRepoTitle(repoName);
-    final fallbackBullets = <String>[];
-
-    if (repoDescription.isNotEmpty) {
-      final desc = repoDescription.endsWith('.') ? repoDescription : '$repoDescription.';
-      fallbackBullets.add('Engineered $formattedName, $desc');
-    } else {
-      fallbackBullets.add('Engineered and open-sourced $formattedName on GitHub.');
-    }
-
-    if (fallbackTechs.isNotEmpty) {
-      fallbackBullets.add('Utilized ${fallbackTechs.join(", ")} for core application logic and feature implementation.');
-    }
+    final fallbackBullets = _generateFallbackBullets(
+      formattedName: formattedName,
+      repoDescription: repoDescription,
+      fallbackTechs: fallbackTechs,
+      cleanReadme: cleanReadme,
+    );
 
     return ProjectEntry(
       name: formattedName,
@@ -797,6 +1458,85 @@ Return ONLY valid JSON.
       githubOwner: owner,
       githubRepo: repo,
     );
+  }
+
+  static String _cleanBulletText(String raw) {
+    var s = raw.replaceAll(RegExp(r'^[•\-\*–—\d\.\)\s]+'), '').trim();
+    if (s.isEmpty) return '';
+    if (!s.endsWith('.') && !s.endsWith('!') && !s.endsWith('?')) {
+      s = '$s.';
+    }
+    if (s.isNotEmpty) {
+      s = s[0].toUpperCase() + s.substring(1);
+    }
+    return s;
+  }
+
+  static List<String> _normalizeToTwoOrThreeBullets({
+    required List<String> bullets,
+    required String repoName,
+    required String repoDescription,
+    required List<String> technologies,
+  }) {
+    final cleaned = bullets.map(_cleanBulletText).where((s) => s.isNotEmpty).toList();
+
+    if (cleaned.length > 3) {
+      return cleaned.sublist(0, 3);
+    }
+
+    if (cleaned.length == 2 || cleaned.length == 3) {
+      return cleaned;
+    }
+
+    if (cleaned.length == 1) {
+      final b1 = cleaned[0];
+      final techStr = technologies.isNotEmpty ? technologies.take(4).join(', ') : '';
+      final b2 = techStr.isNotEmpty
+          ? 'Engineered core system components and application logic using $techStr.'
+          : 'Structured codebase with modular architecture to ensure maintainability and extensible feature delivery.';
+      return [b1, b2];
+    }
+
+    return [];
+  }
+
+  static List<String> _generateFallbackBullets({
+    required String formattedName,
+    required String repoDescription,
+    required List<String> fallbackTechs,
+    required String cleanReadme,
+  }) {
+    final bullets = <String>[];
+
+    // Bullet 1: Core purpose / description
+    if (repoDescription.isNotEmpty) {
+      final desc = repoDescription.replaceAll(RegExp(r'[\.\s]+$'), '');
+      bullets.add('Developed $formattedName, $desc.');
+    } else {
+      bullets.add('Engineered and open-sourced $formattedName on GitHub.');
+    }
+
+    // Bullet 2: Technologies and implementation
+    if (fallbackTechs.isNotEmpty) {
+      bullets.add('Implemented core application functionality and workflow utilizing ${fallbackTechs.take(4).join(", ")}.');
+    } else {
+      bullets.add('Designed and implemented modular application architecture with focused technical components.');
+    }
+
+    // Bullet 3: Features or architecture if README available
+    if (cleanReadme.isNotEmpty && cleanReadme.length > 50) {
+      bullets.add('Structured repository workflows and code modules according to best engineering practices.');
+    }
+
+    // Strictly enforce 2 or 3 bullets
+    if (bullets.length > 3) {
+      return bullets.sublist(0, 3);
+    }
+    if (bullets.length < 2) {
+      bullets.add('Maintained structured repository workflow to ensure reliable application execution.');
+    }
+
+    return bullets;
   }
 
   static String _formatRepoTitle(String str) {
@@ -872,6 +1612,24 @@ Return ONLY valid JSON.
             final decoded = _decodePdfTextStream(streamText, cmap);
             if (decoded.trim().isNotEmpty) {
               buffer.write('$decoded\n');
+            }
+          }
+        }
+
+        if (buffer.length < 50) {
+          for (final streamText in decompressedStreams) {
+            final textMatches = RegExp(r"\(([^)]{1,250})\)").allMatches(streamText);
+            for (final tm in textMatches) {
+              final token = tm.group(1)?.trim();
+              if (token != null && token.length > 1 && !_isPdfSyntaxBoilerplate(token)) {
+                final unescaped = token
+                    .replaceAll(r'\(', '(')
+                    .replaceAll(r'\)', ')')
+                    .replaceAll(r'\\', r'\');
+                if (!_isPdfSyntaxBoilerplate(unescaped)) {
+                  buffer.write('$unescaped\n');
+                }
+              }
             }
           }
         }
@@ -1015,13 +1773,13 @@ Return ONLY valid JSON.
       }
     }
 
-    final cleanText = _sanitizeFinalExtractedText(text);
+    final cleanText = _sanitizeFinalExtractedText(text.isNotEmpty ? text : extractTextFromBytes(bytes));
     final alphaNumCount = RegExp(r'[a-zA-Z0-9]').allMatches(cleanText).length;
     final alphaRatio = cleanText.isEmpty ? 0.0 : alphaNumCount / cleanText.length;
     final wordCount = RegExp(r'\b[a-zA-Z]{2,}\b').allMatches(cleanText).length;
-    final isFinalReadable = isReadable && validateExtractedText(cleanText);
+    final isFinalReadable = validateExtractedText(cleanText);
 
-    // Diagnostics Logging (Step 7)
+    // Diagnostics Logging
     final previewSnippet = cleanText.length > 200 ? cleanText.substring(0, 200) : cleanText;
     debugPrint('\n[RESUME-AI-INPUT]');
     debugPrint('method=$method');
@@ -1031,30 +1789,24 @@ Return ONLY valid JSON.
     debugPrint('alphaRatio=${alphaRatio.toStringAsFixed(2)}');
     debugPrint('preview="$previewSnippet"\n');
 
-    if (!isFinalReadable) {
-      debugPrint('[PDFExtraction] REJECTED: Extracted text is unreadable or corrupted. Will NOT send to AI.');
-      return '';
-    }
-
     return cleanText;
   }
 
   /// Audits extracted PDF text to verify readability and prevent garbled/corrupted unicode from being sent to AI providers.
   static bool validateExtractedText(String text) {
     final trimmed = text.trim();
-    if (trimmed.length < 20) return false;
+    if (trimmed.length < 10) return false;
 
-    // Count corrupted, replacement, math, or private use symbols typical of unparsed font streams
-    final corruptCount = RegExp(r'[\uFFFD\u2100-\u2BFF\u2200-\u22FF\u2700-\u27BF\uE000-\uF8FF\x00-\x08\x0B\x0C\x0E-\x1F]').allMatches(trimmed).length;
-
-    if (corruptCount > 10) {
-      debugPrint('[AIService] validateExtractedText: REJECTED text. corruptCount=$corruptCount, totalLen=${trimmed.length}');
+    // Check count of readable alphanumeric characters
+    final alphaNumCount = RegExp(r'[a-zA-Z0-9]').allMatches(trimmed).length;
+    if (alphaNumCount < 8) {
+      debugPrint('[AIService] validateExtractedText: REJECTED text due to insufficient alphanumeric characters ($alphaNumCount chars)');
       return false;
     }
 
-    // Require at least basic readable English words (3+ characters)
-    final wordMatches = RegExp(r'\b[a-zA-Z]{3,}\b').allMatches(trimmed).length;
-    if (wordMatches < 3) {
+    // Require at least basic readable English words (2+ characters)
+    final wordMatches = RegExp(r'\b[a-zA-Z]{2,}\b').allMatches(trimmed).length;
+    if (wordMatches < 2) {
       debugPrint('[AIService] validateExtractedText: REJECTED text due to insufficient readable words ($wordMatches words)');
       return false;
     }
@@ -1213,6 +1965,79 @@ Return ONLY valid JSON.
         .replaceAll(r'\f', '');
   }
 
+  static String _reconstructCohesiveLines(String text) {
+    final rawLines = text.split(RegExp(r'\r?\n'));
+    final resultLines = <String>[];
+    String currentLine = '';
+
+    for (int i = 0; i < rawLines.length; i++) {
+      final line = rawLines[i].trim();
+      if (line.isEmpty) {
+        if (currentLine.isNotEmpty) {
+          resultLines.add(currentLine);
+          currentLine = '';
+        }
+        resultLines.add('');
+        continue;
+      }
+
+      final isHeader = ResumeData.isKnownSectionHeader(line);
+      final isBullet = line.startsWith('•') ||
+          line.startsWith('◦') ||
+          line.startsWith('▪') ||
+          line.startsWith('- ') ||
+          line.startsWith('* ') ||
+          line.startsWith('– ') ||
+          RegExp(r'^\d+[\.\)]\s*').hasMatch(line);
+      final isDateOnly = RegExp(
+        r'^\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4}|Present|Current)?\s*$',
+        caseSensitive: false,
+      ).hasMatch(line);
+      final isContact = line.contains('@') ||
+          line.contains('linkedin.com') ||
+          line.contains('github.com') ||
+          RegExp(r'^\+?\d{1,4}[-\s\d]{7,}\d$').hasMatch(line);
+
+      if (isHeader || isBullet || isDateOnly || isContact || currentLine.isEmpty) {
+        if (currentLine.isNotEmpty) {
+          resultLines.add(currentLine);
+        }
+        currentLine = line;
+        continue;
+      }
+
+      final startsWithLower = RegExp(r'^[a-z]').hasMatch(line);
+      final startsWithPrep = RegExp(
+        r'^(in|with|a|an|the|to|for|of|from|by|at|on|and|or|as|is|are|was|were|into|during|via|under|about)\b',
+        caseSensitive: false,
+      ).hasMatch(line);
+      final currentEndsWithHyphen = currentLine.endsWith('-');
+      final currentIsShortFragment = currentLine.length < 50 &&
+          !currentLine.endsWith(':') &&
+          !ResumeData.isKnownSectionHeader(currentLine);
+
+      if (startsWithLower ||
+          startsWithPrep ||
+          currentEndsWithHyphen ||
+          (currentIsShortFragment && !isHeader && !isBullet && !isDateOnly && !isContact)) {
+        if (currentEndsWithHyphen) {
+          currentLine = currentLine.substring(0, currentLine.length - 1) + line;
+        } else {
+          currentLine = '$currentLine $line';
+        }
+      } else {
+        resultLines.add(currentLine);
+        currentLine = line;
+      }
+    }
+
+    if (currentLine.isNotEmpty) {
+      resultLines.add(currentLine);
+    }
+
+    return resultLines.join('\n');
+  }
+
   static String normalizeExtractedText(String text) {
     if (text.trim().isEmpty) return text;
 
@@ -1221,9 +2046,13 @@ Return ONLY valid JSON.
         .replaceAll(RegExp(r'[\u25E6\u00B0\u25AA\u25AB\u25CF\u25CB\u2043\u2219\u25BA\u25B6\u25B8]'), '• ')
         .replaceAll(RegExp(r'^[•\-\*–—]\s*', multiLine: true), '• ');
 
-    // 2. Clean up multiple empty lines
+    // 2. Clean up horizontal whitespace
+    cleaned = cleaned.replaceAll(RegExp(r'[ \t]+'), ' ');
+
+    // 3. Reconstruct cohesive sentences and lines
+    cleaned = _reconstructCohesiveLines(cleaned);
+
     return cleaned
-        .replaceAll(RegExp(r'[ \t]+'), ' ')
         .replaceAll(RegExp(r'\n{3,}'), '\n\n')
         .trim();
   }
@@ -1334,7 +2163,7 @@ Return ONLY valid JSON.
       } else if (match.group(6) != null && match.group(7) != null) {
         // Tm: a b c d tx ty
         final ty = double.tryParse(match.group(7)!) ?? 0;
-        if (!lastY.isNaN && (ty - lastY).abs() > 2.0) {
+        if (!lastY.isNaN && (ty - lastY).abs() > 5.5) {
           lineBreak();
         } else if (lineHasContent && !sb.toString().endsWith(' ') && !sb.toString().endsWith('\n')) {
           sb.write(' ');
@@ -1343,7 +2172,7 @@ Return ONLY valid JSON.
       } else if (match.group(8) != null && match.group(9) != null) {
         // Td / TD: tx ty
         final ty = double.tryParse(match.group(9)!) ?? 0;
-        if (ty.abs() > 1.5) {
+        if (ty.abs() > 4.5) {
           lineBreak();
         } else if (lineHasContent && !sb.toString().endsWith(' ') && !sb.toString().endsWith('\n')) {
           sb.write(' ');

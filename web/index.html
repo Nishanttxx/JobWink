@@ -37,6 +37,136 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.fog.min.js"></script>
 
+  <!-- Usability & Accessibility Styles for Microcopy & Dev Overlays -->
+  <style>
+    /* Design Tokens for Radii & Consistency */
+    :root {
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-full: 9999px;
+    }
+
+    /* Issue 2: Fix microcopy & automation descriptions to standard readable scale (min 13-14px) */
+    .styles-module__automationDescription___vFTmJ,
+    [class*="automationDescription"],
+    [class*="styles-module__description"] {
+      font-size: 13px !important;
+      line-height: 1.5 !important;
+      color: #94a3b8 !important;
+    }
+    .styles-module__automationDescription___vFTmJ a,
+    [class*="automationDescription"] a {
+      font-size: 13px !important;
+      color: #f97316 !important;
+      text-decoration: underline !important;
+      text-underline-offset: 2px !important;
+    }
+
+    /* Issue 5 & 6: Clean floating developer toolbar with proper safe-area clearance (24px) */
+    #agentation-mount {
+      position: fixed !important;
+      bottom: 24px !important;
+      right: 24px !important;
+      top: auto !important;
+      left: auto !important;
+      z-index: 999999 !important;
+      pointer-events: none !important;
+    }
+    #agentation-mount > * {
+      pointer-events: auto !important;
+    }
+    .styles-module__toolbarContainer___dIhma,
+    [class*="toolbarContainer"] {
+      margin: 0 !important;
+      border-radius: var(--radius-lg, 14px) !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    /* Issue 7: Enlarge small tightly packed control buttons for accessible hit targets (36px x 36px) */
+    .styles-module__controlButton___8Q0jc,
+    [class*="controlButton"] {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 36px !important;
+      height: 36px !important;
+      min-width: 36px !important;
+      min-height: 36px !important;
+      margin: 0 4px !important;
+      padding: 6px !important;
+      border-radius: var(--radius-md, 10px) !important;
+      transition: background-color 150ms ease, transform 150ms ease !important;
+    }
+    .styles-module__controlButton___8Q0jc:hover,
+    [class*="controlButton"]:hover {
+      background-color: rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* Issue 8: Formatting toolbar & color swatch options with proper sizing & gutters */
+    .styles-module__colorOption___Co955,
+    [class*="colorOption"] {
+      width: 26px !important;
+      height: 26px !important;
+      min-width: 26px !important;
+      min-height: 26px !important;
+      margin: 0 4px !important;
+      border-radius: 50% !important;
+      border: 2px solid transparent !important;
+      cursor: pointer !important;
+      transition: transform 150ms ease, box-shadow 150ms ease !important;
+    }
+    .styles-module__colorOption___Co955:hover,
+    [class*="colorOption"]:hover {
+      transform: scale(1.15) !important;
+    }
+
+    /* Issue 9 & 11: Deduplicate redundant MCP & Webhooks navigation links and suppress ghost elements */
+    .styles-module__settingsNavLink___uYIwM ~ .styles-module__settingsNavLink___uYIwM,
+    [class*="settingsNavLink"] ~ [class*="settingsNavLink"],
+    .styles-module__settingsBackButton___fflll:empty,
+    .styles-module__settingsBackButton___fflll[aria-hidden="true"] {
+      display: none !important;
+    }
+
+    /* Issue 10: Provide clear interactive affordance for Standard cycle button */
+    .styles-module__cycleButton___XMBx3,
+    [class*="cycleButton"] {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      padding: 4px 10px !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      border-radius: var(--radius-sm, 6px) !important;
+      color: #e2e8f0 !important;
+      cursor: pointer !important;
+      font-size: 12px !important;
+      font-weight: 500 !important;
+      transition: background-color 150ms ease, border-color 150ms ease !important;
+    }
+    .styles-module__cycleButton___XMBx3:hover,
+    [class*="cycleButton"]:hover {
+      background: rgba(255, 255, 255, 0.14) !important;
+      border-color: rgba(255, 255, 255, 0.35) !important;
+    }
+    .styles-module__cycleButton___XMBx3:focus-visible,
+    [class*="cycleButton"]:focus-visible {
+      outline: 2px solid #f95716 !important;
+      outline-offset: 2px !important;
+    }
+
+    /* Contain technical settings panels */
+    [class*="styles-module__panel"],
+    [class*="styles-module__settingsNav"],
+    [class*="styles-module__dialog"] {
+      max-width: 380px !important;
+      border-radius: var(--radius-lg, 14px) !important;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+      backdrop-filter: blur(12px) !important;
+    }
+  </style>
+
   <!-- GSAP & ScrollTrigger Animation Libraries -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>

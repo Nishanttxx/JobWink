@@ -133,7 +133,7 @@ class GitHubService {
     final url = Uri.parse('https://api.github.com/repos/$owner/$repo/readme');
     try {
       final res = await http.get(url, headers: {'Accept': 'application/vnd.github.v3.raw'});
-      if (res.statusCode == 200) {
+      if (res.statusCode == 200 && res.body.trim().isNotEmpty) {
         return res.body;
       }
       // Fallback with JSON response containing base64 content
@@ -142,12 +142,29 @@ class GitHubService {
         final data = jsonDecode(jsonRes.body) as Map<String, dynamic>;
         final rawBase64 = data['content']?.toString().replaceAll('\n', '').replaceAll('\r', '') ?? '';
         if (rawBase64.isNotEmpty) {
-          return utf8.decode(base64.decode(rawBase64));
+          final decoded = utf8.decode(base64.decode(rawBase64));
+          if (decoded.trim().isNotEmpty) {
+            return decoded;
+          }
         }
       }
     } catch (e) {
-      debugPrint('[GitHubService] Error fetching readme ($owner/$repo): $e');
+      debugPrint('[GitHubService] Error fetching readme via API ($owner/$repo): $e');
     }
+
+    // Direct raw.githubusercontent.com fallback in case of rate limits or missing API response
+    for (final branch in ['main', 'master']) {
+      for (final filename in ['README.md', 'readme.md', 'README', 'README.markdown']) {
+        try {
+          final rawUrl = Uri.parse('https://raw.githubusercontent.com/$owner/$repo/$branch/$filename');
+          final rawRes = await http.get(rawUrl);
+          if (rawRes.statusCode == 200 && rawRes.body.trim().isNotEmpty && !rawRes.body.startsWith('404: Not Found')) {
+            return rawRes.body;
+          }
+        } catch (_) {}
+      }
+    }
+
     return null;
   }
 }

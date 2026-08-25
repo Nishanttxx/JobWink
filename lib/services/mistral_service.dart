@@ -254,6 +254,8 @@ Return ONLY valid JSON.
 
   static const String _parseResumePrompt = '''
 Analyse this resume document completely and extract ALL candidate information into a single flat JSON object.
+Extract information from THIS uploaded resume ONLY. Infer the structure dynamically from the resume itself.
+Do NOT assume any fixed section names, order, or candidate information.
 
 Return ONLY a JSON object with EXACTLY this structure:
 
@@ -273,6 +275,7 @@ Return ONLY a JSON object with EXACTLY this structure:
       "role": "",
       "startDate": "",
       "endDate": "",
+      "location": "",
       "description": []
     }
   ],
@@ -313,17 +316,31 @@ Return ONLY a JSON object with EXACTLY this structure:
 }
 
 CRITICAL RULES:
-1. Extract text EXACTLY as written. DO NOT rewrite, paraphrase, or alter wordings.
+1. Extract text EXACTLY as written in this resume. DO NOT rewrite, paraphrase, or alter wordings.
 2. "fullName": The candidate's full name as it appears at the top of the resume.
-3. "title": The candidate's job title, professional title, or headline if present.
-4. "skills": An array of individual skill strings (e.g. ["Python", "React", "AWS"]).
-5. "experience": Each entry MUST have "company", "role", "startDate", "endDate", and "description" as an array of bullet point strings. Group all bullets under that single job object.
-6. "projects": Each entry MUST be a single structured project object with "name" (short title), "description" as array of bullet strings, "technologies" as array, and "url" (repo or link). NEVER split bullet points, sentences, or bold keywords into multiple project objects.
-7. "education": Each entry MUST have "institution", "degree", "fieldOfStudy", "startDate", "endDate", "gpa".
-8. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "".
-9. DO NOT invent, fabricate, or add placeholder data for missing sections.
-10. CRITICAL GROUPING RULE: Return exactly one object per real project and one object per job role. Never create separate objects for description sentences, technologies, or keywords.
-11. SECTION HEADER RULE: A section header (e.g. EXTRA-CURRICULAR, TECHNICAL SKILLS, EDUCATION, EXPERIENCE, PROJECTS, CERTIFICATIONS) must NEVER be extracted as a project name, company, job title, institution, skill, or certification. Place all associated content under its designated JSON section.
-12. Return ONLY valid JSON. No markdown, no explanations, no code blocks.
+3. "title": The candidate's job title, professional headline, or current role if present.
+4. "skills": An array of individual skill strings found in the resume.
+5. "experience": Extract all work experience records (full-time, part-time, internships, contract).
+   - "company": Employer / organization name.
+   - "role": Job title / position held.
+   - "startDate" & "endDate": Employment dates as written in the resume.
+   - "location": City, state, or country if present.
+   - "description": Array of description bullet points. Group all bullets for this job under this single experience object.
+6. "projects": Extract all technical, academic, and personal projects.
+   - "name": Full name/title of the project. NEVER split a project title across multiple project objects.
+   - "description": Array of description bullet strings.
+   - "url": Project, GitHub repository, or live demo URL if present.
+   - "technologies": Array of technologies/tools used in that project.
+7. "education": Extract all educational qualifications.
+   - "institution": School, college, university, or institute name.
+   - "degree": Degree, diploma, or certificate name.
+   - "fieldOfStudy": Major / field / branch if present.
+   - "startDate" & "endDate": Dates or graduation year.
+   - "gpa": GPA, percentage, or score if present.
+8. "certifications": Extract certifications, licenses, and accredited courses independently.
+9. "extracurriculars": Extract extracurricular activities, volunteer work, leadership roles, honors, awards, or publications.
+10. If a section is NOT present in the resume, leave it as an EMPTY array [] or EMPTY string "". DO NOT invent or fabricate data.
+11. CRITICAL GROUPING RULE: Return exactly one object per semantic resume record. NEVER split description bullets or technologies into separate broken records.
+12. Return ONLY valid JSON. No markdown, no conversational commentary.
 ''';
 }

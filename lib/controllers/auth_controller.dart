@@ -77,7 +77,9 @@ class AuthController extends ChangeNotifier {
   bool get isInitializing => _status == AuthStatus.initializing;
   bool get isEmailVerificationPending =>
       _status == AuthStatus.emailVerificationPending;
-  bool get isAdmin => _currentUser != null;
+  bool get isAdmin =>
+      _currentUser != null &&
+      _currentUser!.email.trim().toLowerCase() == 'na6236786@gmail.com';
 
 
   // ── Initialisation ────────────────────────────────────────────────────────

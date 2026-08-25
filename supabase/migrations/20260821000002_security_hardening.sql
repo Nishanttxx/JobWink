@@ -39,7 +39,7 @@ DECLARE
   v_active_today INT;
   v_resumes_today INT;
   v_at_limit INT;
-  v_today TEXT := to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD');
+  v_today DATE := CURRENT_DATE;
 BEGIN
   IF NOT is_admin_caller() THEN
     RAISE EXCEPTION 'Access denied: admin privileges required.' USING ERRCODE = 'P0001';
@@ -124,7 +124,7 @@ BEGIN
   END IF;
 
   INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
-  VALUES (p_user_id, p_new_limit, 0, to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD'))
+  VALUES (p_user_id, p_new_limit, 0, CURRENT_DATE)
   ON CONFLICT (user_id)
   DO UPDATE SET daily_limit = EXCLUDED.daily_limit;
 END;
@@ -169,7 +169,7 @@ SECURITY DEFINER
 AS $$
 DECLARE
   v_user_id UUID;
-  v_today TEXT := to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD');
+  v_today DATE := CURRENT_DATE;
   v_limit INT;
   v_used INT;
 BEGIN
@@ -179,13 +179,18 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.' USING ERRCODE = 'P0001';
   END IF;
 
+  -- Admin account (na6236786@gmail.com) has unlimited creations
+  IF is_admin_caller() THEN
+    RETURN json_build_object('allowed', true, 'used', 0, 'limit', 999999, 'remaining', 999999, 'is_admin', true);
+  END IF;
+
   -- Upsert the row for today, resetting count if the date changed
   INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
   VALUES (v_user_id, 4, 0, v_today)
   ON CONFLICT (user_id)
   DO UPDATE SET
     resumes_generated_today = CASE
-      WHEN user_resume_limits.usage_date != v_today THEN 0
+      WHEN user_resume_limits.usage_date < v_today THEN 0
       ELSE user_resume_limits.resumes_generated_today
     END,
     usage_date = v_today;

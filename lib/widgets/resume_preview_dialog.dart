@@ -9,12 +9,18 @@ import '../services/resume_export_service.dart';
 import '../theme/app_theme.dart';
 import '../models/resume_type.dart';
 
+/// Realistic A4 Paper Preview Dialog for JobWink Resumes.
+///
+/// Displays the ATS-compliant resume rendered on actual A4 sheets
+/// (210mm x 297mm) with crisp margins, white paper background,
+/// realistic multi-layer drop shadows, and multi-page pagination.
 class ResumePreviewDialog extends StatefulWidget {
   final ResumeData resumeData;
   final ValueNotifier<ResumeData>? resumeDataNotifier;
   final ResumeType selectedResumeType;
   final ValueNotifier<ResumeType>? resumeTypeNotifier;
   final Uint8List? originalPdfBytes;
+  final List<String> highlightKeywords;
   final VoidCallback onDownload;
 
   const ResumePreviewDialog({
@@ -24,6 +30,7 @@ class ResumePreviewDialog extends StatefulWidget {
     this.selectedResumeType = ResumeType.experience,
     this.resumeTypeNotifier,
     this.originalPdfBytes,
+    this.highlightKeywords = const [],
     required this.onDownload,
   });
 
@@ -34,18 +41,20 @@ class ResumePreviewDialog extends StatefulWidget {
     ResumeType selectedResumeType = ResumeType.experience,
     ValueNotifier<ResumeType>? resumeTypeNotifier,
     Uint8List? originalPdfBytes,
+    List<String> highlightKeywords = const [],
     required VoidCallback onDownload,
   }) {
     return showDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withValues(alpha: 0.65),
+      barrierColor: Colors.black.withValues(alpha: 0.70),
       builder: (dialogCtx) => ResumePreviewDialog(
         resumeData: resumeData,
         resumeDataNotifier: resumeDataNotifier,
         selectedResumeType: selectedResumeType,
         resumeTypeNotifier: resumeTypeNotifier,
         originalPdfBytes: originalPdfBytes,
+        highlightKeywords: highlightKeywords,
         onDownload: onDownload,
       ),
     );
@@ -124,8 +133,8 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 768;
 
-    final dialogWidth = isMobile ? size.width * 0.95 : (size.width * 0.8).clamp(600.0, 920.0);
-    final dialogHeight = isMobile ? size.height * 0.92 : size.height * 0.88;
+    final dialogWidth = isMobile ? size.width * 0.96 : (size.width * 0.85).clamp(650.0, 960.0);
+    final dialogHeight = isMobile ? size.height * 0.94 : (size.height * 0.90).clamp(600.0, 920.0);
 
     final filename = ResumeExportService.getCandidateFilename(_currentResumeData, 'pdf');
 
@@ -141,7 +150,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
       },
       child: Dialog(
         backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.all(16),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         child: Container(
           width: dialogWidth,
           height: dialogHeight,
@@ -157,10 +166,10 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
-                blurRadius: 30,
+                color: Colors.black.withValues(alpha: 0.45),
+                blurRadius: 36,
                 spreadRadius: 4,
-                offset: const Offset(0, 10),
+                offset: const Offset(0, 12),
               ),
             ],
           ),
@@ -188,7 +197,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: const Icon(
-                        Icons.picture_as_pdf_rounded,
+                        Icons.description_rounded,
                         color: AppTheme.primaryOrange,
                         size: 20,
                       ),
@@ -210,22 +219,24 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                               ),
                               const SizedBox(width: 8),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                 decoration: BoxDecoration(
                                   color: (hasResume ? const Color(0xFF10B981) : AppTheme.primaryOrange).withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  hasResume ? 'A4 • EXACT PDF' : 'NO RESUME UPLOADED',
+                                  hasResume ? 'A4 • PAPER PREVIEW' : 'NO RESUME UPLOADED',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.4,
                                     color: hasResume ? const Color(0xFF10B981) : AppTheme.primaryOrange,
                                   ),
                                 ),
                               ),
                             ],
                           ),
+                          const SizedBox(height: 2),
                           Text(
                             hasResume ? filename : 'No resume uploaded yet',
                             style: GoogleFonts.plusJakartaSans(
@@ -238,7 +249,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                         ],
                       ),
                     ),
-                    // Close Button
+                    // Close Icon Button
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
                       icon: const Icon(Icons.close_rounded),
@@ -251,10 +262,10 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                 ),
               ),
 
-              // ── 2. Exact A4 Document Viewer Canvas / Empty State ──
+              // ── 2. Realistic A4 Paper Canvas ──
               Expanded(
                 child: Container(
-                  color: isDarkMode ? const Color(0xFF0F1117) : const Color(0xFFE2E8F0),
+                  color: isDarkMode ? const Color(0xFF141720) : const Color(0xFFE2E8F0),
                   child: !hasResume
                       ? Center(
                           child: Padding(
@@ -285,7 +296,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                                 ),
                                 const SizedBox(height: 8),
                                 Text(
-                                  'No resume has been uploaded yet. Upload a resume file or add details in the editor to preview your live A4 document.',
+                                  'No resume has been uploaded yet. Upload a resume file or enter details in the editor to preview your live A4 document.',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 13,
                                     color: AppTheme.getMutedTextColor(context),
@@ -297,23 +308,60 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                           ),
                         )
                       : PdfPreview(
-                          key: ValueKey('${_currentResumeData.hashCode}_${_currentResumeType.name}'),
+                          key: ValueKey('${_currentResumeData.hashCode}_${_currentResumeType.name}_${widget.highlightKeywords.length}'),
                           build: (PdfPageFormat format) async {
                             return await ResumeExportService.instance.generateAtsPdf(
                               _currentResumeData,
                               selectedResumeType: _currentResumeType,
                               originalPdfBytes: widget.originalPdfBytes,
+                              highlightKeywords: widget.highlightKeywords,
                             );
                           },
+                          // Pure paper presentation: disable fake browser UI & toolbars
                           allowPrinting: false,
                           allowSharing: false,
                           canChangePageFormat: false,
                           canChangeOrientation: false,
                           canDebug: false,
-                          maxPageWidth: 720,
+                          actions: const [],
                           pdfFileName: filename,
-                          previewPageMargin: const EdgeInsets.all(20),
                           initialPageFormat: PdfPageFormat.a4,
+                          pageFormats: const {'A4': PdfPageFormat.a4},
+                          maxPageWidth: isMobile ? (dialogWidth * 0.90) : 660.0,
+                          // Backdrop canvas color
+                          scrollViewDecoration: BoxDecoration(
+                            color: isDarkMode ? const Color(0xFF141720) : const Color(0xFFE2E8F0),
+                          ),
+                          // Authentic A4 Paper Sheet Styling
+                          pdfPreviewPageDecoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                            border: Border.all(
+                              color: isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : const Color(0xFFCBD5E1),
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              // Deep ambient drop shadow for realistic paper elevation
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: isDarkMode ? 0.50 : 0.16),
+                                blurRadius: 28,
+                                spreadRadius: 2,
+                                offset: const Offset(0, 10),
+                              ),
+                              // Soft contact shadow
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: isDarkMode ? 0.30 : 0.06),
+                                blurRadius: 6,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          previewPageMargin: EdgeInsets.symmetric(
+                            vertical: isMobile ? 18 : 28,
+                            horizontal: isMobile ? 10 : 20,
+                          ),
                           loadingWidget: Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -321,7 +369,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                                 const CircularProgressIndicator(color: AppTheme.primaryOrange),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'Generating exact A4 PDF layout...',
+                                  'Rendering A4 resume preview...',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
@@ -393,15 +441,19 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      '100% ATS-Compliant A4 Document',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.getMutedTextColor(context),
+                    Expanded(
+                      child: Text(
+                        'A4 Standard (210 × 297 mm)',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.getMutedTextColor(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
@@ -438,7 +490,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryOrange,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),

@@ -7,27 +7,27 @@ import '../../models/resume_type.dart';
 class JobAlignmentCard extends StatelessWidget {
   final TextEditingController targetJobTitleController;
   final TextEditingController jobDescriptionController;
-  final bool isTailoring;
   final bool isAnalyzingKeywords;
   final double jobMatchScore;
   final ResumeType selectedResumeType;
   final ValueChanged<ResumeType>? onSelectResumeType;
-  final VoidCallback onTailorResume;
   final VoidCallback? onPreviewResume;
   final VoidCallback? onChanged;
+  final List<String> matchedKeywords;
+  final List<String> missingKeywords;
 
   const JobAlignmentCard({
     super.key,
     required this.targetJobTitleController,
     required this.jobDescriptionController,
-    required this.isTailoring,
     this.isAnalyzingKeywords = false,
     required this.jobMatchScore,
     this.selectedResumeType = ResumeType.experience,
     this.onSelectResumeType,
-    required this.onTailorResume,
     this.onPreviewResume,
     this.onChanged,
+    this.matchedKeywords = const [],
+    this.missingKeywords = const [],
   });
 
   IconData _getResumeTypeIcon(ResumeType type) {
@@ -338,12 +338,12 @@ class JobAlignmentCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
 
-          // Target Match Progress Bar Row (Matching screenshot: Target Match ... 91%)
+          // Target Match Progress Bar Row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Target Match',
+                'Target Match & ATS Score',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -370,66 +370,102 @@ class JobAlignmentCard extends StatelessWidget {
               valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryOrange),
             ),
           ),
-          const SizedBox(height: 18),
-
-          // Auto-Tailor & Preview Action Buttons
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: isTailoring ? null : onTailorResume,
-                  icon: isTailoring
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Icon(Icons.auto_awesome, size: 16),
-                  label: Text(
-                    isTailoring ? 'Tailoring Resume...' : '⚡ Auto-Tailor Resume with AI',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    elevation: 0,
+          if (matchedKeywords.isNotEmpty || missingKeywords.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Job Keywords & Skill Alignment',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.getMutedTextColor(context),
                   ),
                 ),
-              ),
-              if (onPreviewResume != null) ...[
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: onPreviewResume,
-                  icon: const Icon(Icons.visibility_rounded, size: 16, color: AppTheme.primaryOrange),
-                  label: Text(
-                    'Preview Resume',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: AppTheme.primaryOrange, width: 1.5),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
+                Text(
+                  '${matchedKeywords.length} Matched in Resume',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF10B981),
                   ),
                 ),
               ],
-            ],
-          ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                ...matchedKeywords.map((kw) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 12, color: Color(0xFF10B981)),
+                      const SizedBox(width: 4),
+                      Text(
+                        kw,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
+                        ),
+                      ),
+                    ],
+                  ),
+                )),
+                ...missingKeywords.take(10).map((kw) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF21262D) : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: isDarkMode ? const Color(0xFF30363D) : const Color(0xFFCBD5E1)),
+                  ),
+                  child: Text(
+                    kw,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: AppTheme.getMutedTextColor(context),
+                    ),
+                  ),
+                )),
+              ],
+            ),
+          ],
+          const SizedBox(height: 18),
+
+          // Preview Action Button
+          if (onPreviewResume != null) ...[
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onPreviewResume,
+                icon: const Icon(Icons.visibility_rounded, size: 16, color: AppTheme.primaryOrange),
+                label: Text(
+                  'Preview Resume',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: AppTheme.primaryOrange,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppTheme.primaryOrange, width: 1.5),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

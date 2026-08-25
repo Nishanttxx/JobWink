@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -12,6 +13,7 @@ import '../providers/auth_provider.dart';
 import '../repositories/storage_repository.dart';
 import '../services/ai_service.dart';
 import '../services/ai_usage_service.dart';
+import '../services/resume_limit_service.dart';
 import '../services/demo_service.dart';
 import '../services/resume_persistence_service.dart';
 import '../services/resume_export_service.dart';
@@ -45,29 +47,24 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   double _atsScore = 88.0;
   ResumeType _selectedResumeType = ResumeType.experience;
 
+  // Automatic Keyword Highlighting & ATS scoring state
+  List<String> _matchedJobKeywords = [];
+  List<String> _missingJobKeywords = [];
+  bool _isAnalyzingKeywords = false;
+  Timer? _jdDebounceTimer;
+
+  void openFullPreviewDialog() => _openFullPreviewDialog();
+  void openAtsScore() => handleSubSectionSelected(7);
+  void openUploadResume() => _uploadResume();
+
   void _openFullPreviewDialog() {
     final currentResume = _buildCurrentResumeData();
-    if (!currentResume.hasUsableData && _uploadedFileBytes == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppTheme.primaryOrange,
-          content: Text(
-            'Please upload a resume or fill in your details first.',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      );
-      return;
-    }
-
     ResumePreviewDialog.show(
       context,
       resumeData: currentResume,
       selectedResumeType: _selectedResumeType,
       originalPdfBytes: _uploadedFileBytes,
+      highlightKeywords: _matchedJobKeywords,
       onDownload: () => _downloadTailoredResume(format: 'pdf'),
     );
   }
@@ -108,7 +105,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     'skills': _skills.length,
     'projects': _parsedResumeData?.projects.length ?? 0,
     'experience': _parsedResumeData?.experience.length ?? 0,
-    'certifications': _parsedResumeData?.certifications.length ?? 0,
     'extracurriculars': _parsedResumeData?.extracurriculars.length ?? 0,
   };
 
@@ -122,7 +118,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
   void handleGenerate() {
     setState(() {
-      _activeSubTab = 7;
+      _activeSubTab = 6;
+      _activeSubSectionIndex = 6;
     });
   }
 
@@ -212,8 +209,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   // Tailoring state
   final TextEditingController _targetJobTitleController = TextEditingController();
   final TextEditingController _jobDescriptionController = TextEditingController();
-  bool _isTailoring = false;
-  bool _isTailored = false;
   double _jobMatchScore = 0.0;
 
   // Section collapse state
@@ -255,15 +250,19 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     _activeSubTab = widget.initialTab.clamp(0, 9);
     _nameController.addListener(_onFieldChanged);
     _emailController.addListener(_onFieldChanged);
-    _phoneController.addListener(_onFieldChanged);
+    _phoneController.addListener(_phoneChanged);
     _locationController.addListener(_onFieldChanged);
     _linkedinController.addListener(_onFieldChanged);
     _githubController.addListener(_onFieldChanged);
     _titleController.addListener(_onFieldChanged);
     _summaryController.addListener(_onFieldChanged);
+    _jobDescriptionController.addListener(_onJobDescriptionChanged);
+    _targetJobTitleController.addListener(_onJobDescriptionChanged);
 
     _loadCachedResume();
   }
+
+  void _phoneChanged() => _onFieldChanged();
 
   /// Validates that cached resume data contains real content and not PDF artifacts.
   bool _isValidResumeData(ResumeData data) {
@@ -308,7 +307,22 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     _summaryController.text = data.summary;
 
     _skills.clear();
-    _skills.addAll(data.skills);
+    final allExtractedSkills = <String>{};
+    for (final s in data.skills) {
+      final trimmed = s.trim();
+      if (trimmed.isNotEmpty && !ResumeData.isPlaceholderValue(trimmed)) {
+        allExtractedSkills.add(trimmed);
+      }
+    }
+    for (final g in data.skillGroups) {
+      for (final s in g.items) {
+        final trimmed = s.trim();
+        if (trimmed.isNotEmpty && !ResumeData.isPlaceholderValue(trimmed)) {
+          allExtractedSkills.add(trimmed);
+        }
+      }
+    }
+    _skills.addAll(allExtractedSkills);
 
     // Compute initial ATS score dynamically from completeness
     double score = 0;
@@ -339,6 +353,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       stage: 'ResumeEditor Form Population',
       extractedTextLength: _rawExtractedText?.length,
     );
+
+    if (_jobDescriptionController.text.trim().isNotEmpty) {
+      _analyzeJobDescriptionKeywords();
+    }
 
     widget.onSectionChanged?.call();
   }
@@ -376,11 +394,131 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   }
 
   void _onFieldChanged() {
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+      if (_jobDescriptionController.text.trim().isNotEmpty) {
+        _onJobDescriptionChanged();
+      }
+    }
+  }
+
+  void _onJobDescriptionChanged() {
+    _jdDebounceTimer?.cancel();
+    _jdDebounceTimer = Timer(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        _analyzeJobDescriptionKeywords();
+      }
+    });
+  }
+
+  Future<void> _analyzeJobDescriptionKeywords() async {
+    final jd = _jobDescriptionController.text.trim();
+    if (jd.isEmpty) {
+      if (mounted) {
+        setState(() {
+          _jobMatchScore = 0.0;
+          _matchedJobKeywords = [];
+          _missingJobKeywords = [];
+          _isAnalyzingKeywords = false;
+        });
+      }
+      return;
+    }
+
+    setState(() => _isAnalyzingKeywords = true);
+
+    try {
+      final currentResume = _buildCurrentResumeData();
+      final result = await AIService.instance.analyzeJobKeywords(
+        jobDescription: jd,
+        currentResume: currentResume,
+        targetJobTitle: _targetJobTitleController.text,
+      );
+
+      if (mounted) {
+        setState(() {
+          _jobMatchScore = result.matchScore;
+          _atsScore = result.atsScore;
+          _matchedJobKeywords = result.matchedKeywords;
+          _missingJobKeywords = result.missingKeywords;
+          _isAnalyzingKeywords = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[ResumeEditor] Error analyzing job keywords: $e');
+      if (mounted) {
+        setState(() => _isAnalyzingKeywords = false);
+      }
+    }
+  }
+
+  Widget _buildHighlightedFlutterText(
+    String text,
+    BuildContext context, {
+    TextStyle? defaultStyle,
+  }) {
+    final isDarkMode = AppTheme.isDarkMode(context);
+    final baseStyle = defaultStyle ??
+        AppTheme.getBodyFont(
+          fontSize: 12,
+          color: AppTheme.getTextColor(context).withValues(alpha: 0.85),
+          height: 1.4,
+        );
+
+    if (_matchedJobKeywords.isEmpty || text.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final safeEscaped = _matchedJobKeywords
+        .map((k) => k.trim())
+        .where((k) => k.length >= 2)
+        .map(RegExp.escape)
+        .join('|');
+
+    if (safeEscaped.isEmpty) {
+      return Text(text, style: baseStyle);
+    }
+
+    final kwRegex = RegExp('(?<=^|[^a-zA-Z0-9])($safeEscaped)(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
+    if (!kwRegex.hasMatch(text)) {
+      return Text(text, style: baseStyle);
+    }
+
+    final spans = <InlineSpan>[];
+    int last = 0;
+    for (final m in kwRegex.allMatches(text)) {
+      if (m.start > last) {
+        spans.add(TextSpan(
+          text: text.substring(last, m.start),
+          style: baseStyle,
+        ));
+      }
+      final matchedText = m.group(1)!;
+      spans.add(TextSpan(
+        text: matchedText,
+        style: baseStyle.copyWith(
+          fontWeight: FontWeight.w800,
+          color: isDarkMode ? Colors.white : Colors.black,
+          backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.15),
+        ),
+      ));
+      last = m.end;
+    }
+    if (last < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(last),
+        style: baseStyle,
+      ));
+    }
+
+    return RichText(text: TextSpan(children: spans));
   }
 
   @override
   void dispose() {
+    _jdDebounceTimer?.cancel();
+    _jobDescriptionController.removeListener(_onJobDescriptionChanged);
+    _targetJobTitleController.removeListener(_onJobDescriptionChanged);
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
@@ -510,6 +648,29 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     }
 
     final fileBytes = bytes;
+
+    // ── Atomic Per-User Daily Resume Limit Enforcement ──
+    final limitCheck = await ResumeLimitService.instance.checkAndReserveLimit();
+    if (!limitCheck.allowed) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(
+              limitCheck.message.isNotEmpty
+                  ? limitCheck.message
+                  : 'Daily resume limit reached. Please try again tomorrow.',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     debugPrint('[ResumePipeline] New resume uploaded - cache invalidated');
     debugPrint('[ResumePipeline] New resume detected - starting extraction');
 
@@ -525,19 +686,36 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       final mimeType = _getMimeType(pickedFile.name);
       debugPrint('[ResumeEditor] Starting AI extraction: file=${pickedFile.name}, bytes=${fileBytes.length}');
 
+      // Compute unique file hash to invalidate cache and track distinct uploads
+      String fileHash = '';
+      try {
+        var hash = BigInt.parse('14695981039346656037');
+        final fnvPrime = BigInt.parse('1099511628211');
+        final mask64 = (BigInt.one << 64) - BigInt.one;
+        for (final b in fileBytes) {
+          hash = (hash ^ BigInt.from(b)) * fnvPrime & mask64;
+        }
+        fileHash = hash.toRadixString(16).padLeft(16, '0');
+      } catch (_) {}
+
       // Extract raw text with robust local decoding + backend fallback + token sanitization
       final rawExtracted = await AIService.instance.extractTextFromBytesAsync(
         Uint8List.fromList(fileBytes),
         fileName: pickedFile.name,
       );
       _rawExtractedText = rawExtracted;
+      debugPrint('[ResumeParser] Raw extracted text length: ${rawExtracted.length}');
       debugPrint('[DEBUG-PIPELINE-1] PDF TEXT LENGTH: ${rawExtracted.length}');
       debugPrint('[DEBUG-PIPELINE-2] PDF TEXT PREVIEW: ${rawExtracted.length > 200 ? rawExtracted.substring(0, 200) : rawExtracted}');
 
-      final resumeData = await AIService.instance.parseResume(
+      final parsedData = await AIService.instance.parseResume(
         Uint8List.fromList(fileBytes),
         mimeType,
       );
+
+      final resumeData = (parsedData != null && fileHash.isNotEmpty)
+          ? parsedData.copyWith(fileHash: fileHash)
+          : parsedData;
 
       if (!mounted) return;
 
@@ -633,6 +811,9 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           }
         }
 
+        // Failed resume creation - refund reserved limit
+        ResumeLimitService.instance.refundLimit();
+
         setState(() {
           _isUploading = false;
           _isParsing = false;
@@ -655,6 +836,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         }
       }
     } on AIUsageLimitException catch (limitErr) {
+      ResumeLimitService.instance.refundLimit();
       setState(() {
         _isUploading = false;
         _isParsing = false;
@@ -675,6 +857,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         );
       }
     } catch (e) {
+      ResumeLimitService.instance.refundLimit();
       setState(() {
         _isUploading = false;
         _isParsing = false;
@@ -738,137 +921,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
-  void _tailorResume() async {
-    if (_isTailoring) return;
-    if (_jobDescriptionController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppTheme.primaryOrange,
-          content: Text(
-            'Please enter a target job description to tailor your resume!',
-            style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold, color: Colors.white),
-          ),
-        ),
-      );
-      return;
-    }
-
-    setState(() => _isTailoring = true);
-
-    try {
-      final currentResume = _buildCurrentResumeData();
-      final result = await AIService.instance.tailorResume(
-        currentResume,
-        _targetJobTitleController.text,
-        _jobDescriptionController.text,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _isTailoring = false;
-        _isTailored = true;
-        _jobMatchScore = result.matchScore;
-        _atsScore = result.atsScore;
-
-        if (_targetJobTitleController.text.trim().isNotEmpty) {
-          _titleController.text = _targetJobTitleController.text.trim();
-        }
-
-        if (result.summary.isNotEmpty) {
-          _summaryController.text = result.summary;
-        }
-
-        for (final skill in result.skills) {
-          if (!_skills.contains(skill)) {
-            _skills.add(skill);
-            _suggestedKeywords.remove(skill);
-          }
-        }
-        _suggestedKeywords.clear();
-        _suggestedKeywords.addAll(result.suggestedKeywords);
-
-        // ALWAYS update _parsedResumeData with tailored experience, summary, and skills
-        final updatedExp = result.experience.isNotEmpty
-            ? result.experience
-            : (_parsedResumeData?.experience ?? []);
-
-        _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(
-          title: _titleController.text,
-          summary: _summaryController.text,
-          skills: List.from(_skills),
-          experience: updatedExp,
-        );
-      });
-
-      // Save ATS analysis in background
-      ResumePersistenceService.instance.saveAtsAnalysis(
-        overallScore: result.atsScore.toInt(),
-        formatScore: 90,
-        contentScore: result.matchScore.toInt(),
-        keywordScore: result.atsScore.toInt(),
-        feedback: {
-          'suggestedKeywords': result.suggestedKeywords,
-          'tailoredForJob': _targetJobTitleController.text,
-        },
-      );
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFF10B981),
-            content: Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Resume successfully tailored! ATS Score: ${result.atsScore.toInt()}% | Match: ${result.matchScore.toInt()}%',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-    } on AIUsageLimitException catch (limitErr) {
-      if (mounted) {
-        setState(() => _isTailoring = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Text(
-              limitErr.message,
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isTailoring = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Text(
-              'Tailoring failed: $e',
-              style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.bold, color: Colors.white),
-            ),
-          ),
-        );
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -889,29 +941,34 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   title: 'CV Studio & Resume Tailoring 📝',
                   subtitle: 'Upload existing resume or tailor your CV to any target job description in real-time.',
                   action: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryOrange.withValues(alpha: 0.12),
+                      color: const Color(0xFF10B981).withValues(alpha: isDarkMode ? 0.15 : 0.1),
                       borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
+                      border: Border.all(
+                        color: const Color(0xFF10B981).withValues(alpha: isDarkMode ? 0.35 : 0.25),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(
-                          Icons.auto_awesome,
-                          size: 14,
-                          color: AppTheme.primaryOrange,
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFF10B981),
+                          ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 8),
                         Text(
-                          _isTailored
-                              ? 'Tailored (96% Match)'
-                              : 'AI Tailoring Ready',
+                          _jobDescriptionController.text.trim().isNotEmpty
+                              ? 'Job Matched (${_jobMatchScore.toInt()}% Match)'
+                              : 'Job Alignment Ready',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: AppTheme.primaryOrange,
+                            fontWeight: FontWeight.w600,
+                            color: isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46),
                           ),
                         ),
                       ],
@@ -947,11 +1004,9 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       {'step': '3', 'title': 'Skills', 'subtitle': 'Technical Skills', 'tab': 2},
       {'step': '4', 'title': 'Projects', 'subtitle': 'GitHub & Portfolio', 'tab': 3},
       {'step': '5', 'title': 'Experience', 'subtitle': 'Work History', 'tab': 4},
-      {'step': '6', 'title': 'Certifications', 'subtitle': 'Licenses & Credentials', 'tab': 5},
-      {'step': '7', 'title': 'Extracurriculars', 'subtitle': 'Activities & Honors', 'tab': 6},
-      {'step': '8', 'title': 'Target Job', 'subtitle': 'Job Description & AI', 'tab': 7},
-      {'step': '9', 'title': 'ATS Score', 'subtitle': 'Score & Keywords', 'tab': 8},
-      {'step': '10', 'title': 'Export', 'subtitle': 'Download & Preview', 'tab': 9},
+      {'step': '6', 'title': 'Extracurriculars', 'subtitle': 'Activities & Honors', 'tab': 5},
+      {'step': '7', 'title': 'Target Job', 'subtitle': 'Job Description & AI', 'tab': 6},
+      {'step': '8', 'title': 'Export', 'subtitle': 'Download & Preview', 'tab': 8},
     ];
 
     return Container(
@@ -1107,7 +1162,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             ),
             _buildUploadResumeCard(context, isDarkMode),
             _buildExtractedTextCard(context, isDarkMode),
-            const SizedBox(height: 20),
             _buildIdentityCard(context, isDarkMode, isDesktop),
             _buildSummaryCard(context, isDarkMode),
             const SizedBox(height: 24),
@@ -1308,63 +1362,14 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             _buildSubPageNavigationFooter(
               prevTitle: '← Back: Projects',
               onPrev: () => handleSubSectionSelected(3),
-              nextTitle: 'Next: Certifications →',
+              nextTitle: 'Next: Extracurriculars →',
               onNext: () => handleSubSectionSelected(5),
             ),
           ],
         );
 
       case 5:
-        // Tab 5: Certifications
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Certifications',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.getTextColor(context),
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage professional certifications, licenses, and verified credentials.',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: AppTheme.getMutedTextColor(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _buildSectionCard(
-              context: context,
-              sectionKey: 'certifications',
-              icon: Icons.workspace_premium_outlined,
-              title: 'Certifications & Credentials',
-              subtitle: '${_parsedResumeData?.certifications.length ?? 0} entries',
-              child: _buildCertificationsSection(context, isDarkMode),
-            ),
-            const SizedBox(height: 24),
-            _buildSubPageNavigationFooter(
-              prevTitle: '← Back: Experience',
-              onPrev: () => handleSubSectionSelected(4),
-              nextTitle: 'Next: Extracurriculars →',
-              onNext: () => handleSubSectionSelected(6),
-            ),
-          ],
-        );
-
-      case 6:
-        // Tab 6: Extracurriculars
+        // Tab 5: Extracurriculars
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1396,6 +1401,15 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             ),
             _buildSectionCard(
               context: context,
+              sectionKey: 'certifications',
+              icon: Icons.verified_outlined,
+              title: 'Certifications & Credentials',
+              subtitle: '${_parsedResumeData?.certifications.length ?? 0} entries',
+              child: _buildCertificationsSection(context, isDarkMode),
+            ),
+            const SizedBox(height: 16),
+            _buildSectionCard(
+              context: context,
               sectionKey: 'extracurriculars',
               icon: Icons.interests_outlined,
               title: 'Extracurricular Activities',
@@ -1404,16 +1418,16 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             ),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
-              prevTitle: '← Back: Certifications',
-              onPrev: () => handleSubSectionSelected(5),
+              prevTitle: '← Back: Experience',
+              onPrev: () => handleSubSectionSelected(4),
               nextTitle: 'Next: Target Job →',
-              onNext: () => setState(() => _activeSubTab = 7),
+              onNext: () => handleSubSectionSelected(6),
             ),
           ],
         );
 
-      case 7:
-        // Tab 7: Target Job Description & Tailoring
+      case 6:
+        // Tab 6: Target Job Description & Tailoring
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1444,22 +1458,22 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               ),
             ),
             _buildTailoringCard(context, isDarkMode),
-            if (_isTailored) ...[
+            if (_jobDescriptionController.text.trim().isNotEmpty) ...[
               const SizedBox(height: 16),
               _buildAtsGaugeCard(context, isDarkMode),
             ],
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
               prevTitle: '← Back: Extracurriculars',
-              onPrev: () => handleSubSectionSelected(6),
-              nextTitle: 'Next: ATS Score Analysis →',
-              onNext: () => setState(() => _activeSubTab = 8),
+              onPrev: () => handleSubSectionSelected(5),
+              nextTitle: 'Next: Preview & Export →',
+              onNext: () => handleSubSectionSelected(8),
             ),
           ],
         );
 
-      case 8:
-        // Tab 8: ATS Score Analysis
+      case 7:
+        // Tab 7: ATS Score Analysis
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1489,19 +1503,22 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
+            _buildUploadResumeCard(context, isDarkMode),
+            _buildExtractedTextCard(context, isDarkMode),
+            const SizedBox(height: 16),
             _buildAtsGaugeCard(context, isDarkMode),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
               prevTitle: '← Back: Target Job',
-              onPrev: () => setState(() => _activeSubTab = 7),
+              onPrev: () => handleSubSectionSelected(6),
               nextTitle: 'Next: Preview & Export →',
-              onNext: () => setState(() => _activeSubTab = 9),
+              onNext: () => handleSubSectionSelected(8),
             ),
           ],
         );
 
-      case 9:
-        // Tab 9: Live Preview & Export
+      case 8:
+        // Tab 8: Live Preview & Export
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1555,8 +1572,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             ),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
-              prevTitle: '← Back: ATS Score Analysis',
-              onPrev: () => setState(() => _activeSubTab = 8),
+              prevTitle: '← Back: Target Job',
+              onPrev: () => handleSubSectionSelected(6),
             ),
           ],
         );
@@ -2224,7 +2241,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         SnackBar(
                           backgroundColor: const Color(0xFF10B981),
                           content: Text(
-                            'Deterministic test data loaded! Form fields populated successfully.',
+                            'Sample resume loaded! Form fields populated successfully.',
                             style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: Colors.white),
                           ),
                         ),
@@ -2235,14 +2252,14 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.bug_report_rounded, size: 14, color: AppTheme.primaryOrange),
+                          Icon(Icons.description_outlined, size: 14, color: AppTheme.getMutedTextColor(context)),
                           const SizedBox(width: 4),
                           Text(
-                            'Test Auto-Fill (Deterministic)',
+                            'Load Sample Resume',
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: AppTheme.primaryOrange,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.getMutedTextColor(context),
                               decoration: TextDecoration.underline,
                             ),
                           ),
@@ -4139,6 +4156,154 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
+  void _showCertificationDialog(BuildContext context, {ExtracurricularEntry? initial, int? index}) {
+    final nameController = TextEditingController(text: initial?.activity ?? '');
+    final issuerController = TextEditingController(text: initial?.organization ?? '');
+    final roleController = TextEditingController(text: initial?.role ?? '');
+    final descController = TextEditingController(text: initial?.description ?? '');
+
+    debugPrint('[Certification DEBUG] Input name: ${nameController.text}');
+    debugPrint('[Certification DEBUG] Input issuer: ${issuerController.text}');
+    debugPrint('[Certification DEBUG] Input URL/details: ${descController.text}');
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(ctx),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            initial == null ? 'Add Certification' : 'Edit Certification',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.bold,
+              fontSize: 18,
+              color: AppTheme.getTextColor(ctx),
+            ),
+          ),
+          content: SingleChildScrollView(
+            child: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildFormField(
+                    context: ctx,
+                    label: 'Certification Name *',
+                    hint: 'e.g. AWS Certified Cloud Practitioner',
+                    icon: Icons.workspace_premium_outlined,
+                    controller: nameController,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildFormField(
+                    context: ctx,
+                    label: 'Issuing Organization / Issuer',
+                    hint: 'e.g. Amazon Web Services',
+                    icon: Icons.business_center_outlined,
+                    controller: issuerController,
+                  ),
+                  const SizedBox(height: 12),
+                  _buildFormField(
+                    context: ctx,
+                    label: 'Role / Credential Level (Optional)',
+                    hint: 'e.g. Professional / Associate',
+                    icon: Icons.badge_outlined,
+                    controller: roleController,
+                  ),
+                  const SizedBox(height: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Date / Credential URL / Details',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.getTextColor(ctx),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      TextField(
+                        controller: descController,
+                        maxLines: 2,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          color: AppTheme.getTextColor(ctx),
+                        ),
+                        decoration: _inputDecoration(
+                          ctx,
+                          'e.g. 2026 • https://aws.amazon.com/verification',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  color: AppTheme.getMutedTextColor(ctx),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final certName = nameController.text.trim();
+                if (certName.isEmpty) {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(content: Text('Certification Name is required.')),
+                  );
+                  return;
+                }
+
+                final entry = ExtracurricularEntry(
+                  activity: certName,
+                  organization: issuerController.text.trim(),
+                  role: roleController.text.trim(),
+                  description: descController.text.trim(),
+                );
+
+                final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.certifications ?? []);
+                debugPrint('[Certification DEBUG] Before save count: ${currentList.length}');
+
+                if (index != null && index >= 0 && index < currentList.length) {
+                  currentList[index] = entry;
+                } else {
+                  currentList.add(entry);
+                }
+
+                debugPrint('[Certification DEBUG] After save count: ${currentList.length}');
+
+                setState(() {
+                  _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(certifications: currentList);
+                });
+
+                debugPrint('[Certification DEBUG] ResumeModel certifications: ${_parsedResumeData?.certifications.length ?? 0}');
+
+                _persistCurrentResume();
+                Navigator.pop(ctx);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primaryOrange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text(
+                'Save',
+                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _showExtracurricularDialog(BuildContext context, {ExtracurricularEntry? initial, int? index}) {
     final activityController = TextEditingController(text: initial?.activity ?? '');
     final roleController = TextEditingController(text: initial?.role ?? '');
@@ -4746,8 +4911,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${edu.degree} ${edu.fieldOfStudy}'.trim().isNotEmpty
-                              ? '${edu.degree} in ${edu.fieldOfStudy}'.trim()
+                          [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ').isNotEmpty
+                              ? [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ')
                               : 'Degree',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
@@ -4891,7 +5056,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                           IconButton(
                             icon: const Icon(Icons.edit_outlined,
                                 size: 18, color: AppTheme.primaryOrange),
-                            onPressed: () => _showExtracurricularDialog(context, initial: item, index: idx),
+                            onPressed: () => _showCertificationDialog(context, initial: item, index: idx),
                             tooltip: 'Edit certification entry',
                           ),
                           IconButton(
@@ -4957,7 +5122,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         SizedBox(
           width: double.infinity,
           child: OutlinedButton.icon(
-            onPressed: () => _showExtracurricularDialog(context),
+            onPressed: () => _showCertificationDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
               '+ Add Certification',
@@ -5134,6 +5299,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         bytes = await ResumeExportService.instance.generateAtsPdf(
           currentResume,
           originalPdfBytes: _uploadedFileBytes,
+          highlightKeywords: _matchedJobKeywords,
         );
       } else {
         final textContent = _buildTextResumeFormat(currentResume);
@@ -5226,7 +5392,21 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     if (resume.education.isNotEmpty) {
       sb.writeln('EDUCATION');
       for (final edu in resume.education) {
-        sb.writeln('${edu.degree} in ${edu.fieldOfStudy} - ${edu.institution} (${edu.startDate} - ${edu.endDate})');
+        final title = [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ');
+        final start = edu.startDate.replaceAll(RegExp(r'[\s\-–—]+$'), '').trim();
+        final end = edu.endDate.replaceAll(RegExp(r'^[\s\-–—]+'), '').trim();
+        final String dates;
+        if (start.isNotEmpty && end.isNotEmpty) {
+          dates = '$start - $end';
+        } else if (start.isNotEmpty) {
+          dates = start;
+        } else if (end.isNotEmpty) {
+          dates = end;
+        } else {
+          dates = '';
+        }
+        final line = [title, edu.institution, if (dates.isNotEmpty) '($dates)'].where((s) => s.trim().isNotEmpty).join(' - ');
+        sb.writeln(line);
       }
     }
 
@@ -5366,20 +5546,21 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
-  // ── Resume Tailoring Card (Replaces National/International options) ──
+  // ── Resume Tailoring Card ──
 
   Widget _buildTailoringCard(BuildContext context, bool isDarkMode) {
     return JobAlignmentCard(
       targetJobTitleController: _targetJobTitleController,
       jobDescriptionController: _jobDescriptionController,
-      isTailoring: _isTailoring,
+      isAnalyzingKeywords: _isAnalyzingKeywords,
       jobMatchScore: _jobMatchScore,
       selectedResumeType: _selectedResumeType,
       onSelectResumeType: (type) {
         setState(() => _selectedResumeType = type);
       },
-      onTailorResume: _tailorResume,
       onPreviewResume: _openFullPreviewDialog,
+      matchedKeywords: _matchedJobKeywords,
+      missingKeywords: _missingJobKeywords,
     );
   }
 
@@ -5440,28 +5621,52 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   color: AppTheme.getTextColor(context),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
-                    const SizedBox(width: 4),
-                    Text(
-                      'LIVE PREVIEW',
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _openFullPreviewDialog,
+                    icon: const Icon(Icons.visibility_rounded, size: 14, color: AppTheme.primaryOrange),
+                    label: Text(
+                      'A4 Paper Preview',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: const Color(0xFF10B981),
-                        letterSpacing: 0.5,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.primaryOrange,
                       ),
                     ),
-                  ],
-                ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: AppTheme.primaryOrange, width: 1.2),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
+                        const SizedBox(width: 4),
+                        Text(
+                          'LIVE PREVIEW',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF10B981),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -5531,9 +5736,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  _buildHighlightedFlutterText(
                     currentResume.summary,
-                    style: AppTheme.getBodyFont(
+                    context,
+                    defaultStyle: AppTheme.getBodyFont(
                       fontSize: 12,
                       color: AppTheme.getTextColor(context).withValues(alpha: 0.85),
                       height: 1.4,
@@ -5554,9 +5760,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  Text(
+                  _buildHighlightedFlutterText(
                     currentResume.skills.join(' • '),
-                    style: GoogleFonts.plusJakartaSans(
+                    context,
+                    defaultStyle: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
                       color: AppTheme.getTextColor(context),
@@ -5627,9 +5834,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                                       ),
                                     ),
                                     Expanded(
-                                      child: Text(
+                                      child: _buildHighlightedFlutterText(
                                         cleaned,
-                                        style: GoogleFonts.plusJakartaSans(
+                                        context,
+                                        defaultStyle: GoogleFonts.plusJakartaSans(
                                           fontSize: 11,
                                           color: AppTheme.getTextColor(context)
                                               .withValues(alpha: 0.85),
@@ -5709,9 +5917,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                                       ),
                                     ),
                                     Expanded(
-                                      child: Text(
+                                      child: _buildHighlightedFlutterText(
                                         cleaned,
-                                        style: GoogleFonts.plusJakartaSans(
+                                        context,
+                                        defaultStyle: GoogleFonts.plusJakartaSans(
                                           fontSize: 11,
                                           color: AppTheme.getTextColor(context)
                                               .withValues(alpha: 0.85),
@@ -5754,31 +5963,50 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${edu.degree}${edu.fieldOfStudy.isNotEmpty ? " in ${edu.fieldOfStudy}" : ""}',
+                                  [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ').isNotEmpty
+                                      ? [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ')
+                                      : (edu.institution.isNotEmpty ? edu.institution : 'Education'),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                     color: AppTheme.getTextColor(context),
                                   ),
                                 ),
-                                Text(
-                                  edu.institution,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    color: AppTheme.getMutedTextColor(context),
+                                if (edu.institution.isNotEmpty)
+                                  Text(
+                                    edu.institution,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      color: AppTheme.getMutedTextColor(context),
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),
-                          if (edu.startDate.isNotEmpty || edu.endDate.isNotEmpty)
-                            Text(
-                              '${edu.startDate} - ${edu.endDate}',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 11,
-                                color: AppTheme.getMutedTextColor(context),
-                              ),
-                            ),
+                          Builder(
+                            builder: (context) {
+                              final start = edu.startDate.replaceAll(RegExp(r'[\s\-–—]+$'), '').trim();
+                              final end = edu.endDate.replaceAll(RegExp(r'^[\s\-–—]+'), '').trim();
+                              final String dateStr;
+                              if (start.isNotEmpty && end.isNotEmpty) {
+                                dateStr = '$start - $end';
+                              } else if (start.isNotEmpty) {
+                                dateStr = start;
+                              } else if (end.isNotEmpty) {
+                                dateStr = end;
+                              } else {
+                                dateStr = '';
+                              }
+                              if (dateStr.isEmpty) return const SizedBox.shrink();
+                              return Text(
+                                dateStr,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  color: AppTheme.getMutedTextColor(context),
+                                ),
+                              );
+                            },
+                          ),
                         ],
                       ),
                     );
@@ -5849,9 +6077,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                                       ),
                                     ),
                                     Expanded(
-                                      child: Text(
+                                      child: _buildHighlightedFlutterText(
                                         cleaned,
-                                        style: GoogleFonts.plusJakartaSans(
+                                        context,
+                                        defaultStyle: GoogleFonts.plusJakartaSans(
                                           fontSize: 11,
                                           color: AppTheme.getTextColor(context)
                                               .withValues(alpha: 0.85),

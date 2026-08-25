@@ -69,13 +69,13 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
         _resumeEditorKey.currentState?.handleSubSectionSelected(subIndex);
       },
       onResumePreview: () {
-        if (_currentIndex != 2 && _currentIndex != 0) {
+        if (_currentIndex != 2) {
           _pageController.jumpToPage(2);
           setState(() {
             _currentIndex = 2;
           });
         }
-        _resumeEditorKey.currentState?.handleSubSectionSelected(0);
+        _resumeEditorKey.currentState?.openFullPreviewDialog();
       },
       onGenerate: () {
         if (_currentIndex != 2 && _currentIndex != 0) {
@@ -85,6 +85,24 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
           });
         }
         _resumeEditorKey.currentState?.handleGenerate();
+      },
+      onAtsScore: () {
+        if (_currentIndex != 2 && _currentIndex != 0) {
+          _pageController.jumpToPage(2);
+          setState(() {
+            _currentIndex = 2;
+          });
+        }
+        _resumeEditorKey.currentState?.openAtsScore();
+      },
+      onUploadResume: () {
+        if (_currentIndex != 2 && _currentIndex != 0) {
+          _pageController.jumpToPage(2);
+          setState(() {
+            _currentIndex = 2;
+          });
+        }
+        _resumeEditorKey.currentState?.openUploadResume();
       },
       child: PageView(
         controller: _pageController,

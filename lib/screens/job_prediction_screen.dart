@@ -300,7 +300,7 @@ Key Requirements:
         color: isStale
             ? const Color(0xFFFEF3C7)
             : AppTheme.getSurfaceColor(context),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
           color: isStale ? const Color(0xFFF59E0B) : AppTheme.getBorderColor(context),
         ),
@@ -350,7 +350,7 @@ Key Requirements:
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFD97706),
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
               ),
               child: const Text('Re-evaluate Now'),
             ),
@@ -364,7 +364,7 @@ Key Requirements:
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceColor(context),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppTheme.getBorderColor(context)),
       ),
       child: Form(
@@ -383,31 +383,35 @@ Key Requirements:
             const SizedBox(height: 16),
             TextFormField(
               controller: _jobTitleController,
+              textAlign: TextAlign.start,
               decoration: InputDecoration(
                 labelText: 'Job Title',
                 hintText: 'e.g. Senior Backend Engineer',
                 prefixIcon: const Icon(Icons.work_outline_rounded, size: 20),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
               ),
             ),
             const SizedBox(height: 16),
             TextFormField(
               controller: _jobDescController,
+              textAlign: TextAlign.start,
               maxLines: 5,
               decoration: InputDecoration(
                 labelText: 'Job Description Text',
                 hintText: 'Paste the target job description requirements here...',
                 alignLabelWithHint: true,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
               ),
             ),
             const SizedBox(height: 24),
 
-            // Features review expandable toggle
+            // Features review expandable toggle - aligned cleanly
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       '2. Extracted Features Review',
@@ -426,11 +430,16 @@ Key Requirements:
                 ),
                 TextButton.icon(
                   onPressed: () => setState(() => _showFeaturesPanel = !_showFeaturesPanel),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
+                  ),
                   icon: Icon(_showFeaturesPanel ? Icons.expand_less : Icons.expand_more, size: 18),
                   label: Text(_showFeaturesPanel ? 'Hide Fields' : 'Review & Edit Features'),
                 ),
               ],
             ),
+            const SizedBox(height: 4),
             Text(
               'Review and manually correct the features extracted from your tailored resume prior to model evaluation.',
               style: GoogleFonts.plusJakartaSans(
@@ -452,8 +461,8 @@ Key Requirements:
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryOrange,
                   foregroundColor: Colors.white,
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
                 ),
                 child: _isPredicting
                     ? Row(
@@ -503,7 +512,7 @@ Key Requirements:
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8F5EE),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           border: Border.all(color: AppTheme.getBorderColor(context)),
         ),
         child: const Column(
@@ -523,10 +532,9 @@ Key Requirements:
 
     return Container(
       padding: const EdgeInsets.all(16),
-
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8F5EE),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppTheme.getBorderColor(context)),
       ),
       child: Column(
@@ -543,7 +551,8 @@ Key Requirements:
             ],
           ),
           const SizedBox(height: 12),
-          _buildTextField('Skills (Comma separated)', _skillsController),
+          // Multi-line skills field to avoid clipping
+          _buildTextField('Skills (Comma separated)', _skillsController, maxLines: 3),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -573,17 +582,25 @@ Key Requirements:
     );
   }
 
-  Widget _buildTextField(String label, TextEditingController controller, {bool isNumeric = false}) {
+  Widget _buildTextField(
+    String label,
+    TextEditingController controller, {
+    bool isNumeric = false,
+    int maxLines = 1,
+  }) {
     return TextFormField(
       controller: controller,
-      keyboardType: isNumeric ? TextInputType.number : TextInputType.text,
+      textAlign: TextAlign.start,
+      maxLines: maxLines,
+      keyboardType: isNumeric ? TextInputType.number : (maxLines > 1 ? TextInputType.multiline : TextInputType.text),
       style: GoogleFonts.plusJakartaSans(fontSize: 13),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: GoogleFonts.plusJakartaSans(fontSize: 12),
+        alignLabelWithHint: maxLines > 1,
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.radiusMd)),
       ),
     );
   }
@@ -597,7 +614,7 @@ Key Requirements:
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: AppTheme.getSurfaceColor(context),
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           border: Border.all(color: AppTheme.getBorderColor(context)),
         ),
         child: Center(
@@ -644,7 +661,7 @@ Key Requirements:
     final fitPct = (result.fitProbability * 100).toStringAsFixed(1);
 
     Color matchColor;
-    if (result.combinedProbability >= 0.75) {
+    if (result.combinedProbability >= 0.70) {
       matchColor = const Color(0xFF10B981); // Green
     } else if (result.combinedProbability >= 0.50) {
       matchColor = const Color(0xFFF59E0B); // Amber
@@ -656,7 +673,7 @@ Key Requirements:
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceColor(context),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(color: AppTheme.getBorderColor(context)),
       ),
       child: Column(
@@ -677,7 +694,7 @@ Key Requirements:
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: matchColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusFull),
                   border: Border.all(color: matchColor.withValues(alpha: 0.4)),
                 ),
                 child: Text(
@@ -746,12 +763,12 @@ Key Requirements:
           ),
           const SizedBox(height: 24),
 
-          // Sub-Probabilities breakdown
+          // Sub-Probabilities breakdown with dynamic semantic colors
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8F5EE),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
             ),
             child: Column(
               children: [
@@ -777,7 +794,7 @@ Key Requirements:
           ),
           const SizedBox(height: 24),
 
-          // Extracted Features Summary list
+          // Extracted Features Breakdown - Formatted as clean scannable tag chips
           Text(
             'Evaluated Feature Breakdown',
             style: GoogleFonts.plusJakartaSans(
@@ -787,22 +804,77 @@ Key Requirements:
             ),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: result.extractedFeatures.entries.map((e) {
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppTheme.isDarkMode(context) ? Colors.white.withValues(alpha: 0.05) : Colors.black.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${e.key}: ${e.value}',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppTheme.getTextColor(context)),
-                ),
-              );
-            }).toList(),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8F5EE),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              border: Border.all(color: AppTheme.getBorderColor(context)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: result.extractedFeatures.entries.map((e) {
+                final isList = e.value.toString().contains(',');
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        e.key,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.getMutedTextColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      if (isList)
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: e.value.toString().split(',').map((item) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: isDarkMode ? Colors.white10 : Colors.white,
+                                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                                border: Border.all(color: AppTheme.getBorderColor(context)),
+                              ),
+                              child: Text(
+                                item.trim(),
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppTheme.getTextColor(context),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isDarkMode ? Colors.white10 : Colors.white,
+                            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                            border: Border.all(color: AppTheme.getBorderColor(context)),
+                          ),
+                          child: Text(
+                            e.value.toString(),
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.getTextColor(context),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -820,7 +892,7 @@ Key Requirements:
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8FAF4),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               border: Border.all(color: AppTheme.getBorderColor(context)),
             ),
             child: Column(
@@ -849,7 +921,7 @@ Key Requirements:
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Text(
                         '✓ $s',
@@ -882,7 +954,7 @@ Key Requirements:
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppTheme.primaryOrange.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                       ),
                       child: Text(
                         '+ $s',
@@ -901,7 +973,7 @@ Key Requirements:
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: AppTheme.primaryOrange.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
             ),
             child: Row(
@@ -923,6 +995,8 @@ Key Requirements:
               ],
             ),
           ),
+          // Safe bottom breathing room
+          const SizedBox(height: 48),
         ],
       ),
     );
@@ -935,6 +1009,11 @@ Key Requirements:
       curve: Curves.easeOutCubic,
       builder: (context, animatedRatio, _) {
         final animPct = (animatedRatio * 100).toStringAsFixed(1);
+        // Dynamic semantic color for progress bar and percentage
+        final rowColor = animatedRatio >= 0.70
+            ? const Color(0xFF10B981) // Green for high match
+            : (animatedRatio >= 0.50 ? const Color(0xFFF59E0B) : const Color(0xFF64748B));
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -954,19 +1033,19 @@ Key Requirements:
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: AppTheme.primaryOrange,
+                    color: rowColor,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
             ClipRRect(
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
               child: LinearProgressIndicator(
                 value: animatedRatio,
                 minHeight: 6,
                 backgroundColor: AppTheme.isDarkMode(context) ? Colors.white10 : Colors.black12,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryOrange),
+                valueColor: AlwaysStoppedAnimation<Color>(rowColor),
               ),
             ),
           ],

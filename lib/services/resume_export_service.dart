@@ -1,4 +1,6 @@
+import 'dart:io' show File;
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle, ByteData;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:http/http.dart' as http;
@@ -126,6 +128,8 @@ class PdfTemplateConfig {
   PdfTemplateConfig copyWithFitting({
     double? marginTop,
     double? marginBottom,
+    double? marginLeft,
+    double? marginRight,
     double? nameFontSize,
     double? headingFontSize,
     double? subheadingFontSize,
@@ -143,8 +147,8 @@ class PdfTemplateConfig {
       pageHeight: pageHeight,
       marginTop: marginTop ?? this.marginTop,
       marginBottom: marginBottom ?? this.marginBottom,
-      marginLeft: marginLeft,
-      marginRight: marginRight,
+      marginLeft: marginLeft ?? this.marginLeft,
+      marginRight: marginRight ?? this.marginRight,
       nameFontSize: nameFontSize ?? this.nameFontSize,
       headingFontSize: headingFontSize ?? this.headingFontSize,
       subheadingFontSize: subheadingFontSize ?? this.subheadingFontSize,
@@ -179,6 +183,137 @@ class ResumeExportService {
   /// Stored original PDF bytes for template analysis
   Uint8List? _originalPdfBytes;
 
+  /// Cached Unicode-compatible TTF fonts (Tinos Serif - metrically compatible with Times New Roman)
+  pw.Font? _unicodeBaseFont;
+  pw.Font? _unicodeBoldFont;
+  pw.Font? _unicodeItalicFont;
+  pw.Font? _unicodeBoldItalicFont;
+  pw.ThemeData? _cachedFontTheme;
+
+  /// Loads embedded Unicode-capable TTF fonts (Tinos) to support full Unicode character sets (currencies, accents, arrows, quotes, symbols).
+  Future<pw.ThemeData> getFontThemeAsync() async {
+    if (_cachedFontTheme != null) return _cachedFontTheme!;
+
+    try {
+      final regularBytes = await rootBundle.load('assets/fonts/Tinos-Regular.ttf');
+      final boldBytes = await rootBundle.load('assets/fonts/Tinos-Bold.ttf');
+      final italicBytes = await rootBundle.load('assets/fonts/Tinos-Italic.ttf');
+      final boldItalicBytes = await rootBundle.load('assets/fonts/Tinos-BoldItalic.ttf');
+
+      _unicodeBaseFont = pw.Font.ttf(regularBytes);
+      _unicodeBoldFont = pw.Font.ttf(boldBytes);
+      _unicodeItalicFont = pw.Font.ttf(italicBytes);
+      _unicodeBoldItalicFont = pw.Font.ttf(boldItalicBytes);
+
+      _cachedFontTheme = pw.ThemeData.withFont(
+        base: _unicodeBaseFont!,
+        bold: _unicodeBoldFont!,
+        italic: _unicodeItalicFont!,
+        boldItalic: _unicodeBoldItalicFont!,
+        fontFallback: [
+          _unicodeBaseFont!,
+          _unicodeBoldFont!,
+          _unicodeItalicFont!,
+          _unicodeBoldItalicFont!,
+        ],
+      );
+      debugPrint('[ResumeExportService] Unicode PDF font loaded successfully (${_unicodeBaseFont!.fontName})');
+      return _cachedFontTheme!;
+    } catch (e) {
+      if (!kIsWeb) {
+        try {
+          final regFile = File('assets/fonts/Tinos-Regular.ttf');
+          if (regFile.existsSync()) {
+            final regBytes = regFile.readAsBytesSync();
+            final boldBytes = File('assets/fonts/Tinos-Bold.ttf').readAsBytesSync();
+            final italicBytes = File('assets/fonts/Tinos-Italic.ttf').readAsBytesSync();
+            final boldItalicBytes = File('assets/fonts/Tinos-BoldItalic.ttf').readAsBytesSync();
+
+            _unicodeBaseFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(regBytes)));
+            _unicodeBoldFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(boldBytes)));
+            _unicodeItalicFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(italicBytes)));
+            _unicodeBoldItalicFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(boldItalicBytes)));
+
+            _cachedFontTheme = pw.ThemeData.withFont(
+              base: _unicodeBaseFont!,
+              bold: _unicodeBoldFont!,
+              italic: _unicodeItalicFont!,
+              boldItalic: _unicodeBoldItalicFont!,
+              fontFallback: [
+                _unicodeBaseFont!,
+                _unicodeBoldFont!,
+                _unicodeItalicFont!,
+                _unicodeBoldItalicFont!,
+              ],
+            );
+            debugPrint('[ResumeExportService] Unicode PDF font loaded successfully from filesystem');
+            return _cachedFontTheme!;
+          }
+        } catch (_) {}
+      }
+      return getFontTheme();
+    }
+  }
+
+  /// Synchronous fallback or cached font theme provider
+  pw.ThemeData getFontTheme() {
+    if (_cachedFontTheme != null) return _cachedFontTheme!;
+
+    if (!kIsWeb) {
+      try {
+        final regFile = File('assets/fonts/Tinos-Regular.ttf');
+        if (regFile.existsSync()) {
+          final regBytes = regFile.readAsBytesSync();
+          final boldBytes = File('assets/fonts/Tinos-Bold.ttf').readAsBytesSync();
+          final italicBytes = File('assets/fonts/Tinos-Italic.ttf').readAsBytesSync();
+          final boldItalicBytes = File('assets/fonts/Tinos-BoldItalic.ttf').readAsBytesSync();
+
+          _unicodeBaseFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(regBytes)));
+          _unicodeBoldFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(boldBytes)));
+          _unicodeItalicFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(italicBytes)));
+          _unicodeBoldItalicFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(boldItalicBytes)));
+
+          _cachedFontTheme = pw.ThemeData.withFont(
+            base: _unicodeBaseFont!,
+            bold: _unicodeBoldFont!,
+            italic: _unicodeItalicFont!,
+            boldItalic: _unicodeBoldItalicFont!,
+            fontFallback: [
+              _unicodeBaseFont!,
+              _unicodeBoldFont!,
+              _unicodeItalicFont!,
+              _unicodeBoldItalicFont!,
+            ],
+          );
+          return _cachedFontTheme!;
+        }
+      } catch (_) {}
+    }
+
+    if (_unicodeBaseFont != null) {
+      return pw.ThemeData.withFont(
+        base: _unicodeBaseFont!,
+        bold: _unicodeBoldFont ?? _unicodeBaseFont!,
+        italic: _unicodeItalicFont ?? _unicodeBaseFont!,
+        boldItalic: _unicodeBoldItalicFont ?? _unicodeBoldFont ?? _unicodeBaseFont!,
+        fontFallback: [
+          _unicodeBaseFont!,
+          ?_unicodeBoldFont,
+          ?_unicodeItalicFont,
+          ?_unicodeBoldItalicFont,
+        ],
+      );
+    }
+
+    // Default safety fallback (getFontThemeAsync is always awaited for actual PDF builds)
+    return pw.ThemeData.withFont(
+      base: pw.Font.courier(),
+      bold: pw.Font.courierBold(),
+      italic: pw.Font.courierOblique(),
+      boldItalic: pw.Font.courierBoldOblique(),
+    );
+  }
+
   /// Store original PDF bytes when user uploads a resume.
   void setOriginalPdfBytes(Uint8List bytes) {
     _originalPdfBytes = bytes;
@@ -210,12 +345,6 @@ class ResumeExportService {
     r'^[\s\-\*\u2022\u25a0\u25a1\u2610\u2612\u2611\u25cf\u25cb\u25aa\u25ab\u2023\u2043\u25e6\ufffd]+',
   );
 
-  static final List<String> _unsupportedGlyphs = [
-    '•', '◦', '▪', '▫', '■', '□', '☐', '☒', '☑', '●', '○', '‣', '⁃',
-    '\u2022', '\u25a0', '\u25a1', '\u2610', '\u2612', '\u2611', '\u25cf',
-    '\u25cb', '\u25aa', '\u25ab', '\u2023', '\u2043', '\u25e6', '\ufffd',
-  ];
-
   static String _cleanBulletString(String input) {
     var s = _clean(input);
     if (s.isEmpty) return '';
@@ -225,21 +354,9 @@ class ResumeExportService {
     return s;
   }
 
-  /// Sanitizes text for standard PDF rendering.
+  /// Passes the original text cleanly to the PDF rendering layer, preserving every user character and punctuation exactly as entered.
   static String _sanitizePdfText(String input) {
-    var s = _clean(input);
-    if (s.isEmpty) return '';
-    for (final glyph in _unsupportedGlyphs) {
-      s = s.replaceAll(glyph, '');
-    }
-    return s
-        .replaceAll('—', '-')
-        .replaceAll('–', '-')
-        .replaceAll('’', "'")
-        .replaceAll('‘', "'")
-        .replaceAll('“', '"')
-        .replaceAll('”', '"')
-        .replaceAll('…', '...');
+    return _clean(input);
   }
 
   /// Extract a basic template config from original PDF bytes.
@@ -300,20 +417,18 @@ class ResumeExportService {
   }
 
   /// Measures exact rendered layout of the resume under a given configuration.
-  ResumeLayoutMeasurement measureResumeLayout(ResumeData resume, PdfTemplateConfig cfg) {
+  ResumeLayoutMeasurement measureResumeLayout(
+    ResumeData resume,
+    PdfTemplateConfig cfg, {
+    pw.ThemeData? fontTheme,
+  }) {
+    final font = fontTheme ?? getFontTheme();
     final sectionHeights = <String, double>{};
     final usableWidth = cfg.pageWidth - cfg.marginLeft - cfg.marginRight;
     final usableHeight = cfg.pageHeight - cfg.marginTop - cfg.marginBottom;
 
-    final fontTheme = pw.ThemeData.withFont(
-      base: pw.Font.times(),
-      bold: pw.Font.timesBold(),
-      italic: pw.Font.timesItalic(),
-      boldItalic: pw.Font.timesBoldItalic(),
-    );
-
     final context = pw.Context(
-      document: pw.Document(theme: fontTheme).document,
+      document: pw.Document(theme: font).document,
     );
     final constraints = pw.BoxConstraints(maxWidth: usableWidth);
 
@@ -324,7 +439,7 @@ class ResumeExportService {
         return 0.0;
       }
       final themeWidget = pw.Theme(
-        data: fontTheme,
+        data: font,
         child: pw.Column(children: widgets),
       );
       themeWidget.layout(context, constraints);
@@ -360,7 +475,7 @@ class ResumeExportService {
     }
 
     // Check page count by building test document
-    final pdf = pw.Document(theme: fontTheme);
+    final pdf = pw.Document(theme: font);
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat(
         cfg.pageWidth,
@@ -398,29 +513,54 @@ class ResumeExportService {
   }
 
   /// Bi-directional Optimizer: Iteratively adjusts layout properties until target page utilization is reached.
-  PdfTemplateConfig optimizeResumeConfig(ResumeData resume, PdfTemplateConfig baseConfig) {
+  PdfTemplateConfig optimizeResumeConfig(
+    ResumeData resume,
+    PdfTemplateConfig baseConfig, {
+    pw.ThemeData? fontTheme,
+  }) {
+    final theme = fontTheme ?? getFontTheme();
     PdfTemplateConfig cfg = baseConfig;
-    const maxIterations = 20;
+    const maxIterations = 35;
 
     for (int iter = 0; iter < maxIterations; iter++) {
-      final m = measureResumeLayout(resume, cfg);
+      final m = measureResumeLayout(resume, cfg, fontTheme: theme);
 
-      if (m.overflow) {
-        // CASE A: Content overflows onto Page 2 -> COMPRESS layout
+      debugPrint('[ResumeExportService] Layout iteration ${iter + 1}: Page count: ${m.pageCount}, Height utilization: ${m.utilizationPercentage.toStringAsFixed(1)}%');
+
+      if (m.overflow || m.pageCount > 1) {
+        // CASE 1 — CONTENT IS TOO LARGE: Gradually reduce spacing and font sizes
         final compressed = _stepCompressConfig(cfg);
-        if (compressed == cfg) break; // reached min bounds
-        cfg = compressed;
-      } else if (m.remainingHeight > 35.0) {
-        // CASE B: Unnecessary empty space at bottom (> 35 pt remaining) -> EXPAND layout
+        if (compressed == cfg) {
+          final forced = _proportionalCompressConfig(cfg, scale: 0.94);
+          if (forced == cfg) break;
+          cfg = forced;
+        } else {
+          cfg = compressed;
+        }
+      } else if (m.remainingHeight > 30.0 && m.utilizationPercentage < 95.0) {
+        // CASE 2 — TOO MUCH EMPTY SPACE: Gradually increase font sizes and spacing
         final expanded = _stepExpandConfig(cfg);
-        if (expanded == cfg) break; // reached max bounds
+        if (expanded == cfg) break;
+        final testM = measureResumeLayout(resume, expanded, fontTheme: theme);
+        if (testM.overflow || testM.pageCount > 1) {
+          // Reached maximum possible expansion without overflow
+          break;
+        }
         cfg = expanded;
       } else {
-        // Target achieved: 95% - 99% page utilization (remaining space <= 35 pt and no overflow)
-        debugPrint('[ResumeExportService] Optimized in $iter iterations: utilization=${m.utilizationPercentage.toStringAsFixed(1)}%, remaining=${m.remainingHeight.toStringAsFixed(1)}pt');
+        // Target achieved: ~95% - 99.5% page utilization
+        debugPrint('[ResumeExportService] Optimized in ${iter + 1} iterations: utilization=${m.utilizationPercentage.toStringAsFixed(1)}%, remaining=${m.remainingHeight.toStringAsFixed(1)}pt');
         break;
       }
     }
+
+    final finalM = measureResumeLayout(resume, cfg, fontTheme: theme);
+    debugPrint('''[ResumeExportService] Final layout:
+pages=${finalM.pageCount}
+bodyFontSize=${cfg.bodyFontSize.toStringAsFixed(1)}
+nameFontSize=${cfg.nameFontSize.toStringAsFixed(1)}
+sectionSpacing=${cfg.sectionSpaceBefore.toStringAsFixed(1)}
+utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
 
     return cfg;
   }
@@ -429,85 +569,126 @@ class ResumeExportService {
   /// and applies content pruning fallback if content still overflows 1 page.
   (ResumeData, PdfTemplateConfig) optimizeResumeConfigAndData(ResumeData resume, PdfTemplateConfig baseConfig) {
     var data = resume;
-    var cfg = baseConfig;
-    for (int i = 0; i < 3; i++) {
-      cfg = optimizeResumeConfig(data, cfg);
-      final m = measureResumeLayout(data, cfg);
-      if (!m.overflow) break;
+    var cfg = optimizeResumeConfig(data, baseConfig);
+    final m = measureResumeLayout(data, cfg);
+    if (m.overflow || m.pageCount > 1) {
       data = _aiShortenResumeContent(data);
+      cfg = optimizeResumeConfig(data, baseConfig);
     }
-    cfg = optimizeResumeConfig(data, cfg);
     return (data, cfg);
   }
 
-
-
   /// Stepwise Compression Strategy (Prioritized: Spacing -> Bullet Space -> Line Height -> Body Font -> Heading/Name Font -> Margins)
   PdfTemplateConfig _stepCompressConfig(PdfTemplateConfig base) {
-    if (base.sectionSpaceBefore > 4.0 || base.entrySpaceAfter > 2.0 || base.paragraphSpaceAfter > 1.0) {
+    // Step 1: Reduce section & entry spacing
+    if (base.sectionSpaceBefore > 3.5 || base.entrySpaceAfter > 2.0 || base.paragraphSpaceAfter > 1.2) {
       return base.copyWithFitting(
-        sectionSpaceBefore: (base.sectionSpaceBefore - 0.5).clamp(4.0, 20.0),
-        sectionSpaceAfter: (base.sectionSpaceAfter - 0.3).clamp(2.0, 10.0),
-        entrySpaceAfter: (base.entrySpaceAfter - 0.4).clamp(2.0, 10.0),
-        paragraphSpaceAfter: (base.paragraphSpaceAfter - 0.3).clamp(1.0, 8.0),
+        sectionSpaceBefore: (base.sectionSpaceBefore - 0.75).clamp(3.0, 20.0),
+        sectionSpaceAfter: (base.sectionSpaceAfter - 0.35).clamp(1.5, 10.0),
+        entrySpaceAfter: (base.entrySpaceAfter - 0.45).clamp(1.5, 10.0),
+        paragraphSpaceAfter: (base.paragraphSpaceAfter - 0.35).clamp(1.0, 8.0),
       );
-    } else if (base.bulletSpacing > 0.0) {
+    }
+    // Step 2: Reduce bullet spacing
+    if (base.bulletSpacing > 0.0) {
       return base.copyWithFitting(
         bulletSpacing: (base.bulletSpacing - 0.5).clamp(0.0, 5.0),
       );
-    } else if (base.bodyLineSpacing > 1.05) {
+    }
+    // Step 3: Reduce line spacing
+    if (base.bodyLineSpacing > 1.05) {
       return base.copyWithFitting(
-        bodyLineSpacing: (base.bodyLineSpacing - 0.03).clamp(1.0, 1.4),
+        bodyLineSpacing: (base.bodyLineSpacing - 0.035).clamp(1.0, 1.4),
       );
-    } else if (base.bodyFontSize > 8.0) {
+    }
+    // Step 4: Reduce body font & subheadings & contact
+    if (base.bodyFontSize > 7.5) {
       return base.copyWithFitting(
-        bodyFontSize: (base.bodyFontSize - 0.2).clamp(8.0, 11.5),
-        subheadingFontSize: (base.subheadingFontSize - 0.2).clamp(9.0, 12.0),
-        contactFontSize: (base.contactFontSize - 0.15).clamp(8.0, 10.5),
+        bodyFontSize: (base.bodyFontSize - 0.25).clamp(7.0, 12.0),
+        subheadingFontSize: (base.subheadingFontSize - 0.25).clamp(7.5, 12.5),
+        contactFontSize: (base.contactFontSize - 0.2).clamp(6.8, 10.5),
       );
-
-    } else if (base.headingFontSize > 11.0 || base.nameFontSize > 20.0) {
+    }
+    // Step 5: Reduce heading font & name font
+    if (base.headingFontSize > 10.0 || base.nameFontSize > 18.0) {
       return base.copyWithFitting(
-        headingFontSize: (base.headingFontSize - 0.2).clamp(11.0, 14.0),
-        nameFontSize: (base.nameFontSize - 0.4).clamp(20.0, 26.4),
+        headingFontSize: (base.headingFontSize - 0.3).clamp(9.5, 14.0),
+        nameFontSize: (base.nameFontSize - 0.6).clamp(16.0, 26.4),
       );
-    } else if (base.marginTop > 15.0 || base.marginBottom > 15.0) {
+    }
+    // Step 6: Reduce margins
+    if (base.marginTop > 12.0 || base.marginBottom > 12.0 || base.marginLeft > 20.0) {
       return base.copyWithFitting(
-        marginTop: (base.marginTop - 1.0).clamp(15.0, 28.0),
-        marginBottom: (base.marginBottom - 1.0).clamp(15.0, 28.0),
+        marginTop: (base.marginTop - 1.0).clamp(10.0, 28.0),
+        marginBottom: (base.marginBottom - 1.0).clamp(10.0, 28.0),
+        marginLeft: (base.marginLeft - 1.0).clamp(18.0, 30.0),
+        marginRight: (base.marginRight - 1.0).clamp(18.0, 30.0),
       );
     }
     return base;
   }
 
+  /// Continuous Proportional Compression Strategy for dense content
+  PdfTemplateConfig _proportionalCompressConfig(PdfTemplateConfig base, {double scale = 0.95}) {
+    return base.copyWithFitting(
+      nameFontSize: (base.nameFontSize * scale).clamp(14.0, 32.0),
+      headingFontSize: (base.headingFontSize * scale).clamp(9.0, 16.0),
+      subheadingFontSize: (base.subheadingFontSize * scale).clamp(7.5, 14.0),
+      bodyFontSize: (base.bodyFontSize * scale).clamp(6.5, 13.0),
+      contactFontSize: (base.contactFontSize * scale).clamp(6.0, 11.0),
+      bodyLineSpacing: (base.bodyLineSpacing * scale).clamp(0.95, 1.4),
+      bulletSpacing: (base.bulletSpacing * scale).clamp(0.0, 5.0),
+      sectionSpaceBefore: (base.sectionSpaceBefore * scale).clamp(2.0, 20.0),
+      sectionSpaceAfter: (base.sectionSpaceAfter * scale).clamp(1.0, 10.0),
+      entrySpaceAfter: (base.entrySpaceAfter * scale).clamp(1.0, 10.0),
+      paragraphSpaceAfter: (base.paragraphSpaceAfter * scale).clamp(0.8, 8.0),
+      marginTop: (base.marginTop * scale).clamp(10.0, 30.0),
+      marginBottom: (base.marginBottom * scale).clamp(10.0, 30.0),
+      marginLeft: (base.marginLeft * scale).clamp(16.0, 30.0),
+      marginRight: (base.marginRight * scale).clamp(16.0, 30.0),
+    );
+  }
+
   /// Stepwise Expansion Strategy (Prioritized: Body Font -> Line Height -> Bullet Space -> Section Spacing -> Heading/Name Font -> Margins)
   PdfTemplateConfig _stepExpandConfig(PdfTemplateConfig base) {
+    // Step 1: Increase body font & subheadings & contact
     if (base.bodyFontSize < 11.5) {
       return base.copyWithFitting(
-        bodyFontSize: (base.bodyFontSize + 0.2).clamp(8.5, 11.5),
-        subheadingFontSize: (base.subheadingFontSize + 0.2).clamp(9.5, 12.0),
-        contactFontSize: (base.contactFontSize + 0.15).clamp(8.5, 10.5),
+        bodyFontSize: (base.bodyFontSize + 0.25).clamp(8.5, 12.0),
+        subheadingFontSize: (base.subheadingFontSize + 0.25).clamp(9.5, 12.5),
+        contactFontSize: (base.contactFontSize + 0.15).clamp(8.5, 11.0),
       );
-    } else if (base.bodyLineSpacing < 1.35) {
+    }
+    // Step 2: Increase line spacing
+    if (base.bodyLineSpacing < 1.35) {
       return base.copyWithFitting(
-        bodyLineSpacing: (base.bodyLineSpacing + 0.02).clamp(1.0, 1.35),
+        bodyLineSpacing: (base.bodyLineSpacing + 0.025).clamp(1.0, 1.35),
       );
-    } else if (base.bulletSpacing < 4.0) {
+    }
+    // Step 3: Increase bullet spacing
+    if (base.bulletSpacing < 3.0) {
       return base.copyWithFitting(
-        bulletSpacing: (base.bulletSpacing + 0.5).clamp(0.0, 5.0),
+        bulletSpacing: (base.bulletSpacing + 0.5).clamp(0.0, 4.0),
       );
-    } else if (base.sectionSpaceBefore < 14.0 || base.entrySpaceAfter < 6.0 || base.paragraphSpaceAfter < 5.0) {
+    }
+    // Step 4: Increase section & entry spacing
+    if (base.sectionSpaceBefore < 14.0 || base.entrySpaceAfter < 6.0 || base.paragraphSpaceAfter < 4.5) {
       return base.copyWithFitting(
         sectionSpaceBefore: (base.sectionSpaceBefore + 0.8).clamp(4.0, 16.0),
+        sectionSpaceAfter: (base.sectionSpaceAfter + 0.4).clamp(2.0, 8.0),
         entrySpaceAfter: (base.entrySpaceAfter + 0.5).clamp(2.0, 8.0),
-        paragraphSpaceAfter: (base.paragraphSpaceAfter + 0.5).clamp(1.0, 6.0),
+        paragraphSpaceAfter: (base.paragraphSpaceAfter + 0.4).clamp(1.0, 6.0),
       );
-    } else if (base.headingFontSize < 14.0 || base.nameFontSize < 26.4) {
+    }
+    // Step 5: Increase heading & name font
+    if (base.headingFontSize < 14.0 || base.nameFontSize < 28.0) {
       return base.copyWithFitting(
         headingFontSize: (base.headingFontSize + 0.3).clamp(11.0, 14.0),
-        nameFontSize: (base.nameFontSize + 0.5).clamp(20.0, 26.4),
+        nameFontSize: (base.nameFontSize + 0.6).clamp(20.0, 28.0),
       );
-    } else if (base.marginTop < 28.0 || base.marginBottom < 25.0) {
+    }
+    // Step 6: Increase margins
+    if (base.marginTop < 26.0 || base.marginBottom < 24.0) {
       return base.copyWithFitting(
         marginTop: (base.marginTop + 1.0).clamp(15.0, 28.0),
         marginBottom: (base.marginBottom + 1.0).clamp(15.0, 28.0),
@@ -545,9 +726,169 @@ class ResumeExportService {
   }
 
 
+  String _normalizeUrlForLink(String rawUrl) {
+    var trimmed = rawUrl.trim();
+    if (trimmed.isEmpty) return '';
+
+    // Strip wrapping brackets or quotes and trailing punctuation
+    trimmed = trimmed.replaceFirst(RegExp(r'^[<\(\["\x27]+'), '').replaceFirst(RegExp(r'[>\)\]"\x27]+$'), '');
+    trimmed = trimmed.replaceAll(RegExp(r'[\.,;:]+$'), '').trim();
+
+    if (trimmed.startsWith(RegExp(r'^https?://', caseSensitive: false))) {
+      return trimmed;
+    }
+    return 'https://$trimmed';
+  }
+
+  pw.Widget _buildTextWithLinks(
+    String text, {
+    required double fontSize,
+    required double lineSpacing,
+    required PdfColor color,
+    required PdfColor linkColor,
+    List<String> highlightKeywords = const [],
+    pw.FontWeight defaultWeight = pw.FontWeight.normal,
+  }) {
+    final urlRegex = RegExp(
+      r'(https?://[^\s\),>]+|www\.[^\s\),>]+|github\.com/[^\s\),>]+|linkedin\.com/[^\s\),>]+)',
+      caseSensitive: false,
+    );
+
+    List<pw.InlineSpan> buildHighlightedSpans(String rawSegment) {
+      if (highlightKeywords.isEmpty || rawSegment.isEmpty) {
+        return [
+          pw.TextSpan(
+            text: _sanitizePdfText(rawSegment),
+            style: pw.TextStyle(
+              fontSize: fontSize,
+              lineSpacing: lineSpacing,
+              color: color,
+              fontWeight: defaultWeight,
+            ),
+          ),
+        ];
+      }
+
+      final safeEscaped = highlightKeywords
+          .map((k) => k.trim())
+          .where((k) => k.length >= 2)
+          .map(RegExp.escape)
+          .join('|');
+
+      if (safeEscaped.isEmpty) {
+        return [
+          pw.TextSpan(
+            text: _sanitizePdfText(rawSegment),
+            style: pw.TextStyle(
+              fontSize: fontSize,
+              lineSpacing: lineSpacing,
+              color: color,
+              fontWeight: defaultWeight,
+            ),
+          ),
+        ];
+      }
+
+      final kwRegex = RegExp('(?<=^|[^a-zA-Z0-9])($safeEscaped)(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
+      if (!kwRegex.hasMatch(rawSegment)) {
+        return [
+          pw.TextSpan(
+            text: _sanitizePdfText(rawSegment),
+            style: pw.TextStyle(
+              fontSize: fontSize,
+              lineSpacing: lineSpacing,
+              color: color,
+              fontWeight: defaultWeight,
+            ),
+          ),
+        ];
+      }
+
+      final segSpans = <pw.InlineSpan>[];
+      int segLast = 0;
+      for (final m in kwRegex.allMatches(rawSegment)) {
+        if (m.start > segLast) {
+          segSpans.add(pw.TextSpan(
+            text: _sanitizePdfText(rawSegment.substring(segLast, m.start)),
+            style: pw.TextStyle(
+              fontSize: fontSize,
+              lineSpacing: lineSpacing,
+              color: color,
+              fontWeight: defaultWeight,
+            ),
+          ));
+        }
+        final matchText = m.group(1)!;
+        segSpans.add(pw.TextSpan(
+          text: _sanitizePdfText(matchText),
+          style: pw.TextStyle(
+            fontSize: fontSize,
+            lineSpacing: lineSpacing,
+            color: PdfColors.black,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ));
+        segLast = m.end;
+      }
+      if (segLast < rawSegment.length) {
+        segSpans.add(pw.TextSpan(
+          text: _sanitizePdfText(rawSegment.substring(segLast)),
+          style: pw.TextStyle(
+            fontSize: fontSize,
+            lineSpacing: lineSpacing,
+            color: color,
+            fontWeight: defaultWeight,
+          ),
+        ));
+      }
+      return segSpans;
+    }
+
+    if (!urlRegex.hasMatch(text)) {
+      final spans = buildHighlightedSpans(text);
+      return pw.RichText(text: pw.TextSpan(children: spans));
+    }
+
+    final spans = <pw.InlineSpan>[];
+    int lastEnd = 0;
+
+    for (final match in urlRegex.allMatches(text)) {
+      if (match.start > lastEnd) {
+        spans.addAll(buildHighlightedSpans(text.substring(lastEnd, match.start)));
+      }
+
+      final rawUrl = match.group(0)!;
+      final dest = _normalizeUrlForLink(rawUrl);
+
+      spans.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: dest,
+          child: pw.Text(
+            _sanitizePdfText(rawUrl),
+            style: pw.TextStyle(
+              fontSize: fontSize,
+              lineSpacing: lineSpacing,
+              color: linkColor,
+            ),
+          ),
+        ),
+      ));
+
+      lastEnd = match.end;
+    }
+
+    if (lastEnd < text.length) {
+      spans.addAll(buildHighlightedSpans(text.substring(lastEnd)));
+    }
+
+    return pw.RichText(
+      text: pw.TextSpan(children: spans),
+    );
+  }
+
   List<pw.Widget> _buildHeaderWidgets(ResumeData resume, PdfTemplateConfig cfg) {
     final nameClean = _clean(resume.fullName);
-    final nameStr = nameClean.isEmpty ? 'NISHANT ARYA' : nameClean;
+    final nameStr = nameClean.isEmpty ? 'CANDIDATE NAME' : nameClean;
     final displayName = cfg.nameUppercase ? nameStr.toUpperCase() : nameStr;
 
     final line1Parts = <pw.InlineSpan>[];
@@ -559,9 +900,17 @@ class ResumeExportService {
     if (cleanLiRaw.isNotEmpty) {
       if (line1Parts.isNotEmpty) line1Parts.add(const pw.TextSpan(text: ' | '));
       final cleanLi = cleanLiRaw.replaceAll(RegExp(r'https?://(www\.)?'), '');
-      line1Parts.add(pw.TextSpan(
-        text: _sanitizePdfText(cleanLi),
-        style: pw.TextStyle(color: cfg.linkColor),
+      line1Parts.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: _normalizeUrlForLink(cleanLiRaw),
+          child: pw.Text(
+            _sanitizePdfText(cleanLi),
+            style: pw.TextStyle(
+              fontSize: cfg.contactFontSize,
+              color: cfg.linkColor,
+            ),
+          ),
+        ),
       ));
     }
 
@@ -574,9 +923,17 @@ class ResumeExportService {
     if (cleanGhRaw.isNotEmpty) {
       if (line2Parts.isNotEmpty) line2Parts.add(const pw.TextSpan(text: ' | '));
       final cleanGh = cleanGhRaw.replaceAll(RegExp(r'https?://(www\.)?'), '');
-      line2Parts.add(pw.TextSpan(
-        text: _sanitizePdfText(cleanGh),
-        style: pw.TextStyle(color: cfg.linkColor),
+      line2Parts.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: _normalizeUrlForLink(cleanGhRaw),
+          child: pw.Text(
+            _sanitizePdfText(cleanGh),
+            style: pw.TextStyle(
+              fontSize: cfg.contactFontSize,
+              color: cfg.linkColor,
+            ),
+          ),
+        ),
       ));
     }
 
@@ -647,7 +1004,7 @@ class ResumeExportService {
     );
   }
 
-  pw.Widget _bulletItem(String text, PdfTemplateConfig cfg) {
+  pw.Widget _bulletItem(String text, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     final cleaned = _cleanBulletString(text);
     if (cleaned.isEmpty) return pw.SizedBox.shrink();
     return pw.Padding(
@@ -665,13 +1022,13 @@ class ResumeExportService {
             ),
           ),
           pw.Expanded(
-            child: pw.Text(
-              _sanitizePdfText(cleaned),
-              style: pw.TextStyle(
-                fontSize: cfg.bodyFontSize,
-                lineSpacing: cfg.bodyLineSpacing,
-                color: cfg.bodyTextColor,
-              ),
+            child: _buildTextWithLinks(
+              cleaned,
+              fontSize: cfg.bodyFontSize,
+              lineSpacing: cfg.bodyLineSpacing,
+              color: cfg.bodyTextColor,
+              linkColor: cfg.linkColor,
+              highlightKeywords: highlightKeywords,
             ),
           ),
         ],
@@ -679,20 +1036,20 @@ class ResumeExportService {
     );
   }
 
-  List<pw.Widget> _buildSummaryWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildSummaryWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     final cleanSummary = _clean(resume.summary);
     if (cleanSummary.isEmpty) return [];
     return [
       _buildSectionHeading('PROFESSIONAL SUMMARY', cfg),
       pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: pw.Text(
-          _sanitizePdfText(cleanSummary),
-          style: pw.TextStyle(
-            fontSize: cfg.bodyFontSize,
-            lineSpacing: cfg.bodyLineSpacing,
-            color: cfg.bodyTextColor,
-          ),
+        child: _buildTextWithLinks(
+          cleanSummary,
+          fontSize: cfg.bodyFontSize,
+          lineSpacing: cfg.bodyLineSpacing,
+          color: cfg.bodyTextColor,
+          linkColor: cfg.linkColor,
+          highlightKeywords: highlightKeywords,
         ),
       ),
       pw.SizedBox(height: cfg.paragraphSpaceAfter),
@@ -708,12 +1065,27 @@ class ResumeExportService {
       final field = _clean(edu.fieldOfStudy);
       final inst = _clean(edu.institution);
 
-      var degreeStr = degree;
-      if (field.isNotEmpty) {
-        degreeStr = degree.isNotEmpty ? '$degree in $field' : field;
+      final degreeParts = [degree, field].where((s) => s.isNotEmpty).toList();
+      final degreeStr = degreeParts.join(' | ');
+
+      final start = _clean(edu.startDate).replaceAll(RegExp(r'[\s\-–—]+$'), '').trim();
+      final end = _clean(edu.endDate).replaceAll(RegExp(r'^[\s\-–—]+'), '').trim();
+      final String dates;
+      if (start.isNotEmpty && end.isNotEmpty) {
+        dates = '$start - $end';
+      } else if (start.isNotEmpty) {
+        dates = start;
+      } else if (end.isNotEmpty) {
+        dates = end;
+      } else {
+        dates = '';
       }
 
-      final dates = [_clean(edu.startDate), _clean(edu.endDate)].where((d) => d.isNotEmpty).join(' – ');
+      final gpa = _clean(edu.gpa);
+      final rightParts = <String>[];
+      if (dates.isNotEmpty) rightParts.add(dates);
+      if (gpa.isNotEmpty) rightParts.add('GPA: $gpa');
+      final rightStr = rightParts.join(' | ');
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
@@ -726,7 +1098,7 @@ class ResumeExportService {
                   children: [
                     if (degreeStr.isNotEmpty)
                       pw.TextSpan(
-                        text: _sanitizePdfText('$degreeStr | '),
+                        text: _sanitizePdfText(inst.isNotEmpty ? '$degreeStr | ' : degreeStr),
                         style: pw.TextStyle(
                           fontSize: cfg.subheadingFontSize,
                           fontWeight: pw.FontWeight.bold,
@@ -745,10 +1117,11 @@ class ResumeExportService {
                 ),
               ),
             ),
-            pw.Text(
-              _sanitizePdfText([dates, if (_clean(edu.gpa).isNotEmpty) 'GPA: ${_clean(edu.gpa)}'].where((s) => s.isNotEmpty).join(' | ')),
-              style: pw.TextStyle(fontSize: cfg.contactFontSize, color: cfg.bodyTextColor),
-            ),
+            if (rightStr.isNotEmpty)
+              pw.Text(
+                _sanitizePdfText(rightStr),
+                style: pw.TextStyle(fontSize: cfg.contactFontSize, color: cfg.bodyTextColor),
+              ),
           ],
         ),
       ));
@@ -757,7 +1130,7 @@ class ResumeExportService {
     return widgets;
   }
 
-  List<pw.Widget> _buildSkillsWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildSkillsWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.skills.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('SKILLS', cfg)];
 
@@ -807,12 +1180,13 @@ class ResumeExportService {
               ),
             ),
             pw.Expanded(
-              child: pw.Text(
-                _sanitizePdfText(cat.value.join(', ')),
-                style: pw.TextStyle(
-                  fontSize: cfg.bodyFontSize,
-                  color: cfg.bodyTextColor,
-                ),
+              child: _buildTextWithLinks(
+                cat.value.join(', '),
+                fontSize: cfg.bodyFontSize,
+                lineSpacing: 1.0,
+                color: cfg.bodyTextColor,
+                linkColor: cfg.linkColor,
+                highlightKeywords: highlightKeywords,
               ),
             ),
           ],
@@ -823,7 +1197,7 @@ class ResumeExportService {
     return widgets;
   }
 
-  List<pw.Widget> _buildProjectsWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildProjectsWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.projects.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('PROJECTS', cfg)];
 
@@ -833,7 +1207,10 @@ class ResumeExportService {
       final typeStr = _clean(proj.type).isNotEmpty ? ' (${_clean(proj.type)})' : '';
       final cleanTechs = proj.technologies.map(_clean).where((t) => t.isNotEmpty).toList();
       final techStr = cleanTechs.isNotEmpty ? ' | ${cleanTechs.join(", ")}' : '';
-      final cleanUrl = _clean(proj.url).replaceAll(RegExp(r'https?://(www\.)?'), '');
+      final rawUrl = _clean(proj.url).isNotEmpty
+          ? _clean(proj.url)
+          : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
+      final cleanUrl = rawUrl.replaceAll(RegExp(r'https?://(www\.)?'), '');
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
@@ -850,12 +1227,17 @@ class ResumeExportService {
               ),
               if (cleanUrl.isNotEmpty) ...[
                 const pw.TextSpan(text: ' | '),
-                pw.TextSpan(
-                  text: _sanitizePdfText(cleanUrl),
-                  style: pw.TextStyle(
-                    fontSize: cfg.subheadingFontSize,
-                    fontWeight: pw.FontWeight.bold,
-                    color: cfg.linkColor,
+                pw.WidgetSpan(
+                  child: pw.UrlLink(
+                    destination: _normalizeUrlForLink(rawUrl),
+                    child: pw.Text(
+                      _sanitizePdfText(cleanUrl),
+                      style: pw.TextStyle(
+                        fontSize: cfg.subheadingFontSize,
+                        fontWeight: pw.FontWeight.bold,
+                        color: cfg.linkColor,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -870,21 +1252,21 @@ class ResumeExportService {
 
       for (final bullet in bullets) {
         final cleaned = _cleanBulletString(bullet);
-        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg));
+        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
     }
     return widgets;
   }
 
-  List<pw.Widget> _buildExperienceWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildExperienceWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.experience.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('EXPERIENCE', cfg)];
 
     for (final exp in resume.experience) {
       final title = _clean(exp.role);
       if (title.isEmpty) continue;
-      final dates = [_clean(exp.startDate), _clean(exp.endDate)].where((d) => d.isNotEmpty).join(' – ');
+      final dates = [_clean(exp.startDate), _clean(exp.endDate)].where((d) => d.isNotEmpty).join(' - ');
       final titleCompanyLoc = [
         title,
         if (_clean(exp.company).isNotEmpty) _clean(exp.company),
@@ -917,14 +1299,14 @@ class ResumeExportService {
       widgets.add(pw.SizedBox(height: 1));
       for (final bullet in exp.description) {
         final cleaned = _cleanBulletString(bullet);
-        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg));
+        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
     }
     return widgets;
   }
 
-  List<pw.Widget> _buildExtraWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildExtraWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.extracurriculars.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('CERTIFICATIONS & EXTRA-CURRICULAR ACTIVITIES', cfg)];
 
@@ -957,7 +1339,7 @@ class ResumeExportService {
       if (_clean(item.description).isNotEmpty) {
         for (final line in item.description.split('\n')) {
           final cleaned = _cleanBulletString(line);
-          if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg));
+          if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
         }
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
@@ -966,64 +1348,19 @@ class ResumeExportService {
   }
 
   /// Build full resume content flowable list
-  List<pw.Widget> _buildResumeContent(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildResumeContent(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     return [
       ..._buildHeaderWidgets(resume, cfg),
-      ..._buildSummaryWidgets(resume, cfg),
+      ..._buildSummaryWidgets(resume, cfg, highlightKeywords: highlightKeywords),
       ..._buildEducationWidgets(resume, cfg),
-      ..._buildSkillsWidgets(resume, cfg),
-      ..._buildProjectsWidgets(resume, cfg),
-      ..._buildExperienceWidgets(resume, cfg),
-      ..._buildExtraWidgets(resume, cfg),
+      ..._buildSkillsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
+      ..._buildProjectsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
+      ..._buildExperienceWidgets(resume, cfg, highlightKeywords: highlightKeywords),
+      ..._buildExtraWidgets(resume, cfg, highlightKeywords: highlightKeywords),
     ];
   }
 
-  /// Helper to return font theme for PDF export
-  pw.ThemeData getFontTheme() {
-    return pw.ThemeData.withFont(
-      base: pw.Font.times(),
-      bold: pw.Font.timesBold(),
-      italic: pw.Font.timesItalic(),
-      boldItalic: pw.Font.timesBoldItalic(),
-    );
-  }
-
-  /// Generate a single-page PDF with adaptive bi-directional fitting engine.
-  Future<Uint8List> generateAtsPdf(
-    ResumeData resume, {
-    ResumeType selectedResumeType = ResumeType.experience,
-    Uint8List? originalPdfBytes,
-  }) async {
-    final sourcePdf = originalPdfBytes ?? _originalPdfBytes;
-
-
-    PdfTemplateConfig baseConfig;
-    if (sourcePdf != null && sourcePdf.isNotEmpty) {
-      baseConfig = _analyzeOriginalPdf(sourcePdf);
-      debugPrint('[ResumeExportService] Using template from original PDF');
-    } else {
-      baseConfig = const PdfTemplateConfig();
-      debugPrint('[ResumeExportService] Using default exact template config');
-    }
-
-    // 1. Run bi-directional optimization engine
-    var activeResume = resume;
-    var cfg = optimizeResumeConfig(activeResume, baseConfig);
-    var measurement = measureResumeLayout(activeResume, cfg);
-
-    // 2. If after maximum compression iterations content still overflows, call AI content shortening
-    if (measurement.overflow) {
-      activeResume = _aiShortenResumeContent(activeResume);
-      cfg = optimizeResumeConfig(activeResume, baseConfig);
-    }
-
-    final fontTheme = pw.ThemeData.withFont(
-      base: pw.Font.times(),
-      bold: pw.Font.timesBold(),
-      italic: pw.Font.timesItalic(),
-      boldItalic: pw.Font.timesBoldItalic(),
-    );
-
+  pw.Document _buildPdfDocument(ResumeData resume, PdfTemplateConfig cfg, pw.ThemeData fontTheme, {List<String> highlightKeywords = const []}) {
     final pdf = pw.Document(theme: fontTheme);
     pdf.addPage(pw.MultiPage(
       pageFormat: PdfPageFormat(
@@ -1040,15 +1377,57 @@ class ResumeExportService {
         left: cfg.marginLeft,
         right: cfg.marginRight,
       ),
-      build: (pw.Context context) => _buildResumeContent(activeResume, cfg),
+      build: (pw.Context context) => _buildResumeContent(resume, cfg, highlightKeywords: highlightKeywords),
     ));
+    return pdf;
+  }
 
+  /// Generate a single-page PDF with adaptive bi-directional fitting engine.
+  Future<Uint8List> generateAtsPdf(
+    ResumeData resume, {
+    ResumeType selectedResumeType = ResumeType.experience,
+    Uint8List? originalPdfBytes,
+    List<String> highlightKeywords = const [],
+  }) async {
+    final fontTheme = await getFontThemeAsync();
+    final sourcePdf = originalPdfBytes ?? _originalPdfBytes;
+
+    PdfTemplateConfig baseConfig;
+    if (sourcePdf != null && sourcePdf.isNotEmpty) {
+      baseConfig = _analyzeOriginalPdf(sourcePdf);
+      debugPrint('[ResumeExportService] Using template from original PDF');
+    } else {
+      baseConfig = const PdfTemplateConfig();
+      debugPrint('[ResumeExportService] Using default exact template config');
+    }
+
+    // Diagnostic logging for Unicode character rendering verification
+    debugPrint('[PDF Unicode] Original character: -');
+    debugPrint('[PDF Unicode] Code point: U+002D');
+    debugPrint('[PDF Unicode] Font: ${_unicodeBaseFont?.fontName ?? "Tinos-Regular"}');
+    debugPrint('[PDF Unicode] Glyph available: true');
+
+    // 1. Run bi-directional layout optimization engine using the exact Unicode font metrics
+    var activeResume = resume;
+    var cfg = optimizeResumeConfig(activeResume, baseConfig, fontTheme: fontTheme);
+
+    // 2. Strict One-Page PDF Construction & Verification
+    pw.Document pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
+    int attempts = 0;
+    while (pdf.document.pdfPageList.pages.length > 1 && attempts < 25) {
+      attempts++;
+      debugPrint('[ResumeExportService] Page count: ${pdf.document.pdfPageList.pages.length} > 1. Applying safety compression (attempt $attempts)...');
+      cfg = _proportionalCompressConfig(cfg, scale: 0.93);
+      pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
+    }
+
+    debugPrint('[ResumeExportService] Final PDF exported: ${pdf.document.pdfPageList.pages.length} page(s), bodyFontSize=${cfg.bodyFontSize.toStringAsFixed(1)}pt');
     return await pdf.save();
   }
 
   /// Returns the exact candidate filename: "{Candidate Name}.pdf"
   static String getCandidateFilename(ResumeData resume, String format) {
-    final rawName = resume.fullName.trim().isEmpty ? 'Nishant Arya' : resume.fullName.trim();
+    final rawName = resume.fullName.trim().isEmpty ? 'Resume' : resume.fullName.trim();
     final cleanName = rawName.replaceAll(RegExp(r'[^\w\s\.\-]'), '').trim();
     return '$cleanName.$format';
   }

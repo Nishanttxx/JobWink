@@ -56,7 +56,7 @@ class AIConfig {
 
   /// Mistral API Key
   static String mistralApiKey =
-      const String.fromEnvironment('MISTRAL_API_KEY', defaultValue: '');
+      const String.fromEnvironment('MISTRAL_API_KEY', defaultValue: 'REDACTED_MISTRAL_KEY');
   /// Mistral API Base URL
   static String mistralBaseUrl = 'https://api.mistral.ai/v1';
   /// Mistral model

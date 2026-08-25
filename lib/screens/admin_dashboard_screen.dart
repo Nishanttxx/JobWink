@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import '../theme/app_theme.dart';
-import '../config/backend_config.dart';
 import '../providers/auth_provider.dart';
+import '../services/resume_limit_service.dart';
+import '../theme/app_theme.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -19,18 +17,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   bool _isLoadingStats = true;
   bool _isLoadingUsers = true;
 
-  // Stats
+  // Overview Stats
   int _totalUsers = 0;
   int _activeUsersToday = 0;
   int _resumesGeneratedToday = 0;
   int _usersAtLimit = 0;
 
-  // Users List
-  List<Map<String, dynamic>> _userList = [];
+  // Paged Users List
+  List<AdminUserQuotaInfo> _allUsers = [];
+  List<AdminUserQuotaInfo> _filteredUsers = [];
   int _currentPage = 1;
   final int _pageSize = 10;
-  int _totalPages = 1;
-  int _totalUsersCount = 0;
   String _searchQuery = '';
 
   final TextEditingController _searchController = TextEditingController();
@@ -50,24 +47,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _verifyAdminAccess() async {
     setState(() => _isCheckingAuth = true);
     final auth = AuthProviderScope.read(context);
-    final user = Supabase.instance.client.auth.currentUser;
-    final userEmail = user?.email?.toLowerCase().trim() ?? '';
-    final targetAdminEmail = BackendConfig.adminEmail.toLowerCase().trim();
+    final email = auth.currentUser?.email;
 
-    final appRole = user?.appMetadata['role'];
-    final safeUserRole = user?.userMetadata?['role'];
-
-    // Check if email or metadata indicates admin
-    final isAdmin = auth.isAdmin ||
-        (userEmail.isNotEmpty && userEmail == targetAdminEmail) ||
-        appRole == 'admin' ||
-        safeUserRole == 'admin';
+    final isAdmin = ResumeLimitService.instance.isUserAdmin(email) || auth.isAdmin;
 
     if (mounted) {
       setState(() {
         _isAdminAuthorized = isAdmin;
         _isCheckingAuth = false;
       });
+
       if (isAdmin) {
         _loadStats();
         _loadUsers();
@@ -78,25 +67,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _loadStats() async {
     setState(() => _isLoadingStats = true);
     try {
-      final res = await Supabase.instance.client.rpc('get_admin_dashboard_stats');
-      if (res != null && res is Map) {
-        final data = Map<String, dynamic>.from(res);
-        if (mounted) {
-          setState(() {
-            _totalUsers = (data['totalUsers'] as num? ?? 0).toInt();
-            _activeUsersToday = (data['activeUsersToday'] as num? ?? 0).toInt();
-            _resumesGeneratedToday = (data['resumesGeneratedToday'] as num? ?? 0).toInt();
-            _usersAtLimit = (data['usersAtLimit'] as num? ?? 0).toInt();
-            _isLoadingStats = false;
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint('[AdminDashboard] Stats RPC error: $e');
+      final stats = await ResumeLimitService.instance.getAdminStats();
       if (mounted) {
         setState(() {
+          _totalUsers = (stats['totalUsers'] as num? ?? 0).toInt();
+          _activeUsersToday = (stats['activeUsersToday'] as num? ?? 0).toInt();
+          _resumesGeneratedToday = (stats['resumesGeneratedToday'] as num? ?? 0).toInt();
+          _usersAtLimit = (stats['usersAtLimit'] as num? ?? 0).toInt();
           _isLoadingStats = false;
         });
+      }
+    } catch (e) {
+      debugPrint('[AdminDashboard] Stats error: $e');
+      if (mounted) {
+        setState(() => _isLoadingStats = false);
       }
     }
   }
@@ -104,65 +88,51 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Future<void> _loadUsers() async {
     setState(() => _isLoadingUsers = true);
     try {
-      final res = await Supabase.instance.client.rpc('get_admin_users');
-      if (res != null && res is List) {
-        final allUsers = List<Map<String, dynamic>>.from(
-          res.map((item) => Map<String, dynamic>.from(item as Map)),
-        );
-
-        List<Map<String, dynamic>> filtered = allUsers;
-        if (_searchQuery.trim().isNotEmpty) {
-          final query = _searchQuery.trim().toLowerCase();
-          filtered = allUsers.where((u) {
-            final email = (u['email'] as String? ?? '').toLowerCase();
-            final userId = (u['user_id'] as String? ?? '').toLowerCase();
-            return email.contains(query) || userId.contains(query);
-          }).toList();
-        }
-
-        final total = filtered.length;
-        final totalPages = (total / _pageSize).ceil();
-        final safeTotalPages = totalPages < 1 ? 1 : totalPages;
-        final safePage = _currentPage.clamp(1, safeTotalPages);
-        final startIndex = (safePage - 1) * _pageSize;
-        final endIndex = (startIndex + _pageSize).clamp(0, total);
-        final pagedUsers = filtered.isEmpty ? <Map<String, dynamic>>[] : filtered.sublist(startIndex, endIndex);
-
-        if (mounted) {
-          setState(() {
-            _userList = pagedUsers;
-            _totalUsersCount = total;
-            _totalPages = safeTotalPages;
-            _currentPage = safePage;
-            _isLoadingUsers = false;
-          });
-        }
+      final users = await ResumeLimitService.instance.getAdminUsers();
+      if (mounted) {
+        setState(() {
+          _allUsers = users;
+          _applyFilter();
+          _isLoadingUsers = false;
+        });
       }
     } catch (e) {
-      debugPrint('[AdminDashboard] get_admin_users RPC error: $e');
+      debugPrint('[AdminDashboard] getAdminUsers error: $e');
       if (mounted) {
         setState(() {
           _isLoadingUsers = false;
-          _userList = [];
+          _allUsers = [];
+          _filteredUsers = [];
         });
       }
     }
   }
 
-  Future<void> _updateUserLimit(String userId, int newLimit) async {
+  void _applyFilter() {
+    if (_searchQuery.trim().isEmpty) {
+      _filteredUsers = List.from(_allUsers);
+    } else {
+      final query = _searchQuery.trim().toLowerCase();
+      _filteredUsers = _allUsers.where((u) {
+        final email = u.email.toLowerCase();
+        final name = (u.fullName ?? '').toLowerCase();
+        final userId = u.userId.toLowerCase();
+        return email.contains(query) || name.contains(query) || userId.contains(query);
+      }).toList();
+    }
+  }
+
+  Future<void> _updateUserLimit(String userId, String userEmail, int newLimit) async {
     try {
-      await Supabase.instance.client.rpc(
-        'update_user_resume_limit',
-        params: {
-          'p_user_id': userId,
-          'p_new_limit': newLimit,
-        },
-      );
+      await ResumeLimitService.instance.updateDailyLimit(userId, newLimit);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
-            content: Text('Updated limit to $newLimit generations/day!', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: Text(
+              'Updated daily limit to $newLimit creations for $userEmail',
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         );
         _loadStats();
@@ -186,9 +156,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF161B22),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Reset Daily Usage?', style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          'Reset Daily Usage?',
+          style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: Text(
-          'This will reset today\'s resume generation counter to 0 for $userEmail.',
+          'This will reset today\'s resume creations counter to 0 for $userEmail.',
           style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E)),
         ),
         actions: [
@@ -211,17 +184,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     if (confirm != true) return;
 
     try {
-      await Supabase.instance.client.rpc(
-        'reset_user_resume_usage',
-        params: {
-          'p_user_id': userId,
-        },
-      );
+      await ResumeLimitService.instance.resetUserUsage(userId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             backgroundColor: Color(0xFF10B981),
-            content: Text('Usage reset successfully!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            content: Text('Daily usage reset successfully!', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           ),
         );
         _loadStats();
@@ -239,68 +207,131 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  void _showEditLimitModal(String userId, String email, int currentLimit) {
-    final controller = TextEditingController(text: '$currentLimit');
+  void _showEditLimitModal(AdminUserQuotaInfo user) {
+    final controller = TextEditingController(text: '${user.dailyLimit}');
+    int selectedPreset = user.dailyLimit;
+    const presets = [1, 2, 4, 5, 10, 20];
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF161B22),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Edit Daily Limit',
-          style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Set daily resume generation limit for $email:',
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 13),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF161B22),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                const Icon(Icons.tune_rounded, color: AppTheme.primaryOrange, size: 22),
+                const SizedBox(width: 10),
+                Text(
+                  'Change Daily Limit',
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              style: GoogleFonts.plusJakartaSans(color: Colors.white),
-              decoration: InputDecoration(
-                labelText: 'Daily Resume Limit',
-                labelStyle: const TextStyle(color: AppTheme.primaryOrange),
-                filled: true,
-                fillColor: const Color(0xFF21262D),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF30363D)),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: AppTheme.primaryOrange),
-                ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'User: ${user.fullName ?? user.email}',
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                  ),
+                  if (user.fullName != null && user.fullName!.isNotEmpty)
+                    Text(
+                      user.email,
+                      style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12),
+                    ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Current Limit: ${user.dailyLimit} | Used Today: ${user.usageCount}',
+                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Quick Presets:',
+                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: presets.map((p) {
+                      final isSelected = selectedPreset == p;
+                      return ChoiceChip(
+                        label: Text('$p'),
+                        selected: isSelected,
+                        selectedColor: AppTheme.primaryOrange,
+                        backgroundColor: const Color(0xFF21262D),
+                        labelStyle: GoogleFonts.plusJakartaSans(
+                          color: isSelected ? Colors.white : const Color(0xFF8B949E),
+                          fontWeight: FontWeight.bold,
+                        ),
+                        onSelected: (val) {
+                          if (val) {
+                            setModalState(() {
+                              selectedPreset = p;
+                              controller.text = '$p';
+                            });
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 18),
+                  TextField(
+                    controller: controller,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white),
+                    decoration: InputDecoration(
+                      labelText: 'Custom Daily Resume Limit',
+                      labelStyle: const TextStyle(color: AppTheme.primaryOrange),
+                      filled: true,
+                      fillColor: const Color(0xFF21262D),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: Color(0xFF30363D)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                        borderSide: const BorderSide(color: AppTheme.primaryOrange),
+                      ),
+                    ),
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val.trim());
+                      if (parsed != null) {
+                        setModalState(() => selectedPreset = parsed);
+                      }
+                    },
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E))),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final newLim = int.tryParse(controller.text.trim());
-              if (newLim != null && newLim >= 0) {
-                Navigator.pop(ctx);
-                _updateUserLimit(userId, newLim);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryOrange,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('Save Limit', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Cancel', style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E))),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  final newLim = int.tryParse(controller.text.trim());
+                  if (newLim != null && newLim >= 0) {
+                    Navigator.pop(ctx);
+                    _updateUserLimit(user.userId, user.email, newLim);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text('Save Limit', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -308,14 +339,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isCheckingAuth) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF0D1117),
-        body: const Center(
+      return const Scaffold(
+        backgroundColor: Color(0xFF0D1117),
+        body: Center(
           child: CircularProgressIndicator(color: AppTheme.primaryOrange),
         ),
       );
     }
 
+    // ── 403 Access Denied Gate ──
     if (!_isAdminAuthorized) {
       return Scaffold(
         backgroundColor: const Color(0xFF0D1117),
@@ -355,7 +387,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Admin privileges are required to access user quota controls and usage dashboards.',
+                  'Admin privileges are strictly restricted to na6236786@gmail.com. Normal users cannot access this dashboard.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
@@ -370,7 +402,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: Text('Return to Editor', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
+                  child: Text('Return to Application', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold)),
                 ),
               ],
             ),
@@ -378,6 +410,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       );
     }
+
+    final total = _filteredUsers.length;
+    final totalPages = (total / _pageSize).ceil();
+    final safeTotalPages = totalPages < 1 ? 1 : totalPages;
+    final safePage = _currentPage.clamp(1, safeTotalPages);
+    final startIndex = (safePage - 1) * _pageSize;
+    final endIndex = (startIndex + _pageSize).clamp(0, total);
+    final pagedUsers = _filteredUsers.isEmpty ? <AdminUserQuotaInfo>[] : _filteredUsers.sublist(startIndex, endIndex);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -401,6 +441,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppTheme.primaryOrange),
+            tooltip: 'Refresh Data',
             onPressed: () {
               _loadStats();
               _loadUsers();
@@ -413,9 +454,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top Overview Cards Row
+            // ── 1. Stats Overview Cards ──
             Text(
-              'System Usage & Quotas',
+              'Overview & Real-Time Metrics',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
@@ -428,8 +469,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 final isWide = constraints.maxWidth >= 800;
                 final cards = [
                   _buildStatCard('Total Users', _isLoadingStats ? '...' : '$_totalUsers', Icons.people_outline, const Color(0xFF3B82F6)),
-                  _buildStatCard('Active Today', _isLoadingStats ? '...' : '$_activeUsersToday', Icons.bolt, const Color(0xFF10B981)),
-                  _buildStatCard('Resumes Generated', _isLoadingStats ? '...' : '$_resumesGeneratedToday', Icons.file_copy_outlined, AppTheme.primaryOrange),
+                  _buildStatCard('Active Users Today', _isLoadingStats ? '...' : '$_activeUsersToday', Icons.bolt, const Color(0xFF10B981)),
+                  _buildStatCard('Resumes Created Today', _isLoadingStats ? '...' : '$_resumesGeneratedToday', Icons.file_copy_outlined, AppTheme.primaryOrange),
                   _buildStatCard('Users At Limit', _isLoadingStats ? '...' : '$_usersAtLimit', Icons.lock_clock, const Color(0xFFEF4444)),
                 ];
 
@@ -448,7 +489,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Users Table Controls Header
+            // ── 2. Users Table Header & Search ──
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -465,21 +506,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Total Registrations: $_totalUsersCount',
+                      'Total Registrations: ${_allUsers.length}',
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF8B949E)),
                     ),
                   ],
                 ),
                 SizedBox(
-                  width: 260,
+                  width: 280,
                   child: TextField(
                     controller: _searchController,
                     onChanged: (val) {
                       setState(() {
                         _searchQuery = val;
                         _currentPage = 1;
+                        _applyFilter();
                       });
-                      _loadUsers();
                     },
                     style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13),
                     decoration: InputDecoration(
@@ -506,10 +547,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Users List Table
+            // ── 3. Users List Table ──
             if (_isLoadingUsers)
               const Center(child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator(color: AppTheme.primaryOrange)))
-            else if (_userList.isEmpty)
+            else if (_filteredUsers.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(32),
@@ -534,8 +575,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 child: Column(
                   children: [
-                    ..._userList.map((user) => _buildUserRow(user)),
-                    if (_totalPages > 1) ...[
+                    ...pagedUsers.map((user) => _buildUserRow(user)),
+                    if (safeTotalPages > 1) ...[
                       const Divider(color: Color(0xFF30363D), height: 1),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -543,26 +584,20 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(
-                              'Page $_currentPage of $_totalPages',
+                              'Page $safePage of $safeTotalPages (${_filteredUsers.length} total users)',
                               style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 13),
                             ),
                             Row(
                               children: [
                                 IconButton(
-                                  onPressed: _currentPage > 1
-                                      ? () {
-                                          setState(() => _currentPage--);
-                                          _loadUsers();
-                                        }
+                                  onPressed: safePage > 1
+                                      ? () => setState(() => _currentPage = safePage - 1)
                                       : null,
                                   icon: const Icon(Icons.chevron_left, color: Colors.white),
                                 ),
                                 IconButton(
-                                  onPressed: _currentPage < _totalPages
-                                      ? () {
-                                          setState(() => _currentPage++);
-                                          _loadUsers();
-                                        }
+                                  onPressed: safePage < safeTotalPages
+                                      ? () => setState(() => _currentPage = safePage + 1)
                                       : null,
                                   icon: const Icon(Icons.chevron_right, color: Colors.white),
                                 ),
@@ -626,15 +661,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildUserRow(Map<String, dynamic> user) {
-    final userId = user['user_id'] as String? ?? '';
-    final email = user['email'] as String? ?? 'User';
-    final limit = (user['daily_limit'] as num? ?? 4).toInt();
-    final used = (user['resumes_generated_today'] as num? ?? 0).toInt();
-    final remaining = (user['remaining'] as num? ?? (limit - used).clamp(0, 99999)).toInt();
-    final usageDate = user['usage_date']?.toString() ?? '';
+  Widget _buildUserRow(AdminUserQuotaInfo user) {
+    final isAtLimit = user.usageCount >= user.dailyLimit;
+    final displayName = (user.fullName != null && user.fullName!.trim().isNotEmpty)
+        ? user.fullName!.trim()
+        : user.email.split('@').first;
 
-    final isAtLimit = used >= limit;
+    final createdDateStr = user.createdAt != null
+        ? '${user.createdAt!.year}-${user.createdAt!.month.toString().padLeft(2, '0')}-${user.createdAt!.day.toString().padLeft(2, '0')}'
+        : '';
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -646,7 +681,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           CircleAvatar(
             backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.2),
             child: Text(
-              email.isNotEmpty ? email[0].toUpperCase() : 'U',
+              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
               style: GoogleFonts.plusJakartaSans(color: AppTheme.primaryOrange, fontWeight: FontWeight.bold),
             ),
           ),
@@ -655,34 +690,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  email,
-                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                Row(
+                  children: [
+                    Text(
+                      displayName,
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                    if (user.email == 'na6236786@gmail.com') ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: const Color(0xFF8B5CF6)),
+                        ),
+                        child: Text(
+                          'ADMIN',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFC4B5FD),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                if (usageDate.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  user.email,
+                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12),
+                ),
+                if (createdDateStr.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
-                    'Usage Date: $usageDate',
-                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 11),
+                    'Registered: $createdDateStr',
+                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF6E7681), fontSize: 11),
                   ),
                 ],
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
               color: isAtLimit
                   ? const Color(0xFFEF4444).withValues(alpha: 0.15)
                   : const Color(0xFF10B981).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: isAtLimit ? const Color(0xFFEF4444) : const Color(0xFF10B981)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  '$used / $limit Used',
+                  '${user.usageCount} / ${user.dailyLimit} Used',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -690,7 +753,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ),
                 ),
                 Text(
-                  '($remaining remaining)',
+                  '${user.remaining} remaining today',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 10,
                     color: isAtLimit ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
@@ -699,18 +762,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               ],
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Row(
             children: [
               IconButton(
-                onPressed: () => _showEditLimitModal(userId, email, limit),
-                tooltip: 'Edit Quota Limit',
-                icon: const Icon(Icons.edit_outlined, color: AppTheme.primaryOrange, size: 18),
+                onPressed: () => _showEditLimitModal(user),
+                tooltip: 'Change Daily Limit',
+                icon: const Icon(Icons.tune_rounded, color: AppTheme.primaryOrange, size: 20),
               ),
               IconButton(
-                onPressed: () => _resetUserUsage(userId, email),
+                onPressed: () => _resetUserUsage(user.userId, user.email),
                 tooltip: 'Reset Today\'s Usage',
-                icon: const Icon(Icons.restore_rounded, color: Color(0xFF8B949E), size: 18),
+                icon: const Icon(Icons.restore_rounded, color: Color(0xFF8B949E), size: 20),
               ),
             ],
           ),

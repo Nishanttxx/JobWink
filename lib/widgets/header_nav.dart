@@ -244,8 +244,8 @@ class _HeaderNavState extends State<HeaderNav> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            // Get Started / Dashboard CTA
-                            ElevatedButton(
+                            // Get Started / Dashboard CTA (Secondary Outlined to avoid competing with Hero primary CTA)
+                            OutlinedButton(
                               onPressed: () {
                                 if (_currentUser == null &&
                                     Supabase.instance.client.auth.currentUser ==
@@ -254,16 +254,18 @@ class _HeaderNavState extends State<HeaderNav> {
                                 }
                                 Navigator.pushNamed(context, '/dashboard');
                               },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: AppTheme.primaryOrange,
-                                foregroundColor: Colors.white,
-                                elevation: 0,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: AppTheme.primaryOrange,
+                                side: const BorderSide(
+                                  color: AppTheme.primaryOrange,
+                                  width: 1.5,
+                                ),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 18,
-                                  vertical: 12,
+                                  vertical: 11,
                                 ),
                               ),
                               child: Text(
@@ -397,7 +399,7 @@ class _HeaderNavState extends State<HeaderNav> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: ElevatedButton(
+                        child: OutlinedButton(
                           onPressed: () {
                             setState(() => _isMobileMenuOpen = false);
                             if (Supabase.instance.client.auth.currentUser ==
@@ -406,9 +408,12 @@ class _HeaderNavState extends State<HeaderNav> {
                             }
                             Navigator.pushNamed(context, '/dashboard');
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppTheme.primaryOrange,
-                            foregroundColor: Colors.white,
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppTheme.primaryOrange,
+                            side: const BorderSide(
+                              color: AppTheme.primaryOrange,
+                              width: 1.5,
+                            ),
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
@@ -447,46 +452,87 @@ class _HeaderNavState extends State<HeaderNav> {
   }
 
   Widget _buildThemeToggleButton(BuildContext context, bool isDarkMode) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => ThemeService.instance.toggleTheme(),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: isDarkMode
-                ? const Color(0xFF1E1F24)
-                : const Color(0xFFF3F4F6),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDarkMode
-                  ? const Color(0xFF3F3F46)
-                  : const Color(0xFFE5E7EB),
+    final trackBg = isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFE5E7EB);
+    final thumbBg = isDarkMode ? const Color(0xFF2D313E) : Colors.white;
+    final borderColor = isDarkMode ? const Color(0xFF373B49) : const Color(0xFFD1D5DB);
+
+    return Tooltip(
+      message: isDarkMode ? 'Switch to Light mode' : 'Switch to Dark mode',
+      child: Semantics(
+        toggled: isDarkMode,
+        button: true,
+        label: isDarkMode ? 'Switch to Light mode' : 'Switch to Dark mode',
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: () => ThemeService.instance.toggleTheme(),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeInOut,
+              width: 58,
+              height: 30,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: trackBg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: borderColor, width: 1),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // Sun & Moon icons positioned on opposite sides of track
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(left: 3),
+                        child: Icon(
+                          Icons.light_mode_rounded,
+                          size: 13,
+                          color: isDarkMode ? Colors.white38 : const Color(0xFFF59E0B),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 3),
+                        child: Icon(
+                          Icons.dark_mode_rounded,
+                          size: 13,
+                          color: isDarkMode ? const Color(0xFF818CF8) : Colors.black38,
+                        ),
+                      ),
+                    ],
+                  ),
+                  // Sliding thumb indicator
+                  AnimatedAlign(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    alignment: isDarkMode ? Alignment.centerRight : Alignment.centerLeft,
+                    child: Container(
+                      width: 24,
+                      height: 24,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: thumbBg,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(isDarkMode ? 80 : 30),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Icon(
+                          isDarkMode ? Icons.dark_mode_rounded : Icons.light_mode_rounded,
+                          size: 13,
+                          color: isDarkMode ? const Color(0xFF818CF8) : const Color(0xFFF59E0B),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isDarkMode
-                    ? Icons.light_mode_rounded
-                    : Icons.dark_mode_rounded,
-                size: 14,
-                color: isDarkMode
-                    ? const Color(0xFFFACC15)
-                    : const Color(0xFF4B5563),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                isDarkMode ? 'Light' : 'Dark',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.getTextColor(context),
-                ),
-              ),
-            ],
           ),
         ),
       ),

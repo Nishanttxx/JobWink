@@ -106,29 +106,44 @@ class ResumeData {
     String? rawJsonString,
   }) {
     debugPrint('\n================ [RESUME-MAPPING-DEBUG: $stage] ================');
-    if (extractedTextLength != null) debugPrint('1. Extracted text length: $extractedTextLength');
+    if (extractedTextLength != null) debugPrint('Extracted text length: $extractedTextLength');
     if (extractedTextSnippet != null && extractedTextSnippet.isNotEmpty) {
       final firstPart = extractedTextSnippet.length > 150 ? extractedTextSnippet.substring(0, 150) : extractedTextSnippet;
       final lastPart = extractedTextSnippet.length > 150 ? extractedTextSnippet.substring(extractedTextSnippet.length - 150) : '';
-      debugPrint('2. Extracted text portions: FIRST="$firstPart" | LAST="$lastPart"');
+      debugPrint('Extracted text portions: FIRST="$firstPart" | LAST="$lastPart"');
     }
-    if (aiResponseLength != null) debugPrint('3. AI parser response length: $aiResponseLength');
+    if (aiResponseLength != null) debugPrint('AI parser response length: $aiResponseLength');
     if (rawJsonString != null && rawJsonString.isNotEmpty) {
       final snippet = rawJsonString.length > 300 ? '${rawJsonString.substring(0, 300)}...' : rawJsonString;
-      debugPrint('4. Parsed JSON: $snippet');
+      debugPrint('Parsed JSON: $snippet');
     }
-    debugPrint('5. ResumeModel values:');
-    debugPrint('   6. Identity/Profile -> Name: "${fullName.isEmpty ? "Not specified" : fullName}", Title: "${title.isEmpty ? "Not specified" : title}", Email: "${email.isEmpty ? "Not specified" : email}", Phone: "${phone.isEmpty ? "Not specified" : phone}", Location: "${location.isEmpty ? "Not specified" : location}", LinkedIn: "${linkedin.isEmpty ? "Not specified" : linkedin}", GitHub: "${github.isEmpty ? "Not specified" : github}"');
-    debugPrint('   7. Skills (${skills.length}): ${skills.take(5).toList()}');
-    debugPrint('   8. Education (${education.length}): ${education.map((e) => e.institution).toList()}');
-    debugPrint('   9. Experience (${experience.length}): ${experience.map((e) => "${e.company} (${e.role})").toList()}');
-    debugPrint('   10. Projects (${projects.length}): ${projects.map((e) => e.name).toList()}');
-    debugPrint('   11. Certifications (${certifications.length}): ${certifications.map((e) => e.activity).toList()}');
-    debugPrint('   12. Summary: "${summary.isEmpty ? "Not specified" : summary}"');
+    debugPrint('\nResumeModel values:');
+    debugPrint('\nIdentity/Profile:');
+    debugPrint('Name: "${fullName.isEmpty ? "Not specified" : fullName}"');
+    debugPrint('Title: "${title.isEmpty ? "Not specified" : title}"');
+    debugPrint('Email: "${email.isEmpty ? "Not specified" : email}"');
+    debugPrint('Phone: "${phone.isEmpty ? "Not specified" : phone}"');
+    debugPrint('Location: "${location.isEmpty ? "Not specified" : location}"');
+    debugPrint('LinkedIn: "${linkedin.isEmpty ? "Not specified" : linkedin}"');
+    debugPrint('GitHub: "${github.isEmpty ? "Not specified" : github}"');
+    debugPrint('\nSkills (${skills.length}):');
+    debugPrint('${skills.take(10).toList()}');
+    debugPrint('\nEducation (${education.length}):');
+    debugPrint('${education.map((e) => e.degree.isNotEmpty ? (e.institution.isNotEmpty ? "${e.degree} at ${e.institution}" : e.degree) : e.institution).toList()}');
+    debugPrint('\nExperience (${experience.length}):');
+    debugPrint('${experience.map((e) => "${e.company} (${e.role})").toList()}');
+    debugPrint('\nProjects (${projects.length}):');
+    debugPrint('${projects.map((e) => e.name).toList()}');
+    debugPrint('\nCertifications (${certifications.length}):');
+    debugPrint('${certifications.map((e) => e.activity).toList()}');
+    debugPrint('\nSummary:');
+    debugPrint('"${summary.isEmpty ? "Not specified" : summary}"');
     debugPrint('=================================================================\n');
   }
 
-  /// Identifies placeholder strings like "Not specified", "N/A", "None", etc.
+  /// Identifies placeholder strings like "Not specified", "N/A", "None", single symbols, etc.
+  static bool isPlaceholderValue(String s) => _isPlaceholderValue(s);
+
   static bool _isPlaceholderValue(String s) {
     final lower = s.toLowerCase().trim();
     if (lower.isEmpty) return true;
@@ -141,6 +156,7 @@ class ResumeData {
       'not_provided',
       'n/a',
       'n / a',
+      'na',
       'none',
       'unknown',
       'undefined',
@@ -159,6 +175,17 @@ class ResumeData {
       'no summary',
       'not available',
       'tbd',
+      '&',
+      '-',
+      '--',
+      '---',
+      '•',
+      '|',
+      '*',
+      '~',
+      '_',
+      ':',
+      ';',
     };
     return placeholders.contains(lower) ||
         RegExp(r'^\[.*(?:specified|provided|available|applicable|name|title|email|phone|address|location).*\]$', caseSensitive: false).hasMatch(lower);
@@ -232,15 +259,15 @@ class ResumeData {
         .replaceAll(RegExp(r'github\.com\/\S+'), '');
 
     String phone = '';
-    final explicitPlusPhone = RegExp(r'\+\d{1,4}[\s\-\.]?\d{7,12}\b').firstMatch(textForPhone);
+    final explicitPlusPhone = RegExp(r'\+\d{1,4}[\s\-\.]?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').firstMatch(textForPhone);
     if (explicitPlusPhone != null) {
       phone = explicitPlusPhone.group(0)!.trim();
     } else {
-      final phoneMatches = RegExp(r'\b(?:\+?\d{1,3}[\s\-\.]?)?\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4}\b').allMatches(textForPhone);
+      final phoneMatches = RegExp(r'\b(?:\+?\d{1,4}[\s\-\.]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').allMatches(textForPhone);
       for (final pm in phoneMatches) {
         final candidate = pm.group(0)!.trim();
         final digitCount = candidate.replaceAll(RegExp(r'\D'), '').length;
-        if (digitCount >= 10 && digitCount <= 15) {
+        if (digitCount >= 7 && digitCount <= 15) {
           phone = candidate;
           break;
         }
@@ -314,7 +341,7 @@ class ResumeData {
       github: githubMatch?.group(0) ?? '',
       title: title,
       summary: summary,
-      skills: flatSkills.toSet().toList(),
+      skills: flatSkills.where((s) => s.trim().isNotEmpty && !ResumeData._isPlaceholderValue(s)).toSet().toList(),
       skillGroups: skillGroups,
       experience: experience,
       education: education,
@@ -323,18 +350,19 @@ class ResumeData {
       extracurriculars: extracurriculars,
     );
 
-    debugPrint('\n====================================================');
-    debugPrint('FINAL EXTRACTION');
-    debugPrint('====================================================');
-    debugPrint('Name: ${parsedData.fullName}');
-    debugPrint('Email: ${parsedData.email}');
-    debugPrint('Phone: ${parsedData.phone}');
-    debugPrint('Projects: ${parsedData.projects.length}');
-    debugPrint('Education: ${parsedData.education.length}');
-    debugPrint('Experience: ${parsedData.experience.length}');
-    debugPrint('Skill Groups: ${parsedData.skillGroups.length}\n');
+    final sanitizedData = validateAndSanitizeAll(parsedData);
 
-    return validateAndSanitizeAll(parsedData);
+    debugPrint('\n================ [RAW-PARSER-RESULT] ================');
+    debugPrint('Name: ${sanitizedData.fullName}');
+    debugPrint('Email: ${sanitizedData.email}');
+    debugPrint('Phone: ${sanitizedData.phone}');
+    debugPrint('Projects: ${sanitizedData.projects.length}');
+    debugPrint('Education: ${sanitizedData.education.length}');
+    debugPrint('Experience: ${sanitizedData.experience.length}');
+    debugPrint('Certifications: ${sanitizedData.certifications.length}');
+    debugPrint('Skill Groups: ${sanitizedData.skillGroups.length}\n');
+
+    return sanitizedData;
   }
 
   // ---------------------------------------------------------------------------
@@ -346,6 +374,9 @@ class ResumeData {
     return rawText;
   }
 
+  /// Normalizes a candidate heading line by trimming, stripping list numbers,
+  /// bullets, markdown hashes, dashes, and trailing colons, converting to lowercase,
+  /// removing non-alphanumeric chars (preserving '&' and space), and collapsing spaces.
   /// Normalizes a candidate heading line by trimming, stripping list numbers,
   /// bullets, markdown hashes, dashes, and trailing colons, converting to lowercase,
   /// removing non-alphanumeric chars (preserving '&' and space), and collapsing spaces.
@@ -365,10 +396,10 @@ class ResumeData {
   static String? _detectSectionHeaderFromNormalized(String norm) {
     if (norm.isEmpty) return null;
 
-    // Reject if too long (section headers are concise: <= 6 words, <= 45 chars)
-    if (norm.length > 45 || norm.split(' ').length > 6) return null;
+    // Reject if too long (section headers are concise: <= 5 words, <= 45 chars)
+    if (norm.length > 45 || norm.split(' ').length > 5) return null;
 
-    // summary
+    // 1. summary
     if (const {
       'summary',
       'professional summary',
@@ -376,62 +407,48 @@ class ResumeData {
       'profile summary',
       'career summary',
       'personal summary',
-      'summary statement',
       'summary objective',
-      'profile overview',
-      'professional overview',
-      'profile',
-      'career profile',
-      'personal profile',
+      'summary and objective',
+      'summary & objective',
       'about me',
       'about',
-      'bio',
-      'objective',
+      'profile',
+      'career profile',
+      'professional profile',
       'career objective',
-      'statement of purpose',
-      'background',
+      'objective',
       'overview',
-    }.contains(norm)) {
+      'bio',
+    }.contains(norm) ||
+        RegExp(r'^(professional |career |profile |executive |personal )?(summary|profile|objective|overview|bio)( (&|and) (summary|profile|objective|overview|bio))?$').hasMatch(norm) ||
+        RegExp(r'^about( me)?$').hasMatch(norm)) {
       return 'summary';
     }
 
-    // skills
+    // 2. skills
     if (const {
       'skills',
       'technical skills',
       'key skills',
       'core skills',
-      'skills & tools',
-      'skills and tools',
-      'skills & technologies',
-      'skills and technologies',
       'technologies',
       'technical proficiencies',
       'core competencies',
       'competencies',
       'areas of expertise',
-      'expertise',
-      'technical expertise',
-      'programming languages',
-      'languages & tools',
-      'languages and tools',
-      'technical stack',
-      'tech stack',
-      'tools & technologies',
-      'tools and technologies',
-      'developer skills',
-      'professional skills',
-      'it skills',
-      'software skills',
-      'skills competencies',
-      'skills proficiencies',
-      'technologies & tools',
-      'technologies and tools',
-    }.contains(norm)) {
+      'technical capabilities',
+      'specializations',
+      'hard skills',
+      'toolbox',
+    }.contains(norm) ||
+        RegExp(r'^(technical |key |core |it |software |developer |professional )?(skills|competencies|proficiencies|technologies|expertise|capabilities)$').hasMatch(norm) ||
+        RegExp(r'^(tech|technical) stack$').hasMatch(norm) ||
+        RegExp(r'^(programming )?languages( (&|and) tools)?$').hasMatch(norm) ||
+        RegExp(r'^(tools (&|and) )?technologies$').hasMatch(norm)) {
       return 'skills';
     }
 
-    // experience
+    // 3. experience
     if (const {
       'experience',
       'work experience',
@@ -451,11 +468,20 @@ class ResumeData {
       'work background',
       'previous experience',
       'job history',
-    }.contains(norm)) {
+      'positions held',
+      'professional journey',
+      'career record',
+      'work record',
+      'employment record',
+      'career highlights',
+    }.contains(norm) ||
+        RegExp(r'^(work |professional |relevant |industry |practical |internship |previous |career )?experience( history)?$').hasMatch(norm) ||
+        RegExp(r'^(employment|work|career|job) history$').hasMatch(norm) ||
+        RegExp(r'^(positions held|employment record|career background|professional journey)$').hasMatch(norm)) {
       return 'experience';
     }
 
-    // education
+    // 4. education
     if (const {
       'education',
       'educational background',
@@ -475,11 +501,18 @@ class ResumeData {
       'education details',
       'education history',
       'studies',
-    }.contains(norm)) {
+      'academic credentials',
+      'formal education',
+      'scholastic record',
+      'education & training',
+    }.contains(norm) ||
+        RegExp(r'^(educational |academic |formal )?education( (&|and) (qualifications|training))?$').hasMatch(norm) ||
+        RegExp(r'^(academic |educational )?(background|qualifications|history|record|details|credentials)$').hasMatch(norm) ||
+        RegExp(r'^(academics|degrees|schooling|studies|scholastic record)$').hasMatch(norm)) {
       return 'education';
     }
 
-    // projects
+    // 5. projects
     if (const {
       'projects',
       'key projects',
@@ -493,6 +526,7 @@ class ResumeData {
       'repositories',
       'github projects',
       'open source projects',
+      'open source contributions',
       'major projects',
       'relevant projects',
       'software projects',
@@ -501,37 +535,57 @@ class ResumeData {
       'featured projects',
       'notable projects',
       'projects open source',
-    }.contains(norm)) {
+      'client projects',
+      'selected work',
+      'selected works',
+      'selected works & repositories',
+      'selected works and repositories',
+      'selected work & repositories',
+      'selected work and repositories',
+      'featured work',
+      'featured works',
+      'capstone projects',
+      'coursework projects',
+    }.contains(norm) ||
+        RegExp(r'^(key |personal |academic |technical |selected |major |notable |capstone |coursework |software |client |featured |portfolio )?projects?( (&|and) repositories)?$').hasMatch(norm) ||
+        RegExp(r'^(selected|featured) works?( (&|and) repositories)?$').hasMatch(norm) ||
+        RegExp(r'^(repositories|portfolio|open source contributions|open source projects)$').hasMatch(norm)) {
       return 'projects';
     }
 
-    // certifications
+    // 6. certifications
     if (const {
       'certifications',
+      'certification',
+      'certificate',
       'certificates',
       'certifications & licenses',
       'certifications and licenses',
       'licenses & certifications',
       'licenses and certifications',
+      'licenses and licenses',
       'credentials',
       'courses & certifications',
       'courses and certifications',
-      'awards & achievements',
-      'awards and achievements',
-      'achievements',
-      'honors & awards',
-      'honors and awards',
-      'awards',
-      'honors',
+      'certifications & courses',
       'certifications courses',
       'accreditations',
       'licenses',
-      'publications',
-    }.contains(norm)) {
+      'professional certifications',
+      'certified courses',
+      'training & certifications',
+      'certifications & credentials',
+      'certifications and credentials',
+      'accreditations & certificates',
+      'accreditations and certificates',
+      'accreditations & certifications',
+      'accreditations and certifications',
+    }.contains(norm) ||
+        RegExp(r'^(professional |certified |training (&|and) )?(certifications?|certificates?|licenses?|credentials?|accreditations?)( (&|and) (certifications?|certificates?|licenses?|credentials?|accreditations?|courses?|training))?$').hasMatch(norm)) {
       return 'certifications';
     }
 
-    // extracurriculars
+    // 7. extracurriculars
     if (const {
       'extracurricular activities',
       'extracurricular activities & achievements',
@@ -550,15 +604,31 @@ class ResumeData {
       'activities',
       'leadership & activities',
       'leadership activities',
+      'leadership & involvement',
+      'leadership experience',
+      'leadership',
       'involvement',
       'campus involvement',
       'activities & achievements',
       'activities and achievements',
       'community involvement',
+      'community service',
       'extracurricular involvement',
       'positions of responsibility',
       'responsibilities',
-    }.contains(norm)) {
+      'awards & achievements',
+      'awards and achievements',
+      'awards',
+      'honors',
+      'honors & awards',
+      'honors and awards',
+      'publications',
+      'associations',
+      'affiliations',
+    }.contains(norm) ||
+        RegExp(r'^(extra|co|cocurricular)[\s\-]?curricular( (activities|involvement|experience))?( (&|and) (achievements|awards))?$').hasMatch(norm) ||
+        RegExp(r'^(leadership|activities|volunteering|volunteer experience|community service|campus involvement|positions of responsibility|publications|associations|affiliations)( (&|and) (activities|involvement|achievements|awards))?$').hasMatch(norm) ||
+        RegExp(r'^(honors|awards)( (&|and) (honors|awards|achievements))?$').hasMatch(norm)) {
       return 'extracurriculars';
     }
 
@@ -566,12 +636,25 @@ class ResumeData {
   }
 
   static String? _detectSectionHeader(String line) {
-    final trimmed = line.trim();
+    var trimmed = line.trim();
     if (trimmed.isEmpty) return null;
 
-    // Filter out date ranges or contact info lines
-    if (trimmed.contains('@') || trimmed.contains('http://') || trimmed.contains('https://') || trimmed.contains('www.')) return null;
-    if (RegExp(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}\b', caseSensitive: false).hasMatch(trimmed)) return null;
+    if (trimmed.endsWith(':')) {
+      trimmed = trimmed.substring(0, trimmed.length - 1).trim();
+    }
+
+    // Filter out content lines containing punctuation, dates, contact info
+    if (trimmed.contains(':') ||
+        trimmed.contains('|') ||
+        trimmed.contains(';') ||
+        trimmed.contains(',') ||
+        trimmed.contains('@') ||
+        trimmed.contains('http://') ||
+        trimmed.contains('https://') ||
+        trimmed.contains('www.')) {
+      return null;
+    }
+    if (RegExp(r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b', caseSensitive: false).hasMatch(trimmed)) return null;
     if (RegExp(r'\b\d{4}\s*[\–\-—\to]\s*(\d{4}|Present)\b', caseSensitive: false).hasMatch(trimmed)) return null;
 
     final norm = _normalizeHeadingCandidate(trimmed);
@@ -580,10 +663,7 @@ class ResumeData {
 
   /// Returns true if the text matches any known section header alias.
   static bool isKnownSectionHeader(String text) {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) return false;
-    final norm = _normalizeHeadingCandidate(trimmed);
-    return _detectSectionHeaderFromNormalized(norm) != null;
+    return _detectSectionHeader(text) != null;
   }
 
   static Map<String, List<String>> _splitIntoSectionBlocks(String rawText) {
@@ -603,7 +683,20 @@ class ResumeData {
     final rawLines = rawText.split(RegExp(r'[\r\n]+')).map((l) => l.trim()).where((l) => l.isNotEmpty).toList();
     String currentSection = 'header';
 
-    for (final line in rawLines) {
+    for (int i = 0; i < rawLines.length; i++) {
+      final line = rawLines[i];
+
+      // Header contact info lines should stay in header
+      if (currentSection == 'header') {
+        if (line.contains('@') ||
+            line.contains('linkedin.com') ||
+            line.contains('github.com') ||
+            RegExp(r'\+\d{1,4}').hasMatch(line)) {
+          blocks['header']?.add(line);
+          continue;
+        }
+      }
+
       final detected = _detectSectionHeader(line);
       if (detected != null) {
         currentSection = detected;
@@ -612,27 +705,16 @@ class ResumeData {
       blocks[currentSection]?.add(line);
     }
 
-    debugPrint('\n================ SECTION DEBUG ================');
-    for (final sec in ['summary', 'skills', 'education', 'experience', 'projects', 'certifications', 'extracurriculars']) {
+    final detectedSectionsList = blocks.entries
+        .where((e) => e.key != 'header' && e.value.isNotEmpty)
+        .map((e) => e.key.toUpperCase())
+        .toList();
+    debugPrint('[PIPELINE] SECTIONS DETECTED: $detectedSectionsList');
+    for (final sec in ['education', 'experience', 'projects', 'skills', 'certifications', 'extracurriculars']) {
       final lines = blocks[sec] ?? [];
-      debugPrint('[SECTION DEBUG] $sec:');
       if (lines.isNotEmpty) {
-        for (final l in lines) {
-          debugPrint('  $l');
-        }
-      } else {
-        debugPrint('  [EMPTY]');
+        debugPrint('[PIPELINE] Section: ${sec.toUpperCase()} (content lines: ${lines.length})');
       }
-    }
-    debugPrint('================================================\n');
-
-    final nonHeaderCount = blocks.entries
-        .where((e) => e.key != 'header')
-        .map((e) => e.value.length)
-        .fold(0, (a, b) => a + b);
-
-    if (rawText.length > 500 && nonHeaderCount == 0) {
-      debugPrint('[SECTION PARSER WARNING] Raw text exists (length=${rawText.length}) but section content is missing.');
     }
 
     return blocks;
@@ -691,8 +773,8 @@ class ResumeData {
     ];
 
     for (final line in lines) {
-      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
+      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine) || ResumeData._isPlaceholderValue(cleanLine)) continue;
 
       if (cleanLine.contains(':')) {
         final colonIdx = cleanLine.indexOf(':');
@@ -762,13 +844,16 @@ class ResumeData {
     final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
     if (cleanLine.isEmpty) return null;
 
-    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line)) {
+    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line) || ResumeData._isPlaceholderValue(cleanLine)) {
       return null;
     }
 
+    // A bullet point or numbered item is NEVER a standalone project header
     if (line.startsWith('•') || line.startsWith('◦') || line.startsWith('°') || line.startsWith('▪') || line.startsWith('▫') || line.startsWith('●') || line.startsWith('○') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || line.startsWith('—') || RegExp(r'^\d+[\.\)]').hasMatch(line)) {
       return null;
     }
+
+    // Action verb lines or descriptive sentences are not headers
     if (RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating|collaborating|researching|automating|testing|authored)\b', caseSensitive: false).hasMatch(cleanLine)) {
       return null;
     }
@@ -785,6 +870,7 @@ class ResumeData {
       return null;
     }
 
+    // 1. Pipe Separated: "Project Title | Tech Stack | Link"
     if (line.contains('|')) {
       final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       if (parts.isNotEmpty) {
@@ -815,6 +901,7 @@ class ResumeData {
       }
     }
 
+    // 2. Dash Separated: "Project Title – Tech Stack"
     if (line.contains(' – ') || line.contains(' — ') || line.contains(' - ')) {
       final sep = line.contains(' – ') ? ' – ' : (line.contains(' — ') ? ' — ' : ' - ');
       final parts = line.split(sep).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
@@ -832,7 +919,10 @@ class ResumeData {
       }
     }
 
-    if (cleanLine.length <= 40 && !cleanLine.contains(',') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z0-9]').hasMatch(cleanLine)) {
+    // 3. Standalone multi-word title line (e.g. "Smart Home IoT Platform" or "Resume Builder")
+    // Must be at least 2 words, no commas, capitalized, and not a continuation fragment
+    final words = cleanLine.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.length >= 2 && cleanLine.length <= 50 && !cleanLine.contains(',') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z0-9]').hasMatch(cleanLine)) {
       return _ProjectHeaderInfo(name: cleanLine);
     }
 
@@ -850,7 +940,7 @@ class ResumeData {
     void flushCurrentBullet() {
       if (currentBullet.trim().isNotEmpty) {
         final b = currentBullet.trim();
-        if (!currentDescriptions.contains(b)) {
+        if (!currentDescriptions.contains(b) && !ResumeData._isPlaceholderValue(b)) {
           currentDescriptions.add(b);
         }
         currentBullet = '';
@@ -858,7 +948,7 @@ class ResumeData {
     }
 
     void flushCurrentProject() {
-      if (currentName != null && currentName!.trim().isNotEmpty && !isKnownSectionHeader(currentName!)) {
+      if (currentName != null && currentName!.trim().isNotEmpty && !isKnownSectionHeader(currentName!) && !ResumeData._isPlaceholderValue(currentName!)) {
         flushCurrentBullet();
         projects.add(ProjectEntry(
           name: currentName!.trim(),
@@ -877,7 +967,7 @@ class ResumeData {
 
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine) || ResumeData._isPlaceholderValue(cleanLine)) continue;
 
       final header = _tryParseProjectHeader(line);
       if (header != null) {
@@ -889,7 +979,8 @@ class ResumeData {
       }
 
       if (currentName == null) {
-        if (cleanLine.length < 40 && !cleanLine.endsWith('.') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
+        final words = cleanLine.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+        if (words.length >= 2 && cleanLine.length < 50 && !cleanLine.endsWith('.') && !_isSingleTechnologyKeyword(cleanLine) && !isKnownSectionHeader(cleanLine) && RegExp(r'^[A-Z]').hasMatch(cleanLine)) {
           currentName = cleanLine;
         }
         continue;
@@ -938,7 +1029,7 @@ class ResumeData {
     final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
     if (cleanLine.isEmpty) return null;
 
-    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line)) {
+    if (isKnownSectionHeader(cleanLine) || isKnownSectionHeader(line) || ResumeData._isPlaceholderValue(cleanLine)) {
       return null;
     }
 
@@ -958,6 +1049,8 @@ class ResumeData {
       return null;
     }
 
+    final datePattern = RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})\s*[\–\-—\to]+\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4}|Present|Current)\b', caseSensitive: false);
+
     if (line.contains('|')) {
       final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
       if (parts.isNotEmpty) {
@@ -970,7 +1063,7 @@ class ResumeData {
 
         for (int i = 2; i < parts.length; i++) {
           final p = parts[i];
-          final dateMatch = RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\b', caseSensitive: false).firstMatch(p);
+          final dateMatch = datePattern.firstMatch(p);
           if (dateMatch != null && startDate.isEmpty) {
             startDate = dateMatch.group(1) ?? '';
             endDate = dateMatch.group(2) ?? '';
@@ -982,7 +1075,7 @@ class ResumeData {
       }
     }
 
-    final isDateRange = RegExp(r'^\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\s*$', caseSensitive: false).hasMatch(cleanLine);
+    final isDateRange = RegExp(r'^\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4}|Present|Current)?\s*$', caseSensitive: false).hasMatch(cleanLine);
     if (isDateRange) {
       return null;
     }
@@ -990,8 +1083,8 @@ class ResumeData {
     if (line.contains(' – ') || line.contains(' — ') || line.contains(' - ')) {
       final sep = line.contains(' – ') ? ' – ' : (line.contains(' — ') ? ' — ' : ' - ');
       final parts = line.split(sep).map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-      final isDate0 = RegExp(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}\b', caseSensitive: false).hasMatch(parts[0]);
-      final isDate1 = parts.length > 1 && RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)\b', caseSensitive: false).hasMatch(parts[1]);
+      final isDate0 = RegExp(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?[a-z]*\s*\d{4}\b', caseSensitive: false).hasMatch(parts[0]);
+      final isDate1 = parts.length > 1 && RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?[a-z]*\s*\d{4}|Present|Current)\b', caseSensitive: false).hasMatch(parts[1]);
       if (isDate0 && isDate1) {
         return null;
       }
@@ -1016,7 +1109,7 @@ class ResumeData {
     void flushCurrentBullet() {
       if (currentBullet.trim().isNotEmpty) {
         final b = currentBullet.trim();
-        if (!currentDescriptions.contains(b)) {
+        if (!currentDescriptions.contains(b) && !ResumeData._isPlaceholderValue(b)) {
           currentDescriptions.add(b);
         }
         currentBullet = '';
@@ -1024,7 +1117,8 @@ class ResumeData {
     }
 
     void flushCurrentExperience() {
-      if ((currentRole != null && currentRole!.trim().isNotEmpty && !isKnownSectionHeader(currentRole!)) || (currentCompany.trim().isNotEmpty && !isKnownSectionHeader(currentCompany))) {
+      if ((currentRole != null && currentRole!.trim().isNotEmpty && !isKnownSectionHeader(currentRole!) && !ResumeData._isPlaceholderValue(currentRole!)) ||
+          (currentCompany.trim().isNotEmpty && !isKnownSectionHeader(currentCompany) && !ResumeData._isPlaceholderValue(currentCompany))) {
         flushCurrentBullet();
         experience.add(ExperienceEntry(
           role: currentRole ?? '',
@@ -1044,9 +1138,11 @@ class ResumeData {
       currentBullet = '';
     }
 
+    final datePattern = RegExp(r'^\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4})\s*[\–\-—\to]+\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{1,2}/\d{4}|\d{4}|Present|Current)?\s*$', caseSensitive: false);
+
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine) || ResumeData._isPlaceholderValue(cleanLine)) continue;
 
       final header = _tryParseExperienceHeader(line);
       if (header != null) {
@@ -1066,8 +1162,8 @@ class ResumeData {
         continue;
       }
 
-      final dateMatch = RegExp(r'^\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\s*$', caseSensitive: false).firstMatch(cleanLine);
-      if (dateMatch != null && currentStart.isEmpty) {
+      final dateMatch = datePattern.firstMatch(cleanLine);
+      if (dateMatch != null) {
         currentStart = dateMatch.group(1) ?? '';
         currentEnd = dateMatch.group(2) ?? '';
         continue;
@@ -1112,14 +1208,31 @@ class ResumeData {
     );
 
     void flushCurrentEducation() {
-      if ((currentDegree != null && currentDegree!.trim().isNotEmpty && !isKnownSectionHeader(currentDegree!)) || (currentInst.trim().isNotEmpty && !isKnownSectionHeader(currentInst))) {
-        education.add(EducationEntry(
-          degree: currentDegree ?? '',
-          institution: currentInst.trim(),
+      final deg = (currentDegree != null &&
+              currentDegree!.trim().isNotEmpty &&
+              !isKnownSectionHeader(currentDegree!) &&
+              !ResumeData._isPlaceholderValue(currentDegree!) &&
+              !_isStopWordOrPreposition(currentDegree!))
+          ? currentDegree!.trim()
+          : '';
+      final inst = (currentInst.trim().isNotEmpty &&
+              !isKnownSectionHeader(currentInst) &&
+              !ResumeData._isPlaceholderValue(currentInst) &&
+              !_isStopWordOrPreposition(currentInst))
+          ? currentInst.trim()
+          : '';
+
+      if (deg.isNotEmpty || inst.isNotEmpty) {
+        final entry = EducationEntry(
+          degree: deg,
+          institution: inst,
           startDate: currentStart.trim(),
           endDate: currentEnd.trim(),
           gpa: currentGpa.trim(),
-        ));
+        );
+        if (validateEducation(entry)) {
+          education.add(entry);
+        }
       }
       currentDegree = null;
       currentInst = '';
@@ -1130,7 +1243,7 @@ class ResumeData {
 
     for (final line in lines) {
       final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine) || ResumeData._isPlaceholderValue(cleanLine) || _isStopWordOrPreposition(cleanLine)) continue;
 
       final isDegreeLine = degreeRegex.hasMatch(cleanLine);
 
@@ -1141,11 +1254,11 @@ class ResumeData {
         }
         for (int i = 0; i < parts.length; i++) {
           final p = parts[i];
-          if (isKnownSectionHeader(p)) continue;
+          if (isKnownSectionHeader(p) || ResumeData._isPlaceholderValue(p) || _isStopWordOrPreposition(p)) continue;
           final isDeg = degreeRegex.hasMatch(p);
           final isInst = RegExp(r'\b(university|college|school|institute|academy|campus|polytechnic)\b', caseSensitive: false).hasMatch(p);
           final dateMatch = RegExp(r'\b((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4})\s*[\–\-—\to]*\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\s*\d{4}|Present)?\b', caseSensitive: false).firstMatch(p);
-          final gpaMatch = RegExp(r'\b(?:gpa:?\s*|grade:?\s*)?(\d+(?:\.\d+)?|\d+\%)\b', caseSensitive: false).firstMatch(p);
+          final gpaMatch = RegExp(r'\b(?:gpa:?\s*|grade:?\s*|cgpa:?\s*)?(\d+(?:\.\d+)?|\d+\%)\b', caseSensitive: false).firstMatch(p);
 
           if (isDeg && (currentDegree == null || currentDegree!.isEmpty)) {
             currentDegree = p;
@@ -1154,8 +1267,8 @@ class ResumeData {
           } else if (dateMatch != null && currentStart.isEmpty) {
             currentStart = dateMatch.group(1) ?? '';
             currentEnd = dateMatch.group(2) ?? '';
-          } else if (gpaMatch != null && currentGpa.isEmpty && (p.toLowerCase().contains('gpa') || p.toLowerCase().contains('grade') || p.contains('%'))) {
-            currentGpa = p.replaceAll(RegExp(r'^(gpa|grade):?\s*', caseSensitive: false), '').trim();
+          } else if (gpaMatch != null && currentGpa.isEmpty && (p.toLowerCase().contains('gpa') || p.toLowerCase().contains('grade') || p.toLowerCase().contains('cgpa') || p.contains('%'))) {
+            currentGpa = p.replaceAll(RegExp(r'^(gpa|grade|cgpa):?\s*', caseSensitive: false), '').trim();
           } else if (currentDegree == null || currentDegree!.isEmpty) {
             currentDegree = p;
           } else if (currentInst.isEmpty) {
@@ -1169,9 +1282,9 @@ class ResumeData {
         flushCurrentEducation();
       }
 
-      final isGpa = cleanLine.toLowerCase().contains('gpa') || cleanLine.toLowerCase().contains('grade') || cleanLine.contains('%') || RegExp(r'^\d+(\.\d+)?$').hasMatch(cleanLine);
+      final isGpa = cleanLine.toLowerCase().contains('gpa') || cleanLine.toLowerCase().contains('grade') || cleanLine.toLowerCase().contains('cgpa') || cleanLine.contains('%') || RegExp(r'^\d+(\.\d+)?$').hasMatch(cleanLine);
       if (isGpa && currentGpa.isEmpty) {
-        currentGpa = cleanLine.replaceAll(RegExp(r'^(gpa|grade):?\s*', caseSensitive: false), '').trim();
+        currentGpa = cleanLine.replaceAll(RegExp(r'^(gpa|grade|cgpa):?\s*', caseSensitive: false), '').trim();
         continue;
       }
 
@@ -1188,7 +1301,13 @@ class ResumeData {
         continue;
       }
 
-      if (currentDegree == null || currentDegree!.isEmpty) {
+      if (isDegreeLine) {
+        if (currentDegree == null || currentDegree!.isEmpty) {
+          currentDegree = cleanLine;
+        } else {
+          currentDegree = '$currentDegree $cleanLine';
+        }
+      } else if (currentDegree == null || currentDegree!.isEmpty) {
         currentDegree = cleanLine;
       } else if (currentInst.isEmpty) {
         currentInst = cleanLine;
@@ -1201,33 +1320,84 @@ class ResumeData {
 
   static List<ExtracurricularEntry> _extractExtracurricularsFromBlock(List<String> lines) {
     final list = <ExtracurricularEntry>[];
-    String currentActivity = '';
-
-    void flushActivity() {
-      if (currentActivity.trim().isNotEmpty && !isKnownSectionHeader(currentActivity.trim())) {
-        list.add(ExtracurricularEntry(activity: currentActivity.trim()));
-        currentActivity = '';
-      }
-    }
 
     for (final line in lines) {
-      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine)) continue;
+      final cleanLine = line.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
+      if (cleanLine.isEmpty || isKnownSectionHeader(cleanLine) || ResumeData._isPlaceholderValue(cleanLine) || _isStopWordOrPreposition(cleanLine) || cleanLine.length < 3) {
+        continue;
+      }
 
-      final isNewBullet = line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || line.startsWith('–') || RegExp(r'^\d+[\.\)]').hasMatch(line);
-      if (isNewBullet && currentActivity.isNotEmpty) {
-        flushActivity();
-        currentActivity = cleanLine;
-      } else {
-        if (currentActivity.isNotEmpty) {
-          currentActivity = '$currentActivity $cleanLine';
-        } else {
-          currentActivity = cleanLine;
+      final isDateOnly = RegExp(r'^(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4})\s*[\–\-—\to]*\s*(?:(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}|\d{4}|Present)?$', caseSensitive: false).hasMatch(cleanLine);
+      if (isDateOnly) {
+        if (list.isNotEmpty) {
+          final last = list.removeLast();
+          final updatedDesc = last.description.isNotEmpty ? '$cleanLine • ${last.description}' : cleanLine;
+          list.add(last.copyWith(description: updatedDesc));
         }
+        continue;
+      }
+
+      if (cleanLine.contains('|')) {
+        final parts = cleanLine.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty && !ResumeData._isPlaceholderValue(s) && !_isStopWordOrPreposition(s)).toList();
+        if (parts.isNotEmpty) {
+          final act = parts[0];
+          final org = parts.length > 1 ? parts[1] : '';
+          final desc = parts.length > 2 ? parts.sublist(2).join(' • ') : '';
+          final entry = ExtracurricularEntry(
+            activity: act,
+            organization: org,
+            description: desc,
+          );
+          if (validateExtracurricular(entry)) {
+            list.add(entry);
+          }
+          continue;
+        }
+      }
+
+      if (cleanLine.contains(' – ') || cleanLine.contains(' — ') || cleanLine.contains(' - ')) {
+        final sep = cleanLine.contains(' – ') ? ' – ' : (cleanLine.contains(' — ') ? ' — ' : ' - ');
+        final parts = cleanLine.split(sep).map((s) => s.trim()).where((s) => s.isNotEmpty && !ResumeData._isPlaceholderValue(s) && !_isStopWordOrPreposition(s)).toList();
+        if (parts.length >= 2) {
+          final isPart0Date = RegExp(r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}$|^\d{4}$', caseSensitive: false).hasMatch(parts[0]);
+          final isPart1Date = RegExp(r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}$|^\d{4}$|^Present$', caseSensitive: false).hasMatch(parts[1]);
+          if (isPart0Date && isPart1Date) {
+            if (list.isNotEmpty) {
+              final last = list.removeLast();
+              final updatedDesc = last.description.isNotEmpty ? '$cleanLine • ${last.description}' : cleanLine;
+              list.add(last.copyWith(description: updatedDesc));
+            }
+            continue;
+          }
+
+          final entry = ExtracurricularEntry(
+            activity: parts[0],
+            organization: parts[1],
+            description: parts.length > 2 ? parts.sublist(2).join(' • ') : '',
+          );
+          if (validateExtracurricular(entry)) {
+            list.add(entry);
+          }
+          continue;
+        }
+      }
+
+      // Check if line is a descriptive bullet / action verb belonging to previous item
+      final isActionBullet = RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|researched|assisted|organized)\b', caseSensitive: false).hasMatch(cleanLine) ||
+          line.startsWith('•') || line.startsWith('-') || line.startsWith('*');
+      if (isActionBullet && list.isNotEmpty) {
+        final last = list.removeLast();
+        final updatedDesc = last.description.isNotEmpty ? '${last.description} • $cleanLine' : cleanLine;
+        list.add(last.copyWith(description: updatedDesc));
+        continue;
+      }
+
+      final entry = ExtracurricularEntry(activity: cleanLine);
+      if (validateExtracurricular(entry)) {
+        list.add(entry);
       }
     }
 
-    flushActivity();
     return list;
   }
 
@@ -1344,8 +1514,29 @@ class ResumeData {
     final sanitizedProj = validateAndSanitizeProjects(parsedProj);
     final validProj = sanitizedProj.where(validateProject).toList();
     final validEdu = parsedEdu.where(validateEducation).toList();
+    final validCerts = parsedCerts.where(validateCertification).toList();
+    final validExtras = parsedExtras.where(validateExtracurricular).toList();
     final validSkillGroups = parsedSkillGroups.where(validateSkillGroup).toList();
-    final validSkills = parsedSkills.where((s) => s.trim().isNotEmpty && !_isPlaceholderValue(s)).toList();
+    final validSkills = parsedSkills
+        .where((s) => s.trim().isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s))
+        .toList();
+
+    debugPrint('[PIPELINE] AI EXTRACTION:');
+    debugPrint('   skills=${validSkills.length}');
+    debugPrint('   education=${validEdu.length}');
+    debugPrint('   experience=${validExp.length}');
+    debugPrint('   projects=${validProj.length}');
+    debugPrint('   certifications=${validCerts.length}');
+
+    final validFallbackExp = validateAndSanitizeExperience(fallbackData.experience);
+    final validFallbackProj = validateAndSanitizeProjects(fallbackData.projects).where(validateProject).toList();
+    final validFallbackEdu = fallbackData.education.where(validateEducation).toList();
+    final validFallbackCerts = fallbackData.certifications.where(validateCertification).toList();
+    final validFallbackExtras = fallbackData.extracurriculars.where(validateExtracurricular).toList();
+    final validFallbackSkills = fallbackData.skills
+        .where((s) => s.trim().isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s))
+        .toList();
+    final validFallbackSkillGroups = fallbackData.skillGroups.where(validateSkillGroup).toList();
 
     final parsedParserVersion = getString(['parserVersion', 'parser_version']);
     final parsedFileHash = getString(['fileHash', 'file_hash']);
@@ -1359,27 +1550,29 @@ class ResumeData {
       github: extractedGithub.isNotEmpty ? extractedGithub : fallbackData.github,
       title: extractedTitle.isNotEmpty ? extractedTitle : fallbackData.title,
       summary: (parsedSummary.isEmpty || _isPlaceholderValue(parsedSummary)) ? fallbackData.summary : parsedSummary,
-      skills: validSkills.isEmpty ? fallbackData.skills : validSkills,
-      skillGroups: validSkillGroups.isEmpty ? fallbackData.skillGroups : validSkillGroups,
-      experience: validExp.isEmpty ? fallbackData.experience : validExp,
-      projects: validProj.isEmpty ? fallbackData.projects : validProj,
-      education: validEdu.isEmpty ? fallbackData.education : validEdu,
-      certifications: parsedCerts.isEmpty ? fallbackData.certifications : parsedCerts,
-      extracurriculars: parsedExtras.isEmpty ? fallbackData.extracurriculars : parsedExtras,
+      skills: validSkills.isEmpty ? validFallbackSkills : validSkills,
+      skillGroups: validSkillGroups.isEmpty ? validFallbackSkillGroups : validSkillGroups,
+      experience: validExp.isEmpty ? validFallbackExp : validExp,
+      projects: validProj.isEmpty ? validFallbackProj : validProj,
+      education: validEdu.isEmpty ? validFallbackEdu : validEdu,
+      certifications: validCerts.isEmpty ? validFallbackCerts : validCerts,
+      extracurriculars: validExtras.isEmpty ? validFallbackExtras : validExtras,
       parserVersion: parsedParserVersion.isNotEmpty ? parsedParserVersion : currentParserVersion,
       fileHash: parsedFileHash.isNotEmpty ? parsedFileHash : fallbackData.fileHash,
     );
 
     final result = _sanitizeAndRepairSectionMapping(rawData, fallbackData: fallbackData);
+    final finalResult = validateAndSanitizeAll(result);
 
-    debugPrint('[PIPELINE STAGE 5: FRONTEND STATE]');
-    debugPrint('Candidate: "${result.fullName}" (${result.email})');
-    debugPrint('Total Projects: ${result.projects.length}');
-    debugPrint('Total Education: ${result.education.length}');
-    debugPrint('Total Experience: ${result.experience.length}');
-    debugPrint('Total Skill Groups: ${result.skillGroups.length}');
+    debugPrint('[PIPELINE] FINAL RESUMEMODEL:');
+    debugPrint('   Candidate: "${finalResult.fullName}" (${finalResult.email})');
+    debugPrint('   skills=${finalResult.skills.length}');
+    debugPrint('   education=${finalResult.education.length}');
+    debugPrint('   experience=${finalResult.experience.length}');
+    debugPrint('   projects=${finalResult.projects.length}');
+    debugPrint('   certifications=${finalResult.certifications.length}');
 
-    return result;
+    return finalResult;
   }
 
   static ResumeData _sanitizeAndRepairSectionMapping(ResumeData raw, {ResumeData? fallbackData}) {
@@ -1391,7 +1584,7 @@ class ResumeData {
 
     for (final skill in raw.skills) {
       final s = skill.trim();
-      if (s.isEmpty) continue;
+      if (s.isEmpty || _isPlaceholderValue(s)) continue;
 
       final isFullSentence = s.length > 70 ||
           RegExp(r'^(engineered|developed|implemented|spearheaded|created|managed|designed|led|built|architected)\b', caseSensitive: false).hasMatch(s) ||
@@ -1412,6 +1605,7 @@ class ResumeData {
     final cleanEdu = List<EducationEntry>.from(raw.education);
     var cleanProj = validateAndSanitizeProjects(raw.projects);
     final cleanExtras = List<ExtracurricularEntry>.from(raw.extracurriculars);
+    final cleanCerts = List<ExtracurricularEntry>.from(raw.certifications);
 
     for (final exp in raw.experience) {
       final comp = exp.company.toLowerCase();
@@ -1419,7 +1613,7 @@ class ResumeData {
 
       final isEdu = comp.contains('university') ||
           comp.contains('college') ||
-          (comp.contains('school') && !comp.contains('3skill')) ||
+          (comp.contains('school') && !comp.contains('skill')) ||
           role.contains('b.tech') ||
           role.contains('bachelor') ||
           role.contains('master') ||
@@ -1453,7 +1647,7 @@ class ResumeData {
     String finalSummary = raw.summary.trim();
 
     final isContaminatedSummary = finalSummary.length > 100 && (
-      RegExp(r'\b(gpa|class xii|class x|cbse|icse|engineered|architected|developed|experience|extra-curricular|extracurricular|institute|university|nitte|st\. karen)\b', caseSensitive: false).hasMatch(finalSummary)
+      RegExp(r'\b(gpa|class xii|class x|cbse|icse|matriculation|engineered|architected|developed|work experience|professional experience|extra-curricular|extracurricular|institute|university|college|b\.tech|bachelor|master)\b', caseSensitive: false).hasMatch(finalSummary)
     );
 
     if (isContaminatedSummary) {
@@ -1507,6 +1701,9 @@ class ResumeData {
       if (cleanExtras.isEmpty && fallbackData.extracurriculars.isNotEmpty) {
         cleanExtras.addAll(fallbackData.extracurriculars);
       }
+      if (cleanCerts.isEmpty && fallbackData.certifications.isNotEmpty) {
+        cleanCerts.addAll(fallbackData.certifications);
+      }
       if (finalSummary.isEmpty && fallbackData.summary.isNotEmpty) {
         finalSummary = fallbackData.summary;
       }
@@ -1519,8 +1716,13 @@ class ResumeData {
       experience: cleanExp,
       education: cleanEdu,
       projects: cleanProj,
+      certifications: cleanCerts,
       extracurriculars: cleanExtras,
     );
+
+    debugPrint('[CERTIFICATIONS] RAW COUNT: ${raw.certifications.length}');
+    debugPrint('[CERTIFICATIONS] FINAL COUNT: ${sanitized.certifications.length}');
+    debugPrint('[Loaded certifications]: ${sanitized.certifications.length}');
 
     debugPrint('[PROJECT EXTRACTION] RAW COUNT: ${raw.projects.length}');
     debugPrint('[PROJECT EXTRACTION] FINAL COUNT: ${sanitized.projects.length}');
@@ -1564,7 +1766,7 @@ class ResumeData {
       final name = p.name.trim();
       if (name.isEmpty) return true;
 
-      if (isKnownSectionHeader(name)) return true;
+      if (isKnownSectionHeader(name) || _isPlaceholderValue(name)) return true;
 
       if (name.toLowerCase() == 'project' ||
           name.toLowerCase() == 'projects' ||
@@ -1574,6 +1776,30 @@ class ResumeData {
       }
 
       if (_isSingleTechnologyKeyword(name)) {
+        return true;
+      }
+
+      final lower = name.toLowerCase();
+      // Single word names that are generic nouns or adjectives or verbs (e.g. Search, AI, Engineering, Digest, AI-powered)
+      if (!name.contains(' ') && !name.contains('|') && !name.contains('-') && (
+        lower == 'search' ||
+        lower == 'ai' ||
+        lower == 'engineering' ||
+        lower == 'digest' ||
+        lower == 'voice' ||
+        lower == 'ai-powered' ||
+        lower == 'developer' ||
+        lower == 'app' ||
+        lower == 'web' ||
+        lower == 'backend' ||
+        lower == 'frontend' ||
+        lower == 'system' ||
+        lower == 'platform' ||
+        lower == 'model' ||
+        lower == 'tool' ||
+        lower == 'api' ||
+        lower == 'application'
+      )) {
         return true;
       }
 
@@ -1649,10 +1875,10 @@ class ResumeData {
 
           for (final f in fragments) {
             final cleanF = f.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-            if (cleanF.isEmpty || isKnownSectionHeader(cleanF)) continue;
+            if (cleanF.isEmpty || isKnownSectionHeader(cleanF) || _isPlaceholderValue(cleanF)) continue;
 
             final isNewBullet = f.startsWith('•') || f.startsWith('◦') || f.startsWith('°') || f.startsWith('▪') || f.startsWith('▫') || f.startsWith('-') || f.startsWith('*') ||
-                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanF);
+                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating|benchmarked|benchmark|generated|analyzed|deployed|automated|configured|trained|evaluated|authored|researched|fine-tuned|tested|orchestrated|established|delivered|directed)\b', caseSensitive: false).hasMatch(cleanF);
 
             if (isNewBullet || updatedBullets.isEmpty) {
               if (!updatedBullets.contains(cleanF)) {
@@ -1752,7 +1978,7 @@ class ResumeData {
         return true;
       }
 
-      if (isKnownSectionHeader(role) || isKnownSectionHeader(comp)) {
+      if (isKnownSectionHeader(role) || isKnownSectionHeader(comp) || _isPlaceholderValue(role) || _isPlaceholderValue(comp)) {
         return true;
       }
 
@@ -1802,10 +2028,10 @@ class ResumeData {
 
           for (final f in fragments) {
             final cleanF = f.replaceFirst(RegExp(r'^(?:[•◦°▪▫●○◆◇►▶▸⁃∙\-\*–—>]|\d+[\.\)\-]\s*|\(\d+\)\s*)\s*'), '').trim();
-            if (cleanF.isEmpty || isKnownSectionHeader(cleanF)) continue;
+            if (cleanF.isEmpty || isKnownSectionHeader(cleanF) || _isPlaceholderValue(cleanF)) continue;
 
             final isNewBullet = f.startsWith('•') || f.startsWith('◦') || f.startsWith('°') || f.startsWith('▪') || f.startsWith('▫') || f.startsWith('-') || f.startsWith('*') ||
-                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed)\b', caseSensitive: false).hasMatch(cleanF);
+                RegExp(r'^(engineered|architected|developed|implemented|spearheaded|created|built|designed|integrated|collaborated|applied|optimized|maintained|utilized|led|managed|focusing|reducing|demonstrating|benchmarked|benchmark|generated|analyzed|deployed|automated|configured|trained|evaluated|authored|researched|fine-tuned|tested|orchestrated|established|delivered|directed)\b', caseSensitive: false).hasMatch(cleanF);
 
             if (isNewBullet || updatedBullets.isEmpty) {
               if (!updatedBullets.contains(cleanF)) {
@@ -1825,7 +2051,9 @@ class ResumeData {
             }
           }
 
-          cleanExp.add(last.copyWith(description: updatedBullets));
+          cleanExp.add(last.copyWith(
+            description: updatedBullets,
+          ));
         }
         continue;
       }
@@ -1924,17 +2152,75 @@ class ResumeData {
     return true;
   }
 
+  static bool _isStopWordOrPreposition(String text) {
+    final s = text.trim().toLowerCase();
+    if (s.isEmpty) return true;
+    return const {
+      'in', 'with', 'a', 'an', 'the', 'to', 'for', 'of', 'from',
+      'by', 'at', 'on', 'and', 'or', 'as', 'is', 'are', 'was', 'were',
+      'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did',
+      'but', 'if', 'then', 'else', 'when', 'where', 'why', 'how', 'all',
+      'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such',
+      'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very',
+      'can', 'will', 'just', 'should', 'now', '&', '-', '•', '|', '~', '_',
+      ':', ';', ',', '.', '(', ')', '[', ']', '{', '}',
+    }.contains(s);
+  }
+
   static bool validateEducation(EducationEntry e) {
-    if (e.institution.trim().isEmpty && e.degree.trim().isEmpty) return false;
-    if (isKnownSectionHeader(e.institution) || isKnownSectionHeader(e.degree)) return false;
-    if (_isPlaceholderValue(e.institution) && _isPlaceholderValue(e.degree)) return false;
+    final inst = e.institution.trim();
+    final deg = e.degree.trim();
+    if (inst.isEmpty && deg.isEmpty) return false;
+    if (_isStopWordOrPreposition(inst) && deg.isEmpty) return false;
+    if (_isStopWordOrPreposition(deg) && inst.isEmpty) return false;
+    if (_isStopWordOrPreposition(inst) && _isStopWordOrPreposition(deg)) return false;
+    if (isKnownSectionHeader(inst) || isKnownSectionHeader(deg)) return false;
+    if (_isPlaceholderValue(inst) && _isPlaceholderValue(deg)) return false;
+    if (inst.length < 3 && deg.length < 3) return false;
     return true;
   }
 
   static bool validateExperience(ExperienceEntry e) {
-    if (e.company.trim().isEmpty && e.role.trim().isEmpty) return false;
-    if (isKnownSectionHeader(e.company) || isKnownSectionHeader(e.role)) return false;
-    if (_isPlaceholderValue(e.company) && _isPlaceholderValue(e.role)) return false;
+    final comp = e.company.trim();
+    final role = e.role.trim();
+    if (comp.isEmpty && role.isEmpty) return false;
+    if (_isStopWordOrPreposition(comp) && role.isEmpty) return false;
+    if (_isStopWordOrPreposition(role) && comp.isEmpty) return false;
+    if (_isStopWordOrPreposition(comp) && _isStopWordOrPreposition(role)) return false;
+    if (isKnownSectionHeader(comp) || isKnownSectionHeader(role)) return false;
+    if (_isPlaceholderValue(comp) && _isPlaceholderValue(role)) return false;
+    if (comp.length < 2 && role.length < 2) return false;
+    if (RegExp(r'^(collaborated|worked|engineered|developed|built|managed|led|spearheaded|researched)\b', caseSensitive: false).hasMatch(comp) && role.isEmpty) return false;
+    return true;
+  }
+
+  static bool validateCertification(ExtracurricularEntry c) {
+    final act = c.activity.trim();
+    if (act.isEmpty || _isStopWordOrPreposition(act) || _isPlaceholderValue(act)) return false;
+    if (isKnownSectionHeader(act)) return false;
+    if (act.length < 3) return false;
+    // Reject sentence-length action verb bullet points as certification titles
+    if (act.length > 80 ||
+        (act.contains(' ') &&
+            act.split(' ').length > 8 &&
+            RegExp(r'^(collaborated|worked|engineered|developed|built|managed|led|spearheaded|researched)\b',
+                    caseSensitive: false)
+                .hasMatch(act))) {
+      return false;
+    }
+    return true;
+  }
+
+  static bool validateExtracurricular(ExtracurricularEntry e) {
+    final act = e.activity.trim();
+    if (act.isEmpty || _isStopWordOrPreposition(act) || _isPlaceholderValue(act)) return false;
+    if (isKnownSectionHeader(act)) return false;
+    if (act.length < 3) return false;
+    if (RegExp(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}$', caseSensitive: false).hasMatch(act)) return false;
+    if (RegExp(r'^\d{4}\s*[\–\-—\to]\s*(\d{4}|Present)$', caseSensitive: false).hasMatch(act)) return false;
+    if (RegExp(r'^(collaborated|worked|engineered|developed|built|managed|led|spearheaded|researched)\b', caseSensitive: false).hasMatch(act) && (act.length > 50 || act.split(' ').length > 6)) {
+      return false;
+    }
     return true;
   }
 
@@ -1947,19 +2233,28 @@ class ResumeData {
     final validProjects = validateAndSanitizeProjects(data.projects);
     final validEducation = data.education.where(validateEducation).toList();
     final validExperience = validateAndSanitizeExperience(data.experience);
+    final validCertifications = data.certifications.where(validateCertification).toList();
+    final validExtracurriculars = data.extracurriculars.where(validateExtracurricular).toList();
     final validSkillGroups = data.skillGroups.where(validateSkillGroup).toList();
+    final validSkills = data.skills
+        .where((s) => s.trim().isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s))
+        .toList();
 
-    debugPrint('[PIPELINE STAGE 4: NORMALIZED RECORDS]');
-    debugPrint('   - Projects (${validProjects.length}): ${validProjects.map((p) => p.name).toList()}');
-    debugPrint('   - Education (${validEducation.length}): ${validEducation.map((e) => e.degree.isNotEmpty ? e.degree : e.institution).toList()}');
-    debugPrint('   - Experience (${validExperience.length}): ${validExperience.map((e) => "${e.company} (${e.role})").toList()}');
-    debugPrint('   - Skill Groups (${validSkillGroups.length}): ${validSkillGroups.map((g) => g.category).toList()}');
+    debugPrint('[PIPELINE] NORMALIZATION:');
+    debugPrint('   skills=${validSkills.length}');
+    debugPrint('   education=${validEducation.length}');
+    debugPrint('   experience=${validExperience.length}');
+    debugPrint('   projects=${validProjects.length}');
+    debugPrint('   certifications=${validCertifications.length}');
 
     return data.copyWith(
       projects: validProjects,
       education: validEducation,
       experience: validExperience,
+      certifications: validCertifications,
+      extracurriculars: validExtracurriculars,
       skillGroups: validSkillGroups,
+      skills: validSkills,
     );
   }
 
@@ -2105,22 +2400,45 @@ class ResumeData {
       'licenses',
       'courses',
       'credentials',
+      'accreditations',
+      'training',
     ];
 
     void checkSourceMap(Map<String, dynamic> src) {
-      final val = _getNormalized(src, possibleKeys);
-      if (val != null) {
-        if (val is List) {
-          for (final item in val) {
-            final entry = ExtracurricularEntry.fromJson(item);
-            if (entry.activity.isNotEmpty || entry.role.isNotEmpty || entry.organization.isNotEmpty || entry.description.isNotEmpty) {
-              results.add(entry);
+      for (final key in possibleKeys) {
+        final val = _getNormalized(src, [key]);
+        if (val != null) {
+          if (val is List) {
+            for (final item in val) {
+              final entry = ExtracurricularEntry.fromJson(item);
+              if (validateCertification(entry)) {
+                if (!results.any((r) => r.activity == entry.activity && r.organization == entry.organization)) {
+                  results.add(entry);
+                }
+              }
             }
-          }
-        } else if (val is String && val.trim().isNotEmpty) {
-          final lines = val.split(RegExp(r'[\n;]')).map((e) => e.trim()).where((s) => s.isNotEmpty);
-          for (final line in lines) {
-            results.add(ExtracurricularEntry(activity: line));
+          } else if (val is String && val.trim().isNotEmpty && !_isPlaceholderValue(val.trim())) {
+            final lines = val.split(RegExp(r'[\n;]')).map((e) => e.trim()).where((s) => s.isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s));
+            for (final line in lines) {
+              if (line.contains('|')) {
+                final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s)).toList();
+                if (parts.isNotEmpty) {
+                  final entry = ExtracurricularEntry(
+                    activity: parts[0],
+                    organization: parts.length > 1 ? parts[1] : '',
+                    description: parts.length > 2 ? parts.sublist(2).join(' • ') : '',
+                  );
+                  if (validateCertification(entry)) {
+                    results.add(entry);
+                  }
+                  continue;
+                }
+              }
+              final entry = ExtracurricularEntry(activity: line);
+              if (validateCertification(entry) && !results.any((r) => r.activity == line)) {
+                results.add(entry);
+              }
+            }
           }
         }
       }
@@ -2147,14 +2465,13 @@ class ResumeData {
       'achievements',
       'awards',
       'volunteering',
+      'volunteer',
       'community',
-      'certifications',
-      'certificates',
-      'certification',
-      'certificate',
-      'licenses',
-      'courses',
-      'credentials',
+      'leadership',
+      'involvement',
+      'honors',
+      'publications',
+      'responsibilities',
     ];
 
     void checkSourceMap(Map<String, dynamic> src) {
@@ -2164,17 +2481,32 @@ class ResumeData {
           if (val is List) {
             for (final item in val) {
               final entry = ExtracurricularEntry.fromJson(item);
-              if (entry.activity.isNotEmpty || entry.role.isNotEmpty || entry.organization.isNotEmpty || entry.description.isNotEmpty) {
+              if (validateExtracurricular(entry)) {
                 if (!results.any((r) => r.activity == entry.activity && r.organization == entry.organization)) {
                   results.add(entry);
                 }
               }
             }
-          } else if (val is String && val.trim().isNotEmpty) {
-            final lines = val.split(RegExp(r'[\n;]')).map((e) => e.trim()).where((s) => s.isNotEmpty);
+          } else if (val is String && val.trim().isNotEmpty && !_isPlaceholderValue(val.trim())) {
+            final lines = val.split(RegExp(r'[\n;]')).map((e) => e.trim()).where((s) => s.isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s));
             for (final line in lines) {
-              if (!results.any((r) => r.activity == line)) {
-                results.add(ExtracurricularEntry(activity: line));
+              if (line.contains('|')) {
+                final parts = line.split('|').map((s) => s.trim()).where((s) => s.isNotEmpty && !_isPlaceholderValue(s) && !_isStopWordOrPreposition(s)).toList();
+                if (parts.isNotEmpty) {
+                  final entry = ExtracurricularEntry(
+                    activity: parts[0],
+                    organization: parts.length > 1 ? parts[1] : '',
+                    description: parts.length > 2 ? parts.sublist(2).join(' • ') : '',
+                  );
+                  if (validateExtracurricular(entry)) {
+                    results.add(entry);
+                  }
+                  continue;
+                }
+              }
+              final entry = ExtracurricularEntry(activity: line);
+              if (validateExtracurricular(entry) && !results.any((r) => r.activity == line)) {
+                results.add(entry);
               }
             }
           }
@@ -2695,7 +3027,29 @@ class ExtracurricularEntry {
 
   factory ExtracurricularEntry.fromJson(dynamic json) {
     if (json is String) {
-      return ExtracurricularEntry(activity: json.trim());
+      final s = json.trim();
+      if (s.contains('|')) {
+        final parts = s.split('|').map((p) => p.trim()).where((p) => p.isNotEmpty && !ResumeData._isPlaceholderValue(p)).toList();
+        if (parts.isNotEmpty) {
+          return ExtracurricularEntry(
+            activity: parts[0],
+            organization: parts.length > 1 ? parts[1] : '',
+            description: parts.length > 2 ? parts.sublist(2).join(' • ') : '',
+          );
+        }
+      }
+      if (s.contains(' – ') || s.contains(' — ') || s.contains(' - ')) {
+        final sep = s.contains(' – ') ? ' – ' : (s.contains(' — ') ? ' — ' : ' - ');
+        final parts = s.split(sep).map((p) => p.trim()).where((p) => p.isNotEmpty && !ResumeData._isPlaceholderValue(p)).toList();
+        if (parts.length >= 2) {
+          return ExtracurricularEntry(
+            activity: parts[0],
+            organization: parts[1],
+            description: parts.length > 2 ? parts.sublist(2).join(' • ') : '',
+          );
+        }
+      }
+      return ExtracurricularEntry(activity: s);
     }
     if (json is Map) {
       final map = Map<String, dynamic>.from(json);
@@ -2716,6 +3070,20 @@ class ExtracurricularEntry {
       );
     }
     return const ExtracurricularEntry();
+  }
+
+  ExtracurricularEntry copyWith({
+    String? activity,
+    String? role,
+    String? organization,
+    String? description,
+  }) {
+    return ExtracurricularEntry(
+      activity: activity ?? this.activity,
+      role: role ?? this.role,
+      organization: organization ?? this.organization,
+      description: description ?? this.description,
+    );
   }
 
   Map<String, dynamic> toJson() => {
@@ -2790,6 +3158,104 @@ class AtsResult {
           ResumeData._parseStringList(json['recommendations']),
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Job Keywords & ATS Match Analysis Result
+// ---------------------------------------------------------------------------
+
+class JobKeywordsAnalysisResult {
+  final double atsScore;
+  final double matchScore;
+  final String summary;
+  final Map<String, int> categoryScores;
+  final List<String> extractedJobKeywords;
+  final List<String> matchedKeywords;
+  final List<String> partiallyMatchedKeywords;
+  final List<String> missingKeywords;
+  final List<String> strengths;
+  final List<String> gaps;
+
+  const JobKeywordsAnalysisResult({
+    this.atsScore = 0.0,
+    this.matchScore = 0.0,
+    this.summary = '',
+    this.categoryScores = const {
+      'keywordSkillMatch': 0,
+      'experienceMatch': 0,
+      'projectMatch': 0,
+      'responsibilityMatch': 0,
+      'educationMatch': 0,
+      'overallRelevance': 0,
+    },
+    this.extractedJobKeywords = const [],
+    this.matchedKeywords = const [],
+    this.partiallyMatchedKeywords = const [],
+    this.missingKeywords = const [],
+    this.strengths = const [],
+    this.gaps = const [],
+  });
+
+  factory JobKeywordsAnalysisResult.fromJson(Map<String, dynamic> json) {
+    final catScoresMap = json['categoryScores'] is Map
+        ? Map<String, dynamic>.from(json['categoryScores'] as Map)
+        : <String, dynamic>{};
+
+    final keywordSkill = ((catScoresMap['keywordSkillMatch'] as num?)?.toInt() ?? 0).clamp(0, 30);
+    final experience = ((catScoresMap['experienceMatch'] as num?)?.toInt() ?? 0).clamp(0, 20);
+    final project = ((catScoresMap['projectMatch'] as num?)?.toInt() ?? 0).clamp(0, 15);
+    final responsibility = ((catScoresMap['responsibilityMatch'] as num?)?.toInt() ?? 0).clamp(0, 15);
+    final education = ((catScoresMap['educationMatch'] as num?)?.toInt() ?? 0).clamp(0, 10);
+    final relevance = ((catScoresMap['overallRelevance'] as num?)?.toInt() ?? 0).clamp(0, 10);
+
+    final calculatedSum = keywordSkill + experience + project + responsibility + education + relevance;
+
+    final rawScore = (json['atsScore'] as num?)?.toDouble();
+    final validatedAtsScore = rawScore != null
+        ? rawScore.clamp(0.0, 100.0)
+        : calculatedSum.toDouble().clamp(0.0, 100.0);
+
+    final finalAtsScore = calculatedSum > 0 ? (validatedAtsScore > 0 ? validatedAtsScore : calculatedSum.toDouble()) : 0.0;
+
+    final matched = ResumeData._parseStringList(json['matchedKeywords']);
+    final partial = ResumeData._parseStringList(json['partiallyMatchedKeywords']);
+    final missing = ResumeData._parseStringList(json['missingKeywords']);
+
+    final allExtracted = <String>[...matched, ...partial, ...missing];
+
+    return JobKeywordsAnalysisResult(
+      atsScore: finalAtsScore,
+      matchScore: finalAtsScore,
+      summary: json['summary'] as String? ?? '',
+      categoryScores: {
+        'keywordSkillMatch': keywordSkill,
+        'experienceMatch': experience,
+        'projectMatch': project,
+        'responsibilityMatch': responsibility,
+        'educationMatch': education,
+        'overallRelevance': relevance,
+      },
+      extractedJobKeywords: allExtracted,
+      matchedKeywords: matched,
+      partiallyMatchedKeywords: partial,
+      missingKeywords: missing,
+      strengths: ResumeData._parseStringList(json['strengths']),
+      gaps: ResumeData._parseStringList(json['gaps']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'atsScore': atsScore,
+        'matchScore': matchScore,
+        'summary': summary,
+        'categoryScores': categoryScores,
+        'extractedJobKeywords': extractedJobKeywords,
+        'matchedKeywords': matchedKeywords,
+        'partiallyMatchedKeywords': partiallyMatchedKeywords,
+        'missingKeywords': missingKeywords,
+        'strengths': strengths,
+        'gaps': gaps,
+      };
 }
 
 // ---------------------------------------------------------------------------

@@ -23,11 +23,13 @@ class EducationCard extends StatelessWidget {
   });
 
   String _formatDates(EducationEntry edu) {
-    if (edu.startDate.isEmpty && edu.endDate.isEmpty) return '';
-    if (edu.startDate.isNotEmpty && edu.endDate.isNotEmpty) {
-      return '${edu.startDate} - ${edu.endDate}';
+    final start = edu.startDate.replaceAll(RegExp(r'[\s\-–—]+$'), '').trim();
+    final end = edu.endDate.replaceAll(RegExp(r'^[\s\-–—]+'), '').trim();
+    if (start.isEmpty && end.isEmpty) return '';
+    if (start.isNotEmpty && end.isNotEmpty) {
+      return '$start - $end';
     }
-    return edu.startDate.isNotEmpty ? edu.startDate : edu.endDate;
+    return start.isNotEmpty ? start : end;
   }
 
   @override

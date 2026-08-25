@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../theme/app_theme.dart';
-import '../services/ai_usage_service.dart';
+import '../services/resume_limit_service.dart';
 
 class QuotaUsageCard extends StatefulWidget {
   final VoidCallback? onOpenAdminDashboard;
@@ -30,7 +30,7 @@ class _QuotaUsageCardState extends State<QuotaUsageCard> {
   Future<void> _loadQuotaInfo() async {
     setState(() => _isLoading = true);
     try {
-      final usage = await AIUsageService.instance.getUserResumeUsage();
+      final usage = await ResumeLimitService.instance.getUserResumeUsage();
 
       if (mounted) {
         setState(() {
