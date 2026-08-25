@@ -17,9 +17,6 @@ JobWink is an elegant, AI-powered resume builder, ATS analyzer, and job-matching
 
 ## 📸 Demo
 
-Add a short demo GIF or screenshot here to showcase the tailoring flow:
-
-![](assets/demo.gif)
 
 
 ## 📚 Table of Contents
@@ -164,4 +161,4 @@ This project is open source — add your preferred license or keep it as-is.
 
 ---
 
-Made with ❤️ by the JobWink team.
+
