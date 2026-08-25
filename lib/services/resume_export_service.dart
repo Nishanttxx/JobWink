@@ -190,6 +190,16 @@ class ResumeExportService {
   pw.Font? _unicodeBoldItalicFont;
   pw.ThemeData? _cachedFontTheme;
 
+  /// Memory cache for generated PDF bytes keyed by resume content hash & options
+  String? _cachedPdfKey;
+  Uint8List? _cachedPdfBytes;
+
+  /// Invalidates the in-memory PDF cache when resume data is modified
+  void invalidatePdfCache() {
+    _cachedPdfKey = null;
+    _cachedPdfBytes = null;
+  }
+
   /// Loads embedded Unicode-capable TTF fonts (Tinos) to support full Unicode character sets (currencies, accents, arrows, quotes, symbols).
   Future<pw.ThemeData> getFontThemeAsync() async {
     if (_cachedFontTheme != null) return _cachedFontTheme!;
@@ -474,29 +484,33 @@ class ResumeExportService {
       contentHeight += h;
     }
 
-    // Check page count by building test document
-    final pdf = pw.Document(theme: font);
-    pdf.addPage(pw.MultiPage(
-      pageFormat: PdfPageFormat(
-        cfg.pageWidth,
-        cfg.pageHeight,
-        marginTop: cfg.marginTop,
-        marginBottom: cfg.marginBottom,
-        marginLeft: cfg.marginLeft,
-        marginRight: cfg.marginRight,
-      ),
-      margin: pw.EdgeInsets.only(
-        top: cfg.marginTop,
-        bottom: cfg.marginBottom,
-        left: cfg.marginLeft,
-        right: cfg.marginRight,
-      ),
-      build: (pw.Context ctx) => _buildResumeContent(resume, cfg),
-    ));
+    // Check page count by building test document only if content is near or above threshold
+    int pageCount = 1;
+    final overflow = contentHeight > usableHeight;
+    if (contentHeight > usableHeight * 0.92) {
+      final pdf = pw.Document(theme: font);
+      pdf.addPage(pw.MultiPage(
+        pageFormat: PdfPageFormat(
+          cfg.pageWidth,
+          cfg.pageHeight,
+          marginTop: cfg.marginTop,
+          marginBottom: cfg.marginBottom,
+          marginLeft: cfg.marginLeft,
+          marginRight: cfg.marginRight,
+        ),
+        margin: pw.EdgeInsets.only(
+          top: cfg.marginTop,
+          bottom: cfg.marginBottom,
+          left: cfg.marginLeft,
+          right: cfg.marginRight,
+        ),
+        build: (pw.Context ctx) => _buildResumeContent(resume, cfg),
+      ));
+      pageCount = pdf.document.pdfPageList.pages.length;
+    }
 
-    final pageCount = pdf.document.pdfPageList.pages.length;
-    final overflow = pageCount > 1 || contentHeight > usableHeight;
-    final remainingHeight = overflow ? 0.0 : (usableHeight - contentHeight);
+    final isPageOverflow = pageCount > 1 || overflow;
+    final remainingHeight = isPageOverflow ? 0.0 : (usableHeight - contentHeight);
     final utilizationPercentage = (contentHeight / usableHeight) * 100;
 
     return ResumeLayoutMeasurement(
@@ -505,7 +519,7 @@ class ResumeExportService {
       usableHeight: usableHeight,
       contentHeight: contentHeight,
       remainingHeight: remainingHeight,
-      overflow: overflow,
+      overflow: isPageOverflow,
       utilizationPercentage: utilizationPercentage.clamp(0.0, 100.0),
       sectionHeights: sectionHeights,
       pageCount: pageCount,
@@ -520,7 +534,7 @@ class ResumeExportService {
   }) {
     final theme = fontTheme ?? getFontTheme();
     PdfTemplateConfig cfg = baseConfig;
-    const maxIterations = 35;
+    const maxIterations = 8;
 
     for (int iter = 0; iter < maxIterations; iter++) {
       final m = measureResumeLayout(resume, cfg, fontTheme: theme);
@@ -528,17 +542,18 @@ class ResumeExportService {
       debugPrint('[ResumeExportService] Layout iteration ${iter + 1}: Page count: ${m.pageCount}, Height utilization: ${m.utilizationPercentage.toStringAsFixed(1)}%');
 
       if (m.overflow || m.pageCount > 1) {
-        // CASE 1 — CONTENT IS TOO LARGE: Gradually reduce spacing and font sizes
+        // CASE 1 — CONTENT IS TOO LARGE: Scale down spacing and font sizes
         final compressed = _stepCompressConfig(cfg);
         if (compressed == cfg) {
-          final forced = _proportionalCompressConfig(cfg, scale: 0.94);
+          final scale = (m.usableHeight / (m.contentHeight > 0 ? m.contentHeight : m.usableHeight * 1.1)).clamp(0.88, 0.96);
+          final forced = _proportionalCompressConfig(cfg, scale: scale);
           if (forced == cfg) break;
           cfg = forced;
         } else {
           cfg = compressed;
         }
-      } else if (m.remainingHeight > 30.0 && m.utilizationPercentage < 95.0) {
-        // CASE 2 — TOO MUCH EMPTY SPACE: Gradually increase font sizes and spacing
+      } else if (m.remainingHeight > 30.0 && m.utilizationPercentage < 94.0) {
+        // CASE 2 — TOO MUCH EMPTY SPACE: Scale up font sizes and spacing
         final expanded = _stepExpandConfig(cfg);
         if (expanded == cfg) break;
         final testM = measureResumeLayout(resume, expanded, fontTheme: theme);
@@ -548,7 +563,7 @@ class ResumeExportService {
         }
         cfg = expanded;
       } else {
-        // Target achieved: ~95% - 99.5% page utilization
+        // Target achieved: ~94% - 99.5% page utilization
         debugPrint('[ResumeExportService] Optimized in ${iter + 1} iterations: utilization=${m.utilizationPercentage.toStringAsFixed(1)}%, remaining=${m.remainingHeight.toStringAsFixed(1)}pt');
         break;
       }
@@ -1382,13 +1397,52 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     return pdf;
   }
 
+  String _computeResumeContentHash(ResumeData resume, ResumeType selectedResumeType, List<String> highlightKeywords) {
+    final sb = StringBuffer();
+    sb.write(resume.fullName);
+    sb.write(resume.title);
+    sb.write(resume.email);
+    sb.write(resume.phone);
+    sb.write(resume.location);
+    sb.write(resume.linkedin);
+    sb.write(resume.github);
+    sb.write(resume.summary);
+    sb.write(resume.skills.join(','));
+    for (final e in resume.experience) {
+      sb.write('${e.company}:${e.role}:${e.startDate}:${e.endDate}:${e.description.join(";")}');
+    }
+    for (final p in resume.projects) {
+      sb.write('${p.name}:${p.technologies.join(",")}:${p.descriptionBullets.join(";")}');
+    }
+    for (final ed in resume.education) {
+      sb.write('${ed.institution}:${ed.degree}:${ed.fieldOfStudy}:${ed.startDate}:${ed.endDate}');
+    }
+    for (final ex in resume.extracurriculars) {
+      sb.write('${ex.activity}:${ex.organization}:${ex.role}:${ex.description}');
+    }
+    sb.write(selectedResumeType.name);
+    sb.write(highlightKeywords.join(','));
+    return sb.toString();
+  }
+
   /// Generate a single-page PDF with adaptive bi-directional fitting engine.
   Future<Uint8List> generateAtsPdf(
     ResumeData resume, {
-    ResumeType selectedResumeType = ResumeType.experience,
+    ResumeType selectedResumeType = ResumeType.fresher,
     Uint8List? originalPdfBytes,
     List<String> highlightKeywords = const [],
   }) async {
+    final validation = selectedResumeType.validateCriteria(resume);
+    if (!validation.isValid) {
+      throw StateError(validation.fullMessage);
+    }
+
+    final cacheKey = _computeResumeContentHash(resume, selectedResumeType, highlightKeywords);
+    if (_cachedPdfKey == cacheKey && _cachedPdfBytes != null && _cachedPdfBytes!.isNotEmpty) {
+      debugPrint('[ResumeExportService] Reusing cached PDF bytes for current resume state');
+      return _cachedPdfBytes!;
+    }
+
     final fontTheme = await getFontThemeAsync();
     final sourcePdf = originalPdfBytes ?? _originalPdfBytes;
 
@@ -1422,7 +1476,10 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     }
 
     debugPrint('[ResumeExportService] Final PDF exported: ${pdf.document.pdfPageList.pages.length} page(s), bodyFontSize=${cfg.bodyFontSize.toStringAsFixed(1)}pt');
-    return await pdf.save();
+    final bytes = await pdf.save();
+    _cachedPdfKey = cacheKey;
+    _cachedPdfBytes = bytes;
+    return bytes;
   }
 
   /// Returns the exact candidate filename: "{Candidate Name}.pdf"

@@ -116,6 +116,7 @@ class _LandingPageState extends State<LandingPage> {
   final ValueNotifier<Offset?> _mousePositionNotifier =
       ValueNotifier<Offset?>(null);
   StreamSubscription<AuthState>? _authSub;
+  bool _navigatedToDashboard = false;
 
   // Global Keys for smooth section scrolling
   final GlobalKey _heroKey = GlobalKey();
@@ -128,12 +129,30 @@ class _LandingPageState extends State<LandingPage> {
   @override
   void initState() {
     super.initState();
+    // Check if session is already established on startup
+    final currentSession = SupabaseService.instance.currentSession;
+    if (currentSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_navigatedToDashboard) {
+          _navigatedToDashboard = true;
+          DemoService.instance.exitDemoMode();
+          debugPrint('[AUTH] Redirecting to dashboard');
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      });
+    }
+
     _authSub = SupabaseService.instance.onAuthStateChange.listen((data) {
       if (mounted &&
           data.session != null &&
-          data.event == AuthChangeEvent.signedIn) {
-        DemoService.instance.exitDemoMode();
-        Navigator.pushNamed(context, '/dashboard');
+          (data.event == AuthChangeEvent.signedIn ||
+           data.event == AuthChangeEvent.initialSession)) {
+        if (!_navigatedToDashboard) {
+          _navigatedToDashboard = true;
+          DemoService.instance.exitDemoMode();
+          debugPrint('[AUTH] Redirecting to dashboard');
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
       }
     });
   }
@@ -265,6 +284,7 @@ class _LandingPageState extends State<LandingPage> {
                                       Supabase.instance.client.auth
                                               .currentUser ==
                                           null) {
+                                    debugPrint('[AUTH] Demo mode enabled');
                                     DemoService.instance.enterDemoMode();
                                   }
                                   Navigator.pushNamed(context, '/dashboard');

@@ -11,7 +11,7 @@ class JobAlignmentCard extends StatelessWidget {
   final double jobMatchScore;
   final ResumeType selectedResumeType;
   final ValueChanged<ResumeType>? onSelectResumeType;
-  final VoidCallback? onPreviewResume;
+  final ResumeFocusCriteriaResult? criteriaValidation;
   final VoidCallback? onChanged;
   final List<String> matchedKeywords;
   final List<String> missingKeywords;
@@ -24,7 +24,7 @@ class JobAlignmentCard extends StatelessWidget {
     required this.jobMatchScore,
     this.selectedResumeType = ResumeType.experience,
     this.onSelectResumeType,
-    this.onPreviewResume,
+    this.criteriaValidation,
     this.onChanged,
     this.matchedKeywords = const [],
     this.missingKeywords = const [],
@@ -258,6 +258,17 @@ class JobAlignmentCard extends StatelessWidget {
                                     color: AppTheme.getMutedTextColor(context),
                                   ),
                                 ),
+                                const SizedBox(height: 3),
+                                Text(
+                                  type.criteriaSummary,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? AppTheme.primaryOrange
+                                        : (isDarkMode ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
@@ -271,107 +282,53 @@ class JobAlignmentCard extends StatelessWidget {
               );
             },
           ),
-          const SizedBox(height: 16),
-
-          // Alignment Analysis Section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Alignment Analysis',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.getTextColor(context),
+          if (criteriaValidation != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: criteriaValidation!.isValid
+                    ? const Color(0xFF10B981).withValues(alpha: 0.10)
+                    : const Color(0xFFEF4444).withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: criteriaValidation!.isValid
+                      ? const Color(0xFF10B981).withValues(alpha: 0.35)
+                      : const Color(0xFFEF4444).withValues(alpha: 0.35),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: isAnalyzingKeywords
-                      ? Colors.blue.withValues(alpha: 0.12)
-                      : AppTheme.primaryOrange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: isAnalyzingKeywords
-                        ? Colors.blue.withValues(alpha: 0.3)
-                        : AppTheme.primaryOrange.withValues(alpha: 0.3),
+              child: Row(
+                children: [
+                  Icon(
+                    criteriaValidation!.isValid
+                        ? Icons.check_circle_outline_rounded
+                        : Icons.error_outline_rounded,
+                    color: criteriaValidation!.isValid
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFFEF4444),
+                    size: 18,
                   ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isAnalyzingKeywords) ...[
-                      const SizedBox(
-                        width: 10,
-                        height: 10,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 1.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
-                        ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      criteriaValidation!.isValid
+                          ? 'Focus criteria satisfied (${criteriaValidation!.experienceCount} Experiences, ${criteriaValidation!.projectCount} Projects)'
+                          : criteriaValidation!.fullMessage,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: criteriaValidation!.isValid
+                            ? (isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669))
+                            : const Color(0xFFEF4444),
                       ),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Analyzing Job Keywords...',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ] else ...[
-                      const Icon(Icons.stars_rounded, size: 12, color: AppTheme.primaryOrange),
-                      const SizedBox(width: 4),
-                      Text(
-                        'AI-Powered Recommendation Applied',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.primaryOrange,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 14),
-
-          // Target Match Progress Bar Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Target Match & ATS Score',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.getTextColor(context),
-                ),
-              ),
-              Text(
-                '${jobMatchScore.toInt()}%',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.primaryOrange,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: LinearProgressIndicator(
-              value: (jobMatchScore / 100).clamp(0.0, 1.0),
-              minHeight: 8,
-              backgroundColor: isDarkMode ? const Color(0xFF21262D) : const Color(0xFFE2E8F0),
-              valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryOrange),
             ),
-          ),
+          ],
           if (matchedKeywords.isNotEmpty || missingKeywords.isNotEmpty) ...[
-            const SizedBox(height: 14),
+            const SizedBox(height: 16),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -437,33 +394,6 @@ class JobAlignmentCard extends StatelessWidget {
                   ),
                 )),
               ],
-            ),
-          ],
-          const SizedBox(height: 18),
-
-          // Preview Action Button
-          if (onPreviewResume != null) ...[
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onPreviewResume,
-                icon: const Icon(Icons.visibility_rounded, size: 16, color: AppTheme.primaryOrange),
-                label: Text(
-                  'Preview Resume',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: AppTheme.primaryOrange,
-                  ),
-                ),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: AppTheme.primaryOrange, width: 1.5),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              ),
             ),
           ],
         ],

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../providers/auth_provider.dart';
-import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 
 class AuthModal extends StatefulWidget {
@@ -90,11 +89,14 @@ class _AuthModalState extends State<AuthModal> {
 
       if (success) {
         Navigator.of(context).pop();
-        widget.onSuccess?.call();
-        if (auth.isEmailVerificationPending) {
-          Navigator.pushNamed(context, '/verify-email');
+        if (widget.onSuccess != null) {
+          widget.onSuccess!();
         } else {
-          Navigator.pushNamed(context, '/dashboard');
+          if (auth.isEmailVerificationPending) {
+            Navigator.pushNamed(context, '/verify-email');
+          } else {
+            Navigator.pushNamed(context, '/dashboard');
+          }
         }
       } else {
         setState(() => _errorMessage = auth.errorMessage);
@@ -117,19 +119,19 @@ class _AuthModalState extends State<AuthModal> {
 
     try {
       final auth = AuthProviderScope.read(context);
-      final success = provider == OAuthProvider.google
-          ? await auth.signInWithGoogle()
-          : await SupabaseService.instance.signInWithOAuth(provider);
+      final success = await auth.signInWithOAuth(provider);
+      // OAuth flow has launched in browser; close the modal.
+      // Dashboard will ONLY open after the auth callback completes and session is verified.
       if (success && mounted) {
         Navigator.of(context).pop();
-        widget.onSuccess?.call();
-        Navigator.pushNamed(context, '/dashboard');
       }
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() =>
-          _errorMessage = 'Failed to connect to ${provider.name}.');
+      if (mounted) {
+        setState(() =>
+            _errorMessage = 'Failed to connect to ${provider.name}.');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

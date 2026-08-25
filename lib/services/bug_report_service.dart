@@ -7,6 +7,8 @@ import '../config/backend_config.dart';
 import 'supabase_service.dart';
 
 class BugReportData {
+  final String? userId;
+  final String? userName;
   final String userEmail;
   final String title;
   final String description;
@@ -19,6 +21,8 @@ class BugReportData {
   final String? screenshotFileName;
 
   BugReportData({
+    this.userId,
+    this.userName,
     required this.userEmail,
     required this.title,
     required this.description,
@@ -132,22 +136,40 @@ class BugReportService {
     }
   }
 
-  /// Submits the bug report to Supabase DB / Backend.
+  /// Submits the bug report to Supabase DB / Backend and triggers admin email.
   Future<Map<String, dynamic>> submitBugReport(BugReportData data) async {
+    debugPrint('[BUG-EMAIL] submit started');
+
     // 1. Client-Side Input Validation
     final email = data.userEmail.trim().toLowerCase();
-    if (email.isEmpty || !email.contains('@')) {
-      return {'success': false, 'message': 'Please enter a valid email address.'};
+    final userId = data.userId ?? SupabaseService.instance.currentUser?.id;
+    final hasUserId = userId != null && userId.isNotEmpty;
+    final hasEmail = email.isNotEmpty && email.contains('@');
+
+    debugPrint('[BUG-EMAIL] authenticated user found: $hasUserId');
+    debugPrint('[BUG-EMAIL] reporter email available: $hasEmail');
+
+    if (!hasEmail) {
+      debugPrint('[BUG-EMAIL] Database save: FAILURE');
+      debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+      debugPrint('[BUG-EMAIL] final result: FAILURE');
+      return {'success': false, 'email_sent': false, 'message': 'Please enter a valid email address.'};
     }
 
     final title = data.title.trim();
     if (title.isEmpty || title.length < 3) {
-      return {'success': false, 'message': 'Bug title must be at least 3 characters.'};
+      debugPrint('[BUG-EMAIL] Database save: FAILURE');
+      debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+      debugPrint('[BUG-EMAIL] final result: FAILURE');
+      return {'success': false, 'email_sent': false, 'message': 'Bug title must be at least 3 characters.'};
     }
 
     final description = data.description.trim();
     if (description.isEmpty || description.length < 5) {
-      return {'success': false, 'message': 'Bug description must be at least 5 characters.'};
+      debugPrint('[BUG-EMAIL] Database save: FAILURE');
+      debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+      debugPrint('[BUG-EMAIL] final result: FAILURE');
+      return {'success': false, 'email_sent': false, 'message': 'Bug description must be at least 5 characters.'};
     }
 
     String? screenshotUrl;
@@ -157,7 +179,10 @@ class BugReportService {
         fileSizeBytes: data.screenshotBytes!.length,
       );
       if (valErr != null) {
-        return {'success': false, 'message': valErr};
+        debugPrint('[BUG-EMAIL] Database save: FAILURE');
+        debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+        debugPrint('[BUG-EMAIL] final result: FAILURE');
+        return {'success': false, 'email_sent': false, 'message': valErr};
       }
 
       screenshotUrl = await uploadScreenshot(
@@ -171,15 +196,16 @@ class BugReportService {
     // 2. Primary: Submit via Backend HTTP API endpoint to trigger server-side email dispatch
     try {
       final backendUrl = Uri.parse('${BackendConfig.baseUrl}/api/report-bug');
-      final currentUser = SupabaseService.instance.currentUser;
       final headers = <String, String>{
         'Content-Type': 'application/json',
       };
-      if (currentUser != null) {
-        headers['X-User-ID'] = currentUser.id;
+      if (userId != null) {
+        headers['X-User-ID'] = userId;
       }
 
       final body = jsonEncode({
+        'user_id': userId,
+        'user_name': data.userName,
         'user_email': email,
         'title': title,
         'description': description,
@@ -191,17 +217,44 @@ class BugReportService {
         'screenshot_reference': screenshotUrl,
       });
 
-      final httpRes = await http.post(backendUrl, headers: headers, body: body);
+      debugPrint('[BUG-EMAIL] backend request started');
+      final httpRes = await http
+          .post(backendUrl, headers: headers, body: body)
+          .timeout(const Duration(seconds: 30));
+      debugPrint('[BUG-EMAIL] backend response status: ${httpRes.statusCode}');
+
       if (httpRes.statusCode == 200) {
-        final decoded = jsonDecode(httpRes.body);
+        final decoded = jsonDecode(httpRes.body) as Map<String, dynamic>;
+        final emailSent = decoded['email_sent'] == true;
+        final dbSaved = decoded['db_saved'] == true;
+        final messageId = decoded['message_id'];
+
+        debugPrint('[BUG-EMAIL] Database save: ${dbSaved ? "SUCCESS" : "FAILURE"}');
+        debugPrint('[BUG-EMAIL] Email delivery: ${emailSent ? "SUCCESS" : "FAILURE"}');
+        if (messageId != null) {
+          debugPrint('[BUG-EMAIL] provider message ID: $messageId');
+        }
+        debugPrint('[BUG-EMAIL] final result: ${emailSent ? "SUCCESS" : "FAILURE"}');
+
         return {
-          'success': true,
+          'success': emailSent,
+          'email_sent': emailSent,
+          'db_saved': dbSaved,
           'report_id': decoded['report_id'],
-          'message': decoded['message'] ?? 'Bug reported successfully. Thank you for helping us improve the website!'
+          'message_id': messageId,
+          'message': decoded['message'] ??
+              (emailSent
+                  ? 'Bug report submitted successfully.'
+                  : 'Bug report saved to database, but email delivery to administrator failed.'),
         };
+      } else {
+        debugPrint('[BUG-EMAIL] Database save: FAILURE');
+        debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+        debugPrint('[BUG-EMAIL] final result: FAILURE');
       }
     } catch (e) {
-      debugPrint('[BugReportService] Backend API note: $e, trying RPC fallback');
+      debugPrint('[BUG-EMAIL] Backend request error: $e');
+      debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
     }
 
     // 3. Fallback: Submit directly via Supabase RPC if backend server is unreachable
@@ -211,7 +264,7 @@ class BugReportService {
           'p_user_email': email,
           'p_title': title,
           'p_description': description,
-          'p_user_id': SupabaseService.instance.currentUser?.id,
+          'p_user_id': userId,
           'p_page_url': data.pageUrl,
           'p_route': data.route,
           'p_browser': data.browser,
@@ -221,20 +274,30 @@ class BugReportService {
         });
 
         if (response != null && response is Map && response['success'] == true) {
+          debugPrint('[BUG-EMAIL] Database save: SUCCESS');
+          debugPrint('[BUG-EMAIL] Email delivery: FAILURE (Backend offline)');
+          debugPrint('[BUG-EMAIL] final result: FAILURE');
           return {
-            'success': true,
+            'success': false,
+            'email_sent': false,
+            'db_saved': true,
             'report_id': response['report_id'],
-            'message': 'Bug reported successfully. Thank you for helping us improve the website!'
+            'message': 'Bug report saved to database, but email notification service is currently offline.'
           };
         }
       } catch (e) {
-        debugPrint('[BugReportService] Supabase RPC error: $e');
+        debugPrint('[BUG-EMAIL] Supabase RPC error: $e');
       }
     }
 
+    debugPrint('[BUG-EMAIL] Database save: FAILURE');
+    debugPrint('[BUG-EMAIL] Email delivery: FAILURE');
+    debugPrint('[BUG-EMAIL] final result: FAILURE');
     return {
       'success': false,
-      'message': 'Unable to send the bug report. Please ensure backend server is running.'
+      'email_sent': false,
+      'db_saved': false,
+      'message': 'Unable to send the bug report. Please try again.'
     };
   }
 }

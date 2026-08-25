@@ -2,7 +2,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../providers/auth_provider.dart';
 import '../services/bug_report_service.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 
 class ReportBugModal extends StatefulWidget {
@@ -39,6 +41,10 @@ class _ReportBugModalState extends State<ReportBugModal> {
 
   Map<String, String>? _telemetry;
 
+  String? _authenticatedUserId;
+  String? _authenticatedUserName;
+  String? _authenticatedUserEmail;
+
   @override
   void initState() {
     super.initState();
@@ -54,6 +60,36 @@ class _ReportBugModalState extends State<ReportBugModal> {
       context,
       currentRoute: widget.initialRoute,
     );
+    _initUserIdentity();
+  }
+
+  void _initUserIdentity() {
+    final auth = AuthProviderScope.read(context);
+    final user = auth.currentUser;
+    final supabaseUser = SupabaseService.instance.currentUser;
+
+    _authenticatedUserId = user?.id ?? supabaseUser?.id;
+    _authenticatedUserEmail = (user?.email != null && user!.email.isNotEmpty)
+        ? user.email
+        : (supabaseUser?.email ?? '');
+
+    String? name = user?.fullName;
+    if (name == null || name.trim().isEmpty) {
+      name = supabaseUser?.userMetadata?['full_name'] as String? ??
+          supabaseUser?.userMetadata?['name'] as String?;
+    }
+    if (name == null || name.trim().isEmpty) {
+      if (_authenticatedUserEmail != null && _authenticatedUserEmail!.contains('@')) {
+        name = _authenticatedUserEmail!.split('@').first;
+      }
+    }
+    _authenticatedUserName = name;
+
+    if (_emailController.text.isEmpty &&
+        _authenticatedUserEmail != null &&
+        _authenticatedUserEmail!.isNotEmpty) {
+      _emailController.text = _authenticatedUserEmail!;
+    }
   }
 
   @override
@@ -135,8 +171,14 @@ class _ReportBugModalState extends State<ReportBugModal> {
       _successMessage = null;
     });
 
+    final reporterEmail = _emailController.text.trim().isNotEmpty
+        ? _emailController.text.trim()
+        : (_authenticatedUserEmail ?? '');
+
     final reportData = BugReportData(
-      userEmail: _emailController.text,
+      userId: _authenticatedUserId,
+      userName: _authenticatedUserName,
+      userEmail: reporterEmail,
       title: _titleController.text,
       description: _descriptionController.text,
       pageUrl: _telemetry?['page_url'],
@@ -153,10 +195,13 @@ class _ReportBugModalState extends State<ReportBugModal> {
     if (!mounted) return;
 
     if (res['success'] == true) {
+      final emailSent = res['email_sent'] == true;
       setState(() {
         _isSubmitting = false;
         _successMessage = res['message'] ??
-            'Bug reported successfully. Thank you for helping us improve the website!';
+            (emailSent
+                ? 'Bug reported successfully. Thank you for helping us improve JobWink!'
+                : 'Bug report saved to database (email delivery unavailable).');
       });
 
       // Clear form after success

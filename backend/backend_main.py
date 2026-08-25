@@ -21,6 +21,10 @@ import io
 import re
 import json
 import uuid
+import datetime
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Optional, Dict, List, Any
 from pathlib import Path
 
@@ -36,6 +40,7 @@ from template_renderer import render_resume_pdf, get_candidate_filename
 from job_prediction_service import prediction_service, MANDATORY_DISCLAIMER
 
 # Load environment variables
+load_dotenv(Path(__file__).parent / ".env")
 load_dotenv()
 load_dotenv(Path(__file__).parent.parent / "job_collector" / ".env")
 
@@ -936,4 +941,247 @@ def get_latest_job_prediction(resume_id: str):
             record["is_stale"] = True
 
     return record
+
+
+# ---------------------------------------------------------------------------
+# Bug Report & Admin Email Notification
+# ---------------------------------------------------------------------------
+
+class BugReportPayload(BaseModel):
+    user_id: Optional[str] = None
+    user_name: Optional[str] = None
+    user_email: str
+    title: str
+    description: str
+    page_url: Optional[str] = None
+    route: Optional[str] = None
+    browser: Optional[str] = None
+    os: Optional[str] = None
+    screen_size: Optional[str] = None
+    screenshot_reference: Optional[str] = None
+
+
+def send_bug_report_email(report: BugReportPayload, report_id: str) -> tuple[bool, Optional[str], Optional[str]]:
+    """Delivers the bug report to the configured admin email with Reply-To."""
+    print("[BUG-EMAIL] email function started")
+    admin_email = os.environ.get("ADMIN_EMAIL", "na6236786@gmail.com").strip()
+    smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com").strip()
+    smtp_port = int(os.environ.get("SMTP_PORT", 587))
+    smtp_user = os.environ.get("SMTP_USER", admin_email).strip()
+    smtp_password = os.environ.get("SMTP_PASSWORD", "").strip()
+
+    has_admin = bool(admin_email and "@" in admin_email)
+    has_pwd = bool(smtp_password)
+    print(f"[BUG-EMAIL] ADMIN_EMAIL configured: {has_admin}")
+    print(f"[BUG-EMAIL] SMTP_PASSWORD configured: {has_pwd}")
+    print(f"[BUG-EMAIL] recipient: {admin_email}")
+    print(f"[BUG-EMAIL] sender: JobWink Bug Reports <{smtp_user}>")
+    print(f"[BUG-EMAIL] reply_to: {report.user_email.strip()}")
+
+    if not smtp_password:
+        print("[BUG-EMAIL] Warning: SMTP_PASSWORD is not configured. Email delivery skipped.")
+        print("[BUG-EMAIL] provider response status: 401 Unauthorized (Missing credentials)")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, "SMTP_PASSWORD not configured on server"
+
+    import email.utils
+    message_id = email.utils.make_msgid(domain="jobwink.app")
+
+    msg = MIMEMultipart("alternative")
+    msg["Message-ID"] = message_id
+    msg["Subject"] = f"[JobWink Bug Report] {report.title}"
+    msg["From"] = f"JobWink Bug Reports <{smtp_user}>"
+    msg["To"] = admin_email
+    msg["Reply-To"] = report.user_email.strip()
+
+    now_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+    text_content = f"""JOBWINK BUG REPORT
+==================================================
+Report ID: {report_id}
+Submitted: {now_str}
+
+REPORTER IDENTITY:
+--------------------------------------------------
+Name:     {report.user_name or 'Not provided'}
+Email:    {report.user_email}
+User ID:  {report.user_id or 'Unauthenticated / Anonymous'}
+
+BUG DETAILS:
+--------------------------------------------------
+Subject:  {report.title}
+Location: {report.route or report.page_url or 'Unknown'}
+
+Description:
+{report.description}
+
+ENVIRONMENT TELEMETRY:
+--------------------------------------------------
+Page URL:    {report.page_url or 'N/A'}
+Route:       {report.route or 'N/A'}
+Browser:     {report.browser or 'N/A'}
+OS:          {report.os or 'N/A'}
+Screen Size: {report.screen_size or 'N/A'}
+Screenshot:  {report.screenshot_reference or 'None'}
+==================================================
+"""
+
+    html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bug Report</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 20px; background-color: #F1F5F9;">
+  <div style="background: #0F172A; padding: 20px 24px; border-radius: 12px 12px 0 0; color: #ffffff;">
+    <h2 style="margin: 0; color: #FB923C; font-size: 20px; display: flex; align-items: center;">🐛 JobWink Bug Report</h2>
+    <p style="margin: 4px 0 0 0; font-size: 12px; color: #94A3B8;">Report ID: <code style="color: #CBD5E1;">{report_id}</code> &bull; {now_str}</p>
+  </div>
+  <div style="background: #ffffff; border: 1px solid #E2E8F0; padding: 24px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
+    <h3 style="margin-top: 0; color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Reporter Identity</h3>
+    <table style="width: 100%; font-size: 14px; margin-bottom: 20px; border-collapse: collapse;">
+      <tr><td style="width: 120px; padding: 6px 0; font-weight: 600; color: #64748B;">Name:</td><td style="color: #0F172A; font-weight: 600;">{report.user_name or 'N/A'}</td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">Email:</td><td><a href="mailto:{report.user_email}" style="color: #EA580C; font-weight: 600; text-decoration: none;">{report.user_email}</a></td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">User ID:</td><td style="font-family: monospace; font-size: 12px; color: #475569;">{report.user_id or 'Unauthenticated / Anonymous'}</td></tr>
+    </table>
+
+    <h3 style="color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Bug Summary</h3>
+    <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #EA580C; border-radius: 6px; padding: 14px; margin-bottom: 20px;">
+      <p style="margin: 0 0 8px 0; font-weight: 700; font-size: 15px; color: #0F172A;">{report.title}</p>
+      <p style="margin: 0; font-size: 14px; white-space: pre-wrap; color: #334155;">{report.description}</p>
+    </div>
+
+    <h3 style="color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Environment & Telemetry</h3>
+    <table style="width: 100%; font-size: 13px; color: #475569; border-collapse: collapse;">
+      <tr><td style="width: 120px; padding: 4px 0; font-weight: 600; color: #64748B;">Route / Page:</td><td>{report.route or report.page_url or 'N/A'}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Browser:</td><td>{report.browser or 'N/A'}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Platform / OS:</td><td>{report.os or 'N/A'}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Screen Size:</td><td>{report.screen_size or 'N/A'}</td></tr>
+      {f'<tr><td style="padding: 4px 0; font-weight: 600; color: #64748B;">Screenshot:</td><td><a href="{report.screenshot_reference}" target="_blank" style="color: #2563EB; font-weight: 600;">View Attached Screenshot &rarr;</a></td></tr>' if report.screenshot_reference else ''}
+    </table>
+  </div>
+  <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 18px;">JobWink Bug Reporter &bull; Replying to this email will directly message {report.user_email}</p>
+</body>
+</html>
+"""
+
+    msg.attach(MIMEText(text_content, "plain"))
+    msg.attach(MIMEText(html_content, "html"))
+
+    print("[BUG-EMAIL] provider request started")
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port, timeout=15) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+            print("[BUG-EMAIL] provider response status: 250 OK")
+            print("[BUG-EMAIL] provider accepted message: true")
+            print(f"[BUG-EMAIL] provider message ID: {message_id}")
+            print("[BUG-EMAIL] final result: SUCCESS")
+            return True, message_id, None
+    except smtplib.SMTPAuthenticationError as e:
+        err_msg = e.smtp_error.decode("utf-8", errors="ignore") if isinstance(e.smtp_error, bytes) else str(e.smtp_error)
+        print(f"[BUG-EMAIL] provider response status: 535 ({err_msg})")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, f"SMTP Authentication failed (status 535): {err_msg}"
+    except smtplib.SMTPRecipientsRefused as e:
+        print("[BUG-EMAIL] provider response status: 550 Recipients refused")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, "SMTP Recipients refused (status 550)"
+    except smtplib.SMTPSenderRefused as e:
+        print("[BUG-EMAIL] provider response status: 553 Sender refused")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, "SMTP Sender refused (status 553)"
+    except smtplib.SMTPDataError as e:
+        print("[BUG-EMAIL] provider response status: 554 Data rejected")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, "SMTP Data rejected (status 554)"
+    except smtplib.SMTPException as e:
+        print(f"[BUG-EMAIL] provider response status: 500 ({type(e).__name__})")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, f"SMTP error ({type(e).__name__}): {e}"
+    except Exception as e:
+        print(f"[BUG-EMAIL] provider response status: 500 ({type(e).__name__})")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, f"Email delivery error ({type(e).__name__}): {e}"
+
+
+@app.post("/api/report-bug")
+async def report_bug_endpoint(payload: BugReportPayload, x_user_id: Optional[str] = Header(None, alias="X-User-ID")):
+    """Receives a bug report, persists it to database, and emails the administrator."""
+    user_id = payload.user_id or x_user_id
+    report_id = str(uuid.uuid4())
+
+    # 1. Persist to Supabase if connected
+    db_saved = False
+    if supabase_client:
+        try:
+            rpc_res = supabase_client.rpc("submit_bug_report", {
+                "p_user_email": payload.user_email.strip().lower(),
+                "p_title": payload.title.strip(),
+                "p_description": payload.description.strip(),
+                "p_page_url": payload.page_url,
+                "p_route": payload.route,
+                "p_browser": payload.browser,
+                "p_os": payload.os,
+                "p_screen_size": payload.screen_size,
+                "p_screenshot_reference": payload.screenshot_reference,
+            }).execute()
+            if rpc_res and getattr(rpc_res, 'data', None):
+                report_id = rpc_res.data.get('report_id') or report_id
+            db_saved = True
+            print(f"[BUG-EMAIL] Database save: SUCCESS (Report ID: {report_id})")
+        except Exception as e:
+            try:
+                supabase_client.table("bug_reports").insert({
+                    "id": report_id,
+                    "user_id": user_id,
+                    "user_email": payload.user_email.strip().lower(),
+                    "title": payload.title.strip(),
+                    "description": payload.description.strip(),
+                    "page_url": payload.page_url,
+                    "route": payload.route,
+                    "browser": payload.browser,
+                    "os": payload.os,
+                    "screen_size": payload.screen_size,
+                    "screenshot_reference": payload.screenshot_reference,
+                    "status": "open",
+                }).execute()
+                db_saved = True
+                print(f"[BUG-EMAIL] Database save: SUCCESS (Direct insert, Report ID: {report_id})")
+            except Exception as e2:
+                print(f"[BUG-EMAIL] Database save: FAILURE ({e2})")
+    else:
+        print("[BUG-EMAIL] Database save: FAILURE (No database client configured)")
+
+    # 2. Deliver Email to Admin in background worker thread to prevent blocking event loop
+    import anyio
+    email_sent, message_id, email_err = await anyio.to_thread.run_sync(send_bug_report_email, payload, report_id)
+    if email_sent:
+        print(f"[BUG-EMAIL] Email delivery: SUCCESS (Message-ID: {message_id})")
+    else:
+        print(f"[BUG-EMAIL] Email delivery: FAILURE ({email_err})")
+
+    return {
+        "success": email_sent,
+        "email_sent": email_sent,
+        "db_saved": db_saved,
+        "report_id": report_id,
+        "message_id": message_id,
+        "email_error": email_err,
+        "message": "Bug report submitted successfully." if email_sent else "Bug report saved to database, but email delivery to administrator failed."
+    }
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("backend_main:app", host="127.0.0.1", port=8000, reload=True)
+
 

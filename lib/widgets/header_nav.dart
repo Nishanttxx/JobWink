@@ -229,10 +229,7 @@ class _HeaderNavState extends State<HeaderNav> {
                             MouseRegion(
                               cursor: SystemMouseCursors.click,
                               child: GestureDetector(
-                                onTap: () => AuthModal.show(context,
-                                    onSuccess: () {
-                                  Navigator.pushNamed(context, '/dashboard');
-                                }),
+                                onTap: () => AuthModal.show(context),
                                 child: Text(
                                   'Log In',
                                   style: GoogleFonts.plusJakartaSans(
@@ -250,6 +247,7 @@ class _HeaderNavState extends State<HeaderNav> {
                                 if (_currentUser == null &&
                                     Supabase.instance.client.auth.currentUser ==
                                         null) {
+                                  debugPrint('[AUTH] Demo mode enabled');
                                   DemoService.instance.enterDemoMode();
                                 }
                                 Navigator.pushNamed(context, '/dashboard');
@@ -376,9 +374,7 @@ class _HeaderNavState extends State<HeaderNav> {
                         child: OutlinedButton(
                           onPressed: () {
                             setState(() => _isMobileMenuOpen = false);
-                            AuthModal.show(context, onSuccess: () {
-                              Navigator.pushNamed(context, '/dashboard');
-                            });
+                            AuthModal.show(context);
                           },
                           style: OutlinedButton.styleFrom(
                             foregroundColor: textPrimaryColor,
@@ -404,6 +400,7 @@ class _HeaderNavState extends State<HeaderNav> {
                             setState(() => _isMobileMenuOpen = false);
                             if (Supabase.instance.client.auth.currentUser ==
                                 null) {
+                              debugPrint('[AUTH] Demo mode enabled');
                               DemoService.instance.enterDemoMode();
                             }
                             Navigator.pushNamed(context, '/dashboard');

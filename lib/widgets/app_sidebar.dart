@@ -250,20 +250,8 @@ class _AppSidebarState extends State<AppSidebar> {
                   const Divider(height: 1, indent: 8, endIndent: 8),
                   const SizedBox(height: 16),
 
-                  // Sidebar Actions: Resume Preview, Generate Resume, ATS Score
+                  // Sidebar Actions: Generate Resume, ATS Score
                   if (widget.isCollapsed) ...[
-                    _SidebarActionButton(
-                      label: 'Resume Preview',
-                      icon: Icons.visibility_outlined,
-                      isPrimary: false,
-                      isCollapsed: true,
-                      onTap: () {
-                        if (widget.onResumePreview != null) {
-                          widget.onResumePreview!();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 6),
                     _SidebarActionButton(
                       label: 'Generate Resume',
                       icon: Icons.auto_awesome,
@@ -291,17 +279,6 @@ class _AppSidebarState extends State<AppSidebar> {
                       },
                     ),
                   ] else ...[
-                    _SidebarActionButton(
-                      label: 'Resume Preview',
-                      icon: Icons.visibility_outlined,
-                      isPrimary: false,
-                      onTap: () {
-                        if (widget.onResumePreview != null) {
-                          widget.onResumePreview!();
-                        }
-                      },
-                    ),
-                    const SizedBox(height: 8),
                     _SidebarActionButton(
                       label: 'Generate Resume',
                       icon: Icons.auto_awesome,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../animations/gsap_timeline.dart';
+import '../services/demo_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import 'custom_badge.dart';
@@ -75,17 +76,28 @@ class _CtaFormSectionState extends State<CtaFormSection> {
 
     try {
       if (_isSignUpTab) {
-        await SupabaseService.instance.signUpWithEmail(
+        final res = await SupabaseService.instance.signUpWithEmail(
           email: email,
           password: password,
           fullName: fullName.isNotEmpty ? fullName : null,
         );
-        setState(() {
-          _successMessage =
-              'Account created! Redirecting to Dashboard...';
-        });
-        if (mounted) {
-          Navigator.pushNamed(context, '/dashboard');
+        if (res.session != null) {
+          setState(() {
+            _successMessage =
+                'Account created! Redirecting to Dashboard...';
+          });
+          if (mounted) {
+            DemoService.instance.exitDemoMode();
+            Navigator.pushReplacementNamed(context, '/dashboard');
+          }
+        } else {
+          setState(() {
+            _successMessage =
+                'Account created! Please check your email to verify your account.';
+          });
+          if (mounted) {
+            Navigator.pushNamed(context, '/verify-email');
+          }
         }
       } else {
         await SupabaseService.instance.signInWithEmail(
@@ -96,7 +108,8 @@ class _CtaFormSectionState extends State<CtaFormSection> {
           _successMessage = 'Successfully logged in! Redirecting to Dashboard...';
         });
         if (mounted) {
-          Navigator.pushNamed(context, '/dashboard');
+          DemoService.instance.exitDemoMode();
+          Navigator.pushReplacementNamed(context, '/dashboard');
         }
       }
     } on AuthException catch (e) {
@@ -117,11 +130,14 @@ class _CtaFormSectionState extends State<CtaFormSection> {
     });
 
     try {
+      debugPrint('[AUTH] OAuth started: ${provider.name}');
       await SupabaseService.instance.signInWithOAuth(provider);
     } on AuthException catch (e) {
-      setState(() => _errorMessage = e.message);
+      if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
-      setState(() => _errorMessage = 'Could not connect to ${provider.name}.');
+      if (mounted) {
+        setState(() => _errorMessage = 'Could not connect to ${provider.name}.');
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

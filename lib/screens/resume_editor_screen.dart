@@ -59,6 +59,34 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
   void _openFullPreviewDialog() {
     final currentResume = _buildCurrentResumeData();
+    final validation = _selectedResumeType.validateCriteria(currentResume);
+    if (!validation.isValid) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    validation.fullMessage,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
     ResumePreviewDialog.show(
       context,
       resumeData: currentResume,
@@ -109,6 +137,36 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   };
 
   void handleSubSectionSelected(int subIndex) {
+    if (subIndex == 8) {
+      final currentResume = _buildCurrentResumeData();
+      final validation = _selectedResumeType.validateCriteria(currentResume);
+      if (!validation.isValid) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              backgroundColor: const Color(0xFFEF4444),
+              content: Row(
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      validation.fullMessage,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+        return;
+      }
+    }
     setState(() {
       _activeSubSectionIndex = subIndex;
       _activeSubTab = subIndex;
@@ -210,6 +268,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   final TextEditingController _targetJobTitleController = TextEditingController();
   final TextEditingController _jobDescriptionController = TextEditingController();
   double _jobMatchScore = 0.0;
+  bool _isDownloadingResume = false;
 
   // Section collapse state
   final Map<String, bool> _sectionExpanded = {
@@ -369,24 +428,41 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     if (_uploadedFileBytes != null || _isUploading || _isParsing) return;
 
     final auth = AuthProviderScope.read(context);
-    final userName = auth.currentUser?.fullName ?? '';
-    final userEmail = auth.currentUser?.email ?? '';
+    final user = auth.currentUser;
+    final userName = user?.fullName ?? '';
+    final userEmail = user?.email ?? '';
+    final userPhone = user?.phone ?? '';
+    final userLocation = user?.location ?? '';
+    final userLinkedin = user?.linkedinUrl ?? '';
+    final userGithub = user?.githubUrl ?? '';
 
-    if (cached != null && _isValidResumeData(cached) && cached.hasStructuredSections) {
-      debugPrint('[ResumePipeline] Using cached resume');
+    if (cached != null && _isValidResumeData(cached) && (cached.hasStructuredSections || cached.fullName.isNotEmpty)) {
+      debugPrint('[ResumePipeline] Using cached resume for user ${user?.id}');
       setState(() {
         populateFormFromResume(cached);
+        if (_nameController.text.isEmpty && userName.isNotEmpty) _nameController.text = userName;
+        if (_emailController.text.isEmpty && userEmail.isNotEmpty) _emailController.text = userEmail;
+        if (_phoneController.text.isEmpty && userPhone.isNotEmpty) _phoneController.text = userPhone;
+        if (_locationController.text.isEmpty && userLocation.isNotEmpty) _locationController.text = userLocation;
+        if (_linkedinController.text.isEmpty && userLinkedin.isNotEmpty) _linkedinController.text = userLinkedin;
+        if (_githubController.text.isEmpty && userGithub.isNotEmpty) _githubController.text = userGithub;
       });
       debugPrint('[ResumeEditor] Loaded valid cached resume: name="${_nameController.text}", exp=${cached.experience.length}');
     } else {
-      // If no valid cached resume exists yet, populate fields only with user profile data if non-empty
+      // If no valid cached resume exists yet, populate fields with user profile data if non-empty
       setState(() {
         if (_nameController.text.isEmpty && userName.isNotEmpty) _nameController.text = userName;
         if (_emailController.text.isEmpty && userEmail.isNotEmpty) _emailController.text = userEmail;
+        if (_phoneController.text.isEmpty && userPhone.isNotEmpty) _phoneController.text = userPhone;
+        if (_locationController.text.isEmpty && userLocation.isNotEmpty) _locationController.text = userLocation;
+        if (_linkedinController.text.isEmpty && userLinkedin.isNotEmpty) _linkedinController.text = userLinkedin;
+        if (_githubController.text.isEmpty && userGithub.isNotEmpty) _githubController.text = userGithub;
 
         double score = 0;
         if (_nameController.text.isNotEmpty) score += 10;
         if (_emailController.text.isNotEmpty) score += 5;
+        if (_phoneController.text.isNotEmpty) score += 5;
+        if (_locationController.text.isNotEmpty) score += 5;
         _atsScore = score.clamp(0.0, 100.0);
       });
       debugPrint('[ResumeEditor] Initialized identity fields with user profile data');
@@ -450,68 +526,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         setState(() => _isAnalyzingKeywords = false);
       }
     }
-  }
-
-  Widget _buildHighlightedFlutterText(
-    String text,
-    BuildContext context, {
-    TextStyle? defaultStyle,
-  }) {
-    final isDarkMode = AppTheme.isDarkMode(context);
-    final baseStyle = defaultStyle ??
-        AppTheme.getBodyFont(
-          fontSize: 12,
-          color: AppTheme.getTextColor(context).withValues(alpha: 0.85),
-          height: 1.4,
-        );
-
-    if (_matchedJobKeywords.isEmpty || text.isEmpty) {
-      return Text(text, style: baseStyle);
-    }
-
-    final safeEscaped = _matchedJobKeywords
-        .map((k) => k.trim())
-        .where((k) => k.length >= 2)
-        .map(RegExp.escape)
-        .join('|');
-
-    if (safeEscaped.isEmpty) {
-      return Text(text, style: baseStyle);
-    }
-
-    final kwRegex = RegExp('(?<=^|[^a-zA-Z0-9])($safeEscaped)(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
-    if (!kwRegex.hasMatch(text)) {
-      return Text(text, style: baseStyle);
-    }
-
-    final spans = <InlineSpan>[];
-    int last = 0;
-    for (final m in kwRegex.allMatches(text)) {
-      if (m.start > last) {
-        spans.add(TextSpan(
-          text: text.substring(last, m.start),
-          style: baseStyle,
-        ));
-      }
-      final matchedText = m.group(1)!;
-      spans.add(TextSpan(
-        text: matchedText,
-        style: baseStyle.copyWith(
-          fontWeight: FontWeight.w800,
-          color: isDarkMode ? Colors.white : Colors.black,
-          backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.15),
-        ),
-      ));
-      last = m.end;
-    }
-    if (last < text.length) {
-      spans.add(TextSpan(
-        text: text.substring(last),
-        style: baseStyle,
-      ));
-    }
-
-    return RichText(text: TextSpan(children: spans));
   }
 
   @override
@@ -1519,6 +1533,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
       case 8:
         // Tab 8: Live Preview & Export
+        final exportResume = _buildCurrentResumeData();
+        final exportValidation = _selectedResumeType.validateCriteria(exportResume);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1548,27 +1564,116 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-            _buildPreviewCard(context, isDarkMode),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _showExportModal(context),
-                icon: const Icon(Icons.download_rounded, size: 20),
-                label: Text(
-                  'Download Tailored Resume (PDF / DOCX) →',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
+            if (!exportValidation.isValid) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.35)),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryOrange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Meet the criteria to build your resume.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: const Color(0xFFEF4444),
+                            ),
+                          ),
+                          if (exportValidation.detailMessage != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              exportValidation.detailMessage!,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                color: AppTheme.getTextColor(context).withValues(alpha: 0.9),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _openFullPreviewDialog,
+                    icon: Icon(
+                      Icons.visibility_rounded,
+                      size: 20,
+                      color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                    ),
+                    label: Text(
+                      'Preview Resume',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: exportValidation.isValid
+                            ? AppTheme.primaryOrange
+                            : const Color(0xFF8B949E).withValues(alpha: 0.5),
+                        width: 1.5,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: (exportValidation.isValid && !_isDownloadingResume)
+                        ? () => _showExportModal(context)
+                        : null,
+                    icon: _isDownloadingResume
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.download_rounded, size: 20),
+                    label: Text(
+                      _isDownloadingResume
+                          ? 'Generating Resume...'
+                          : 'Download Tailored Resume (PDF / DOCX) →',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      elevation: exportValidation.isValid ? 2 : 0,
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
@@ -5289,7 +5394,42 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
 
   void _downloadTailoredResume({required String format}) async {
+    if (_isDownloadingResume) return;
+
     final currentResume = _buildCurrentResumeData();
+    final validation = _selectedResumeType.validateCriteria(currentResume);
+    if (!validation.isValid) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    validation.fullMessage,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isDownloadingResume = true);
+
+    // Yield control to event loop so Flutter paints the loading button state immediately
+    await Future.delayed(const Duration(milliseconds: 10));
+
     final filename = ResumeExportService.getCandidateFilename(currentResume, format);
 
     try {
@@ -5298,6 +5438,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       if (format == 'pdf') {
         bytes = await ResumeExportService.instance.generateAtsPdf(
           currentResume,
+          selectedResumeType: _selectedResumeType,
           originalPdfBytes: _uploadedFileBytes,
           highlightKeywords: _matchedJobKeywords,
         );
@@ -5313,7 +5454,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       );
 
       if (mounted) {
-        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -5343,6 +5483,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             content: Text('Failed to download resume: $e'),
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isDownloadingResume = false);
       }
     }
   }
@@ -5414,6 +5558,33 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   }
 
   void _showExportModal(BuildContext context) {
+    final currentResume = _buildCurrentResumeData();
+    final validation = _selectedResumeType.validateCriteria(currentResume);
+    if (!validation.isValid) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: const Color(0xFFEF4444),
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  validation.fullMessage,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -5492,7 +5663,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                   ),
                   trailing: const Icon(Icons.download_rounded, color: AppTheme.primaryOrange),
-                  onTap: () => _downloadTailoredResume(format: 'pdf'),
+                  onTap: () {
+                    Navigator.pop(modalCtx);
+                    _downloadTailoredResume(format: 'pdf');
+                  },
                 ),
               ),
               const SizedBox(height: 12),
@@ -5535,7 +5709,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                   ),
                   trailing: Icon(Icons.download_rounded, color: AppTheme.getTextColor(context)),
-                  onTap: () => _downloadTailoredResume(format: 'txt'),
+                  onTap: () {
+                    Navigator.pop(modalCtx);
+                    _downloadTailoredResume(format: 'txt');
+                  },
                 ),
               ),
               const SizedBox(height: 16),
@@ -5549,16 +5726,18 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   // ── Resume Tailoring Card ──
 
   Widget _buildTailoringCard(BuildContext context, bool isDarkMode) {
+    final currentResume = _buildCurrentResumeData();
+    final criteriaValidation = _selectedResumeType.validateCriteria(currentResume);
     return JobAlignmentCard(
       targetJobTitleController: _targetJobTitleController,
       jobDescriptionController: _jobDescriptionController,
       isAnalyzingKeywords: _isAnalyzingKeywords,
       jobMatchScore: _jobMatchScore,
       selectedResumeType: _selectedResumeType,
+      criteriaValidation: criteriaValidation,
       onSelectResumeType: (type) {
         setState(() => _selectedResumeType = type);
       },
-      onPreviewResume: _openFullPreviewDialog,
       matchedKeywords: _matchedJobKeywords,
       missingKeywords: _missingJobKeywords,
     );
@@ -5575,534 +5754,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         border: Border.all(color: AppTheme.getBorderColor(context)),
       ),
       child: AtsScoreGauge(score: _atsScore.toInt()),
-    );
-  }
-
-  // ── Live Preview Card ──
-
-  Widget _buildPreviewCard(BuildContext context, bool isDarkMode) {
-    final currentResume = _buildCurrentResumeData();
-
-    // Build contact info string dynamically
-    final contactParts = <String>[];
-    if (currentResume.email.isNotEmpty) contactParts.add(currentResume.email);
-    if (currentResume.phone.isNotEmpty) contactParts.add(currentResume.phone);
-    if (currentResume.location.isNotEmpty) contactParts.add(currentResume.location);
-    if (currentResume.linkedin.isNotEmpty) contactParts.add(currentResume.linkedin);
-    if (currentResume.github.isNotEmpty) contactParts.add(currentResume.github);
-
-    final contactLine = contactParts.isEmpty
-        ? 'alex.johnson@example.com • +1 (555) 019-2834 • San Francisco, CA'
-        : contactParts.join(' • ');
-
-    final expList = currentResume.experience;
-    final projList = currentResume.projects;
-    final eduList = currentResume.education;
-    final extraList = currentResume.extracurriculars;
-
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppTheme.getSurfaceColor(context),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.getBorderColor(context)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Live Document Preview 📄',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.getTextColor(context),
-                ),
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: _openFullPreviewDialog,
-                    icon: const Icon(Icons.visibility_rounded, size: 14, color: AppTheme.primaryOrange),
-                    label: Text(
-                      'A4 Paper Preview',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primaryOrange,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: AppTheme.primaryOrange, width: 1.2),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.circle, size: 8, color: Color(0xFF10B981)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'LIVE PREVIEW',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: const Color(0xFF10B981),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // Document mockup
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: isDarkMode
-                  ? const Color(0xFF13151C)
-                  : const Color(0xFFFAFAFA),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppTheme.getBorderColor(context)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: isDarkMode ? 0.3 : 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header (Name & Title & Contact)
-                Text(
-                  currentResume.fullName.isEmpty
-                      ? 'Your Name'
-                      : currentResume.fullName,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.getTextColor(context),
-                  ),
-                ),
-                if (currentResume.title.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    currentResume.title,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 4),
-                Text(
-                  contactLine,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: AppTheme.getMutedTextColor(context),
-                  ),
-                ),
-                const Divider(height: 24),
-
-                // Executive Summary
-                if (currentResume.summary.isNotEmpty) ...[
-                  Text(
-                    'EXECUTIVE SUMMARY',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  _buildHighlightedFlutterText(
-                    currentResume.summary,
-                    context,
-                    defaultStyle: AppTheme.getBodyFont(
-                      fontSize: 12,
-                      color: AppTheme.getTextColor(context).withValues(alpha: 0.85),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // Skills & Technologies
-                if (currentResume.skills.isNotEmpty) ...[
-                  Text(
-                    'SKILLS & TECHNOLOGIES',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  _buildHighlightedFlutterText(
-                    currentResume.skills.join(' • '),
-                    context,
-                    defaultStyle: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.getTextColor(context),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                ],
-
-                // Work Experience
-                if (expList.isNotEmpty) ...[
-                  Text(
-                    'WORK EXPERIENCE',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...expList.map((exp) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  '${exp.role}${exp.company.isNotEmpty ? " • ${exp.company}" : ""}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.getTextColor(context),
-                                  ),
-                                ),
-                              ),
-                              if (exp.startDate.isNotEmpty || exp.endDate.isNotEmpty)
-                                Text(
-                                  '${exp.startDate} - ${exp.endDate}',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.getMutedTextColor(context),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (exp.description.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            ...exp.description.map((bullet) {
-                              final cleaned = _cleanBulletString(bullet);
-                              if (cleaned.isEmpty) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 3),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 5, right: 8),
-                                      width: 4,
-                                      height: 4,
-                                      decoration: const BoxDecoration(
-                                        color: AppTheme.primaryOrange,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildHighlightedFlutterText(
-                                        cleaned,
-                                        context,
-                                        defaultStyle: GoogleFonts.plusJakartaSans(
-                                          fontSize: 11,
-                                          color: AppTheme.getTextColor(context)
-                                              .withValues(alpha: 0.85),
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                ],
-
-                // Projects
-                if (projList.isNotEmpty) ...[
-                  Text(
-                    'PROJECTS',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...projList.map((proj) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                proj.name,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.getTextColor(context),
-                                ),
-                              ),
-                              if (proj.technologies.isNotEmpty)
-                                Text(
-                                  proj.technologies.join(', '),
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontStyle: FontStyle.italic,
-                                    color: AppTheme.getMutedTextColor(context),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (proj.description.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            ...proj.description.split('\n').map((line) {
-                              final cleaned = _cleanBulletString(line);
-                              if (cleaned.isEmpty) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 3),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 5, right: 8),
-                                      width: 4,
-                                      height: 4,
-                                      decoration: const BoxDecoration(
-                                        color: AppTheme.primaryOrange,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildHighlightedFlutterText(
-                                        cleaned,
-                                        context,
-                                        defaultStyle: GoogleFonts.plusJakartaSans(
-                                          fontSize: 11,
-                                          color: AppTheme.getTextColor(context)
-                                              .withValues(alpha: 0.85),
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                ],
-
-                // Education
-                if (eduList.isNotEmpty) ...[
-                  Text(
-                    'EDUCATION',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...eduList.map((edu) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ').isNotEmpty
-                                      ? [edu.degree, edu.fieldOfStudy].where((s) => s.trim().isNotEmpty).join(' • ')
-                                      : (edu.institution.isNotEmpty ? edu.institution : 'Education'),
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.getTextColor(context),
-                                  ),
-                                ),
-                                if (edu.institution.isNotEmpty)
-                                  Text(
-                                    edu.institution,
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 11,
-                                      color: AppTheme.getMutedTextColor(context),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          Builder(
-                            builder: (context) {
-                              final start = edu.startDate.replaceAll(RegExp(r'[\s\-–—]+$'), '').trim();
-                              final end = edu.endDate.replaceAll(RegExp(r'^[\s\-–—]+'), '').trim();
-                              final String dateStr;
-                              if (start.isNotEmpty && end.isNotEmpty) {
-                                dateStr = '$start - $end';
-                              } else if (start.isNotEmpty) {
-                                dateStr = start;
-                              } else if (end.isNotEmpty) {
-                                dateStr = end;
-                              } else {
-                                dateStr = '';
-                              }
-                              if (dateStr.isEmpty) return const SizedBox.shrink();
-                              return Text(
-                                dateStr,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 11,
-                                  color: AppTheme.getMutedTextColor(context),
-                                ),
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    );
-                  }),
-                  const SizedBox(height: 12),
-                ],
-
-                // Certifications & Activities
-                if (extraList.isNotEmpty) ...[
-                  Text(
-                    'CERTIFICATIONS & ACTIVITIES',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.1,
-                      color: AppTheme.primaryOrange,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  ...extraList.map((extra) {
-                    final title = extra.activity.isNotEmpty
-                        ? extra.activity
-                        : (extra.role.isNotEmpty ? extra.role : 'Activity');
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                title,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppTheme.getTextColor(context),
-                                ),
-                              ),
-                              if (extra.organization.isNotEmpty)
-                                Text(
-                                  extra.organization,
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 11,
-                                    fontStyle: FontStyle.italic,
-                                    color: AppTheme.getMutedTextColor(context),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          if (extra.description.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            ...extra.description.split('\n').map((line) {
-                              final cleaned = _cleanBulletString(line);
-                              if (cleaned.isEmpty) return const SizedBox.shrink();
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 4, bottom: 3),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 5, right: 8),
-                                      width: 4,
-                                      height: 4,
-                                      decoration: const BoxDecoration(
-                                        color: AppTheme.primaryOrange,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    Expanded(
-                                      child: _buildHighlightedFlutterText(
-                                        cleaned,
-                                        context,
-                                        defaultStyle: GoogleFonts.plusJakartaSans(
-                                          fontSize: 11,
-                                          color: AppTheme.getTextColor(context)
-                                              .withValues(alpha: 0.85),
-                                          height: 1.35,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }),
-                          ],
-                        ],
-                      ),
-                    );
-                  }),
-                ],
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 

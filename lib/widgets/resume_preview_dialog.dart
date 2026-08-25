@@ -140,6 +140,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
 
     final bool hasResume = _currentResumeData.hasUsableData ||
         (widget.originalPdfBytes != null && widget.originalPdfBytes!.isNotEmpty);
+    final validation = _currentResumeType.validateCriteria(_currentResumeData);
 
     return KeyboardListener(
       focusNode: _focusNode,
@@ -221,16 +222,27 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                 decoration: BoxDecoration(
-                                  color: (hasResume ? const Color(0xFF10B981) : AppTheme.primaryOrange).withValues(alpha: 0.12),
+                                  color: (!hasResume
+                                          ? AppTheme.primaryOrange
+                                          : (!validation.isValid
+                                              ? const Color(0xFFEF4444)
+                                              : const Color(0xFF10B981)))
+                                      .withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  hasResume ? 'A4 • PAPER PREVIEW' : 'NO RESUME UPLOADED',
+                                  !hasResume
+                                      ? 'NO RESUME UPLOADED'
+                                      : (!validation.isValid ? 'CRITERIA NOT MET' : 'A4 • PAPER PREVIEW'),
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
                                     letterSpacing: 0.4,
-                                    color: hasResume ? const Color(0xFF10B981) : AppTheme.primaryOrange,
+                                    color: !hasResume
+                                        ? AppTheme.primaryOrange
+                                        : (!validation.isValid
+                                            ? const Color(0xFFEF4444)
+                                            : const Color(0xFF10B981)),
                                   ),
                                 ),
                               ),
@@ -307,16 +319,77 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                             ),
                           ),
                         )
-                      : PdfPreview(
-                          key: ValueKey('${_currentResumeData.hashCode}_${_currentResumeType.name}_${widget.highlightKeywords.length}'),
-                          build: (PdfPageFormat format) async {
-                            return await ResumeExportService.instance.generateAtsPdf(
-                              _currentResumeData,
-                              selectedResumeType: _currentResumeType,
-                              originalPdfBytes: widget.originalPdfBytes,
-                              highlightKeywords: widget.highlightKeywords,
-                            );
-                          },
+                      : !validation.isValid
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(20),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.assignment_late_outlined,
+                                        size: 56,
+                                        color: Color(0xFFEF4444),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    Text(
+                                      'Meet the criteria to build your resume.',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: AppTheme.getTextColor(context),
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    if (validation.detailMessage != null) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        validation.detailMessage!,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 13,
+                                          color: AppTheme.getMutedTextColor(context),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                    const SizedBox(height: 16),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.getSurfaceColor(context),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: AppTheme.getBorderColor(context)),
+                                      ),
+                                      child: Text(
+                                        '${_currentResumeType.displayName} Focus • Current: ${validation.experienceCount} Exp, ${validation.projectCount} Projects',
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.getMutedTextColor(context),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : PdfPreview(
+                              key: ValueKey('${_currentResumeData.hashCode}_${_currentResumeType.name}_${widget.highlightKeywords.length}'),
+                              build: (PdfPageFormat format) async {
+                                return await ResumeExportService.instance.generateAtsPdf(
+                                  _currentResumeData,
+                                  selectedResumeType: _currentResumeType,
+                                  originalPdfBytes: widget.originalPdfBytes,
+                                  highlightKeywords: widget.highlightKeywords,
+                                );
+                              },
                           // Pure paper presentation: disable fake browser UI & toolbars
                           allowPrinting: false,
                           allowSharing: false,
@@ -473,7 +546,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                     ),
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
-                      onPressed: hasResume
+                      onPressed: (hasResume && validation.isValid)
                           ? () {
                               Navigator.of(context).pop();
                               widget.onDownload();

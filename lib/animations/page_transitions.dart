@@ -8,6 +8,7 @@ import '../screens/main_dashboard_wrapper.dart';
 import '../screens/profile_screen.dart';
 import '../screens/reset_password_screen.dart';
 import '../services/demo_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/auth_modal.dart';
 
 // ---------------------------------------------------------------------------
@@ -178,9 +179,7 @@ class _AuthGateState extends State<_AuthGate> {
           Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
 
           // Show auth modal on top of the landing page.
-          AuthModal.show(context, onSuccess: () {
-            Navigator.pushNamed(context, '/dashboard');
-          });
+          AuthModal.show(context);
         });
       }
     }
@@ -190,10 +189,13 @@ class _AuthGateState extends State<_AuthGate> {
   Widget build(BuildContext context) {
     final auth = AuthProviderScope.of(context);
 
-    // While initializing, show a subtle loading indicator.
+    // While initializing, show a subtle themed loading indicator (no auth flash).
     if (auth.isInitializing) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: AppTheme.getBgColor(context),
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryOrange),
+        ),
       );
     }
 

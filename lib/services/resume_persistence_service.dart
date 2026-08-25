@@ -129,9 +129,6 @@ class ResumePersistenceService {
   }
 
   /// Loads the latest saved resume data for the authenticated user from Supabase.
-  ///
-  /// Cache is valid ONLY when parserVersion matches [ResumeData.currentParserVersion]
-  /// and (if [fileHash] is specified) matches the expected PDF hash.
   Future<ResumeData?> loadLatestParsedResume({String? fileHash}) async {
     final userId = _userId;
     if (userId == null) return null;
@@ -147,18 +144,13 @@ class ResumePersistenceService {
 
       if (versions.isNotEmpty && versions.first['parsed_content'] != null) {
         final content = versions.first['parsed_content'] as Map<String, dynamic>;
-        final parsed = ResumeData.fromJson(content);
-        final version = content['parserVersion'] as String? ?? content['parser_version'] as String? ?? '';
+        final parsed = ResumeData.validateAndSanitizeAll(ResumeData.fromJson(content));
         final cachedHash = content['fileHash'] as String? ?? content['file_hash'] as String? ?? '';
-
-        final isVersionValid = version == ResumeData.currentParserVersion;
         final isHashValid = fileHash == null || fileHash.isEmpty || cachedHash.isEmpty || cachedHash == fileHash;
 
-        if (isVersionValid && isHashValid && parsed.hasStructuredSections) {
-          debugPrint('[ResumePersistence] Loaded cached resume version from Supabase (0 AI calls)');
+        if (isHashValid && (parsed.hasStructuredSections || parsed.fullName.isNotEmpty || parsed.email.isNotEmpty)) {
+          debugPrint('[ResumePersistence] Loaded user resume version from Supabase for user $userId');
           return parsed;
-        } else {
-          debugPrint('[ResumePersistence] Cached version stale or invalid (version="$version" vs "${ResumeData.currentParserVersion}", hashMatch=$isHashValid, hasStructured=${parsed.hasStructuredSections}) — skipping cache');
         }
       }
     } catch (vErr) {
@@ -176,18 +168,13 @@ class ResumePersistenceService {
 
       if (resumes.isNotEmpty && resumes.first['extracted_data'] != null) {
         final content = resumes.first['extracted_data'] as Map<String, dynamic>;
-        final parsed = ResumeData.fromJson(content);
-        final version = content['parserVersion'] as String? ?? content['parser_version'] as String? ?? '';
+        final parsed = ResumeData.validateAndSanitizeAll(ResumeData.fromJson(content));
         final cachedHash = content['fileHash'] as String? ?? content['file_hash'] as String? ?? '';
-
-        final isVersionValid = version == ResumeData.currentParserVersion;
         final isHashValid = fileHash == null || fileHash.isEmpty || cachedHash.isEmpty || cachedHash == fileHash;
 
-        if (isVersionValid && isHashValid && parsed.hasStructuredSections) {
-          debugPrint('[ResumePersistence] Loaded extracted_data from resumes table (0 AI calls)');
+        if (isHashValid && (parsed.hasStructuredSections || parsed.fullName.isNotEmpty || parsed.email.isNotEmpty)) {
+          debugPrint('[ResumePersistence] Loaded user extracted_data from resumes table for user $userId');
           return parsed;
-        } else {
-          debugPrint('[ResumePersistence] Cached extracted_data stale or invalid (version="$version" vs "${ResumeData.currentParserVersion}", hashMatch=$isHashValid, hasStructured=${parsed.hasStructuredSections}) — skipping cache');
         }
       }
     } catch (rErr) {
@@ -195,6 +182,23 @@ class ResumePersistenceService {
     }
 
     return null;
+  }
+
+  /// Fetches all resumes owned by the authenticated user.
+  Future<List<Map<String, dynamic>>> loadUserResumes() async {
+    final userId = _userId;
+    if (userId == null) return [];
+    try {
+      final resumes = await _client
+          .from('resumes')
+          .select('id, user_id, extracted_data, created_at, updated_at')
+          .eq('user_id', userId)
+          .order('updated_at', ascending: false);
+      return List<Map<String, dynamic>>.from(resumes);
+    } catch (e) {
+      debugPrint('[ResumePersistence] loadUserResumes note: $e');
+      return [];
+    }
   }
 
   /// Helper to ensure profile record exists without throwing RLS errors

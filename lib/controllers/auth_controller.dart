@@ -85,6 +85,8 @@ class AuthController extends ChangeNotifier {
   // ── Initialisation ────────────────────────────────────────────────────────
 
   Future<void> _init() async {
+    debugPrint('[AUTH] Application started');
+    debugPrint('[AUTH] Checking existing session');
     try {
       // Subscribe to Supabase auth events for the lifetime of this controller.
       _authSub = _repo.onAuthStateChange.listen(
@@ -98,6 +100,8 @@ class AuthController extends ChangeNotifier {
       // Auto-login: restore persisted session on cold start instantly.
       final session = _repo.currentSession;
       if (session != null) {
+        debugPrint('[AUTH] Session found: true');
+        debugPrint('[AUTH] Session established');
         // Populate basic user info synchronously from local session
         _currentUser = AppUser(
           id: session.user.id,
@@ -112,6 +116,7 @@ class AuthController extends ChangeNotifier {
         // Fetch full profile details asynchronously in background without blocking UI
         _fetchAndSetProfile(session.user.id);
       } else {
+        debugPrint('[AUTH] Session found: false');
         _set(AuthStatus.unauthenticated);
       }
     } catch (e) {
@@ -129,7 +134,9 @@ class AuthController extends ChangeNotifier {
         case AuthChangeEvent.initialSession:
         case AuthChangeEvent.signedIn:
           final uid = state.session?.user.id;
-          if (uid != null) {
+          if (uid != null && state.session != null) {
+            debugPrint('[AUTH] OAuth callback received');
+            debugPrint('[AUTH] Session established');
             await _fetchAndSetProfile(uid);
             _pendingVerificationEmail = null;
             _set(AuthStatus.authenticated);
@@ -168,7 +175,37 @@ class AuthController extends ChangeNotifier {
   Future<void> _fetchAndSetProfile(String userId) async {
     final result = await _repo.getProfile(userId);
     if (result is AuthSuccess<AppUser?>) {
-      _currentUser = result.value;
+      if (result.value != null) {
+        _currentUser = result.value;
+      } else {
+        // First login: ensure profile row exists in Supabase profiles table linked to auth.uid()
+        final authUser = _repo.currentUser;
+        if (authUser != null && authUser.id == userId) {
+          final fullName = authUser.userMetadata?['full_name'] as String? ??
+              authUser.userMetadata?['name'] as String?;
+          final avatarUrl = authUser.userMetadata?['avatar_url'] as String? ??
+              authUser.userMetadata?['picture'] as String?;
+          final updateRes = await _repo.updateProfile(
+            userId: userId,
+            fullName: fullName,
+            avatarUrl: avatarUrl,
+          );
+          if (updateRes is AuthSuccess<AppUser?> && updateRes.value != null) {
+            _currentUser = updateRes.value;
+          } else {
+            _currentUser = AppUser(
+              id: userId,
+              email: authUser.email ?? '',
+              fullName: fullName,
+              avatarUrl: avatarUrl,
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+          }
+        }
+      }
+      notifyListeners();
+
       if (_currentUser?.avatarUrl != null &&
           _currentUser!.avatarUrl!.contains('googleusercontent.com')) {
         final googleUrl = _currentUser!.avatarUrl!;
@@ -192,7 +229,6 @@ class AuthController extends ChangeNotifier {
         });
       }
     }
-    // On failure we leave _currentUser as-is (or null) — not a fatal error.
   }
 
   void _set(AuthStatus status, {String? error}) {
@@ -261,14 +297,15 @@ class AuthController extends ChangeNotifier {
     );
   }
 
-  // ── Google OAuth ──────────────────────────────────────────────────────────
+  // ── Social OAuth ─────────────────────────────────────────────────────────
 
-  /// Launches the Google OAuth flow (opens the browser).
+  /// Launches the OAuth flow for [provider] (Google, GitHub, etc.).
   ///
-  /// Returns `true` immediately; the auth state stream handles the callback.
-  Future<bool> signInWithGoogle() async {
+  /// Returns `true` if the browser was opened; the auth state stream handles the callback.
+  Future<bool> signInWithOAuth(OAuthProvider provider) async {
+    debugPrint('[AUTH] OAuth started: ${provider.name}');
     _set(AuthStatus.loading);
-    final result = await _repo.signInWithGoogle();
+    final result = await _repo.signInWithOAuth(provider);
     return result.when(
       onSuccess: (_) {
         // Browser opened; reset loading — stream will fire on redirect.
@@ -281,6 +318,12 @@ class AuthController extends ChangeNotifier {
       },
     );
   }
+
+  /// Launches the Google OAuth flow (opens the browser).
+  Future<bool> signInWithGoogle() => signInWithOAuth(OAuthProvider.google);
+
+  /// Launches the GitHub OAuth flow (opens the browser).
+  Future<bool> signInWithGithub() => signInWithOAuth(OAuthProvider.github);
 
   // ── Password Reset ────────────────────────────────────────────────────────
 

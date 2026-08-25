@@ -65,11 +65,21 @@ class AuthRepository {
         ));
   }
 
-  // ── Google OAuth ─────────────────────────────────────────────────────────
+  // ── Social OAuth ─────────────────────────────────────────────────────────
+
+  /// Initiates OAuth sign-in (opens browser; result fires via stream).
+  Future<AuthResult<bool>> signInWithOAuth(OAuthProvider provider) async {
+    return _run(() => _service.signInWithOAuth(provider));
+  }
 
   /// Initiates Google OAuth sign-in (opens browser; result fires via stream).
   Future<AuthResult<bool>> signInWithGoogle() async {
-    return _run(() => _service.signInWithOAuth(OAuthProvider.google));
+    return signInWithOAuth(OAuthProvider.google);
+  }
+
+  /// Initiates GitHub OAuth sign-in (opens browser; result fires via stream).
+  Future<AuthResult<bool>> signInWithGithub() async {
+    return signInWithOAuth(OAuthProvider.github);
   }
 
   // ── Sign Out ─────────────────────────────────────────────────────────────
