@@ -3223,6 +3223,20 @@ class JobKeywordsAnalysisResult {
 
     final allExtracted = <String>[...matched, ...partial, ...missing];
 
+    if (json['keywords'] is List) {
+      for (final item in json['keywords'] as List) {
+        if (item is Map) {
+          final term = item['term']?.toString().trim();
+          final importance = item['importance']?.toString().toLowerCase().trim() ?? 'medium';
+          if (term != null && term.isNotEmpty && importance != 'low') {
+            if (!allExtracted.contains(term)) {
+              allExtracted.add(term);
+            }
+          }
+        }
+      }
+    }
+
     return JobKeywordsAnalysisResult(
       atsScore: finalAtsScore,
       matchScore: finalAtsScore,

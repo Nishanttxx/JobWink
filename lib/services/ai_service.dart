@@ -562,18 +562,25 @@ class AIService {
 
     // 1. Prompt the AI evaluator to analyze both the current resume and current job description
     final prompt = '''
-You are an expert ATS (Applicant Tracking System) resume evaluator.
+You are an expert ATS (Applicant Tracking System) and technical job analysis evaluator.
 
-Evaluate ONLY the supplied CURRENT RESUME against ONLY the supplied TARGET JOB DESCRIPTION.
-Do not assume information that is not present.
-Do not invent skills, experience, education, projects, certifications, or achievements.
-Identify meaningful job requirements (do not score generic words like "intern", "responsible", "systems", "services").
+STEP 1: ANALYZE THE TARGET JOB DESCRIPTION FIRST:
+Extract meaningful, job-specific technical keywords, tools, frameworks, languages, technologies, and required qualifications.
+Classify each extracted keyword by importance:
+- "high": Required technical skills, primary programming languages, core frameworks, core technologies, and required qualifications.
+- "medium": Preferred skills, secondary tools, supporting technologies, and domain terminology.
+- "low": Generic words (e.g. "team", "responsibilities", "communication", "years", "using", "developed") - DO NOT include these.
 
-Distinguish carefully between:
-- Required skills vs Preferred/Nice-to-have skills.
-- FOUND keywords: explicitly or semantically present in resume (e.g. "RESTful API development" matches "REST API development").
-- PARTIALLY_MATCHED keywords: partial or related evidence (e.g. "Machine Learning" matching "ML").
-- MISSING keywords: not present in the resume. (e.g. If JD requires "AWS" and resume does not have it, AWS is MISSING. "Java" does NOT match "JavaScript").
+STEP 2: COMPARE AGAINST CURRENT RESUME (NO RESUME MODIFICATION):
+Identify which extracted keywords are authentically present in the CURRENT RESUME:
+- FOUND / MATCHED: Exact or semantic match present in the candidate's resume (e.g. "RESTful APIs" matches "REST APIs", "PostgreSQL" matches "Postgres", "Python" matches "Python").
+- PARTIALLY MATCHED: Related evidence present (e.g. "Machine Learning" matching "ML").
+- MISSING: Required or preferred in Job Description, but NOT present in the candidate's resume (e.g. If JD requires "AWS" and resume does not have AWS, AWS is MISSING. Never match "Java" to "JavaScript" or "C" to generic words).
+
+CRITICAL CONSTRAINTS:
+- Do NOT rewrite or invent resume content.
+- Missing keywords must NEVER be added to matched keywords.
+- Only job-relevant keywords should be extracted.
 
 EVALUATION & SCORING CATEGORIES (Total Max 100 points):
 1. keywordSkillMatch (Max 30 points): Core technical skills, tools, languages, and frameworks alignment.
@@ -584,7 +591,6 @@ EVALUATION & SCORING CATEGORIES (Total Max 100 points):
 6. overallRelevance (Max 10 points): Overall suitability and readiness for this specific job.
 
 SCORING CONSISTENCY RULE:
-The atsScore MUST equal the sum of the 6 category scores:
 atsScore = keywordSkillMatch + experienceMatch + projectMatch + responsibilityMatch + educationMatch + overallRelevance.
 Ensure atsScore is between 0 and 100.
 
@@ -613,6 +619,23 @@ Return ONLY a valid JSON object matching this exact schema:
     "educationMatch": 8,
     "overallRelevance": 7
   },
+  "keywords": [
+    {
+      "term": "Python",
+      "importance": "high",
+      "reason": "Required programming language"
+    },
+    {
+      "term": "Docker",
+      "importance": "high",
+      "reason": "Required containerization technology"
+    },
+    {
+      "term": "REST APIs",
+      "importance": "high",
+      "reason": "Required API development experience"
+    }
+  ],
   "matchedKeywords": [
     "Python",
     "Docker",
@@ -647,7 +670,7 @@ Return ONLY a valid JSON object matching this exact schema:
 
         for (final kw in parsed.matchedKeywords) {
           if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
-            verifiedMatched.add(kw);
+            if (!verifiedMatched.contains(kw)) verifiedMatched.add(kw);
           } else {
             if (!verifiedMissing.contains(kw)) verifiedMissing.add(kw);
           }
@@ -658,7 +681,18 @@ Return ONLY a valid JSON object matching this exact schema:
           if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
             if (!verifiedMatched.contains(kw)) verifiedMatched.add(kw);
           } else {
-            verifiedPartial.add(kw);
+            if (!verifiedPartial.contains(kw)) verifiedPartial.add(kw);
+          }
+        }
+
+        // Also check any structured extracted keywords from the JD
+        for (final kw in parsed.extractedJobKeywords) {
+          if (_isKeywordInResume(kw, currentResume, resumeCorpus)) {
+            if (!verifiedMatched.contains(kw)) verifiedMatched.add(kw);
+          } else {
+            if (!verifiedMissing.contains(kw) && !verifiedPartial.contains(kw)) {
+              verifiedMissing.add(kw);
+            }
           }
         }
 
@@ -981,6 +1015,30 @@ Return ONLY a valid JSON object matching this exact schema:
       case 'google cloud':
       case 'google cloud platform':
         return ['gcp', 'google cloud', 'google cloud platform'];
+      case 'docker':
+      case 'dockerized':
+      case 'containerization':
+        return ['docker', 'dockerized', 'containers', 'containerization'];
+      case 'python':
+      case 'python3':
+        return ['python', 'python3'];
+      case 'typescript':
+      case 'ts':
+        return ['typescript', 'ts'];
+      case 'javascript':
+      case 'js':
+        return ['javascript', 'js'];
+      case 'nlp':
+      case 'natural language processing':
+        return ['nlp', 'natural language processing'];
+      case 'llm':
+      case 'llms':
+      case 'large language models':
+        return ['llm', 'llms', 'large language models', 'large language model'];
+      case 'genai':
+      case 'generative ai':
+      case 'gen ai':
+        return ['genai', 'generative ai', 'gen ai'];
       default:
         return [];
     }

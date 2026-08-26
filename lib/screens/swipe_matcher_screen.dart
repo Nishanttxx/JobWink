@@ -314,6 +314,70 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
     );
   }
 
+  void _navigatePrevious() {
+    if (_currentIndex > 0) {
+      setState(() {
+        _currentIndex--;
+        _cardOffset = Offset.zero;
+        _cardRotation = 0.0;
+      });
+    }
+  }
+
+  void _navigateNext() {
+    if (_currentIndex < _jobQueue.length) {
+      setState(() {
+        _currentIndex++;
+        _cardOffset = Offset.zero;
+        _cardRotation = 0.0;
+      });
+    }
+  }
+
+  Widget _buildCarouselIndicators(BuildContext context, bool isDarkMode) {
+    if (_jobQueue.isEmpty || _currentIndex >= _jobQueue.length) {
+      return const SizedBox.shrink();
+    }
+
+    final total = _jobQueue.length;
+    final current = _currentIndex + 1;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        children: [
+          Text(
+            'Job $current of $total • Swipe or use arrows to browse',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.getMutedTextColor(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(total.clamp(0, 20), (index) {
+                final isActive = index == _currentIndex;
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: isActive ? 18 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: isActive ? AppTheme.primaryOrange : (isDarkMode ? const Color(0xFF333846) : const Color(0xFFD1D5DB)),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -331,7 +395,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
               children: [
                 PageHeader(
                   title: 'Swipe Job Matcher ⚡',
-                  subtitle: 'Instant 48-hour feed. Swipe right to save high-matching roles.',
+                  subtitle: 'Instant 48-hour feed with 10+ openings. Swipe or use arrows to browse.',
                   action: GestureDetector(
                     onTap: () => _showSavedJobsModal(context),
                     child: Container(
@@ -359,30 +423,86 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
                 // Centered Cards and Actions Section
                 Align(
                   alignment: Alignment.topCenter,
                   child: SizedBox(
-                    width: isDesktop ? 620 : double.infinity,
+                    width: isDesktop ? 760 : double.infinity,
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Main Interactive Card Stack View
+                        // Carousel Progress Dots
+                        _buildCarouselIndicators(context, isDarkMode),
+
+                        // Main Interactive Card Stack View with Desktop Arrow Navigation
                         if (_currentIndex < _jobQueue.length)
-                          _buildInteractiveCard(context, isDesktop, isDarkMode)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              if (isDesktop) ...[
+                                Tooltip(
+                                  message: 'Previous Job (←)',
+                                  child: IconButton(
+                                    onPressed: _currentIndex > 0 ? _navigatePrevious : null,
+                                    icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: AppTheme.getSurfaceColor(context),
+                                      foregroundColor: _currentIndex > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                      padding: const EdgeInsets.all(16),
+                                      side: BorderSide(color: AppTheme.getBorderColor(context)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                              ],
+                              _buildInteractiveCard(context, isDesktop, isDarkMode),
+                              if (isDesktop) ...[
+                                const SizedBox(width: 16),
+                                Tooltip(
+                                  message: 'Next Job (→)',
+                                  child: IconButton(
+                                    onPressed: _currentIndex < _jobQueue.length - 1 ? _navigateNext : null,
+                                    icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: AppTheme.getSurfaceColor(context),
+                                      foregroundColor: _currentIndex < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                      padding: const EdgeInsets.all(16),
+                                      side: BorderSide(color: AppTheme.getBorderColor(context)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          )
                         else
                           _buildCompletedState(context, isDarkMode),
 
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 24),
 
-                        // Action Buttons Row (Pass / Refresh / Save) Centered Directly Under Card
+                        // Action Buttons Row (Previous / Pass / Refresh / Save / Next) Centered Directly Under Card
                         if (_currentIndex < _jobQueue.length)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              // Previous Button (Mobile & Desktop)
+                              Tooltip(
+                                message: 'Previous',
+                                child: IconButton.filled(
+                                  onPressed: _currentIndex > 0 ? _navigatePrevious : null,
+                                  icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: AppTheme.getSurfaceColor(context),
+                                    foregroundColor: _currentIndex > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                    padding: const EdgeInsets.all(14),
+                                    side: BorderSide(color: AppTheme.getBorderColor(context)),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
                               // Pass Button (Left)
                               Tooltip(
                                 message: 'Pass (Swipe Left)',
@@ -398,10 +518,10 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 24),
+                              const SizedBox(width: 16),
                               // Instant Refresh Stack Button
                               Tooltip(
-                                message: 'Refresh Feed',
+                                message: 'Refresh Feed (New Random Roles)',
                                 child: IconButton.filled(
                                   onPressed: () => _loadJobsInstant(forceRefresh: true),
                                   icon: const Icon(Icons.refresh_rounded, size: 22),
@@ -413,7 +533,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                                   ),
                                 ),
                               ),
-                              const SizedBox(width: 24),
+                              const SizedBox(width: 16),
                               // Save Button (Right)
                               Tooltip(
                                 message: 'Save & Apply (Swipe Right)',
@@ -427,6 +547,21 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                                     padding: const EdgeInsets.all(18),
                                     elevation: 6,
                                     shadowColor: AppTheme.primaryOrange.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              // Next Button (Mobile & Desktop)
+                              Tooltip(
+                                message: 'Next',
+                                child: IconButton.filled(
+                                  onPressed: _currentIndex < _jobQueue.length - 1 ? _navigateNext : null,
+                                  icon: const Icon(Icons.arrow_forward_rounded, size: 22),
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: AppTheme.getSurfaceColor(context),
+                                    foregroundColor: _currentIndex < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                    padding: const EdgeInsets.all(14),
+                                    side: BorderSide(color: AppTheme.getBorderColor(context)),
                                   ),
                                 ),
                               ),

@@ -749,9 +749,19 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     trimmed = trimmed.replaceFirst(RegExp(r'^[<\(\["\x27]+'), '').replaceFirst(RegExp(r'[>\)\]"\x27]+$'), '');
     trimmed = trimmed.replaceAll(RegExp(r'[\.,;:]+$'), '').trim();
 
-    if (trimmed.startsWith(RegExp(r'^https?://', caseSensitive: false))) {
+    if (trimmed.startsWith(RegExp(r'^(https?|mailto|tel):', caseSensitive: false))) {
       return trimmed;
     }
+
+    if (trimmed.contains('@') && !trimmed.contains('/')) {
+      return 'mailto:$trimmed';
+    }
+
+    if (trimmed.startsWith(RegExp(r'^\+?[0-9\s\-()]{7,}$'))) {
+      final digits = trimmed.replaceAll(RegExp(r'[\s\-()]'), '');
+      return 'tel:$digits';
+    }
+
     return 'https://$trimmed';
   }
 
@@ -765,7 +775,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     pw.FontWeight defaultWeight = pw.FontWeight.normal,
   }) {
     final urlRegex = RegExp(
-      r'(https?://[^\s\),>]+|www\.[^\s\),>]+|github\.com/[^\s\),>]+|linkedin\.com/[^\s\),>]+)',
+      r'(https?://[^\s\),>]+|www\.[^\s\),>]+|github\.com/[^\s\),>]+|linkedin\.com/[^\s\),>]+|gitlab\.com/[^\s\),>]+|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)',
       caseSensitive: false,
     );
 
@@ -784,9 +794,14 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
         ];
       }
 
-      final safeEscaped = highlightKeywords
+      final safeEscapedList = highlightKeywords
           .map((k) => k.trim())
           .where((k) => k.length >= 2)
+          .toSet()
+          .toList()
+        ..sort((a, b) => b.length.compareTo(a.length));
+
+      final safeEscaped = safeEscapedList
           .map(RegExp.escape)
           .join('|');
 
@@ -909,17 +924,27 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     final line1Parts = <pw.InlineSpan>[];
     final cleanEmail = _clean(resume.email);
     if (cleanEmail.isNotEmpty) {
-      line1Parts.add(pw.TextSpan(text: _sanitizePdfText(cleanEmail)));
+      line1Parts.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: _normalizeUrlForLink(cleanEmail),
+          child: pw.Text(
+            _sanitizePdfText(cleanEmail),
+            style: pw.TextStyle(
+              fontSize: cfg.contactFontSize,
+              color: cfg.bodyTextColor,
+            ),
+          ),
+        ),
+      ));
     }
     final cleanLiRaw = _clean(resume.linkedin);
     if (cleanLiRaw.isNotEmpty) {
       if (line1Parts.isNotEmpty) line1Parts.add(const pw.TextSpan(text: ' | '));
-      final cleanLi = cleanLiRaw.replaceAll(RegExp(r'https?://(www\.)?'), '');
       line1Parts.add(pw.WidgetSpan(
         child: pw.UrlLink(
           destination: _normalizeUrlForLink(cleanLiRaw),
           child: pw.Text(
-            _sanitizePdfText(cleanLi),
+            _sanitizePdfText(cleanLiRaw),
             style: pw.TextStyle(
               fontSize: cfg.contactFontSize,
               color: cfg.linkColor,
@@ -932,17 +957,28 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     final line2Parts = <pw.InlineSpan>[];
     final cleanPhone = _clean(resume.phone);
     if (cleanPhone.isNotEmpty) {
-      line2Parts.add(pw.TextSpan(text: _sanitizePdfText(cleanPhone)));
+      final sanitizedPhone = cleanPhone.replaceAll(RegExp(r'[\s\-()]'), '');
+      line2Parts.add(pw.WidgetSpan(
+        child: pw.UrlLink(
+          destination: 'tel:$sanitizedPhone',
+          child: pw.Text(
+            _sanitizePdfText(cleanPhone),
+            style: pw.TextStyle(
+              fontSize: cfg.contactFontSize,
+              color: cfg.bodyTextColor,
+            ),
+          ),
+        ),
+      ));
     }
     final cleanGhRaw = _clean(resume.github);
     if (cleanGhRaw.isNotEmpty) {
       if (line2Parts.isNotEmpty) line2Parts.add(const pw.TextSpan(text: ' | '));
-      final cleanGh = cleanGhRaw.replaceAll(RegExp(r'https?://(www\.)?'), '');
       line2Parts.add(pw.WidgetSpan(
         child: pw.UrlLink(
           destination: _normalizeUrlForLink(cleanGhRaw),
           child: pw.Text(
-            _sanitizePdfText(cleanGh),
+            _sanitizePdfText(cleanGhRaw),
             style: pw.TextStyle(
               fontSize: cfg.contactFontSize,
               color: cfg.linkColor,
@@ -1071,7 +1107,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     ];
   }
 
-  List<pw.Widget> _buildEducationWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+  List<pw.Widget> _buildEducationWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.education.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('EDUCATION', cfg)];
 
@@ -1108,28 +1144,14 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Expanded(
-              child: pw.RichText(
-                text: pw.TextSpan(
-                  children: [
-                    if (degreeStr.isNotEmpty)
-                      pw.TextSpan(
-                        text: _sanitizePdfText(inst.isNotEmpty ? '$degreeStr | ' : degreeStr),
-                        style: pw.TextStyle(
-                          fontSize: cfg.subheadingFontSize,
-                          fontWeight: pw.FontWeight.bold,
-                          color: cfg.bodyTextColor,
-                        ),
-                      ),
-                    if (inst.isNotEmpty)
-                      pw.TextSpan(
-                        text: _sanitizePdfText(inst),
-                        style: pw.TextStyle(
-                          fontSize: cfg.bodyFontSize,
-                          color: cfg.bodyTextColor,
-                        ),
-                      ),
-                  ],
-                ),
+              child: _buildTextWithLinks(
+                inst.isNotEmpty ? '$degreeStr | $inst' : degreeStr,
+                fontSize: cfg.subheadingFontSize,
+                lineSpacing: 1.0,
+                color: cfg.bodyTextColor,
+                linkColor: cfg.linkColor,
+                highlightKeywords: highlightKeywords,
+                defaultWeight: pw.FontWeight.bold,
               ),
             ),
             if (rightStr.isNotEmpty)
@@ -1225,7 +1247,6 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       final rawUrl = _clean(proj.url).isNotEmpty
           ? _clean(proj.url)
           : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
-      final cleanUrl = rawUrl.replaceAll(RegExp(r'https?://(www\.)?'), '');
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
@@ -1240,13 +1261,13 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
                   color: cfg.bodyTextColor,
                 ),
               ),
-              if (cleanUrl.isNotEmpty) ...[
+              if (rawUrl.isNotEmpty) ...[
                 const pw.TextSpan(text: ' | '),
                 pw.WidgetSpan(
                   child: pw.UrlLink(
                     destination: _normalizeUrlForLink(rawUrl),
                     child: pw.Text(
-                      _sanitizePdfText(cleanUrl),
+                      _sanitizePdfText(rawUrl),
                       style: pw.TextStyle(
                         fontSize: cfg.subheadingFontSize,
                         fontWeight: pw.FontWeight.bold,
@@ -1341,13 +1362,14 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: pw.Text(
-          _sanitizePdfText(parts.join(' | ')),
-          style: pw.TextStyle(
-            fontSize: cfg.subheadingFontSize,
-            fontWeight: pw.FontWeight.bold,
-            color: cfg.bodyTextColor,
-          ),
+        child: _buildTextWithLinks(
+          parts.join(' | '),
+          fontSize: cfg.subheadingFontSize,
+          lineSpacing: 1.0,
+          color: cfg.bodyTextColor,
+          linkColor: cfg.linkColor,
+          highlightKeywords: highlightKeywords,
+          defaultWeight: pw.FontWeight.bold,
         ),
       ));
 
@@ -1367,7 +1389,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     return [
       ..._buildHeaderWidgets(resume, cfg),
       ..._buildSummaryWidgets(resume, cfg, highlightKeywords: highlightKeywords),
-      ..._buildEducationWidgets(resume, cfg),
+      ..._buildEducationWidgets(resume, cfg, highlightKeywords: highlightKeywords),
       ..._buildSkillsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
       ..._buildProjectsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
       ..._buildExperienceWidgets(resume, cfg, highlightKeywords: highlightKeywords),

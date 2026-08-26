@@ -1415,15 +1415,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             ),
             _buildSectionCard(
               context: context,
-              sectionKey: 'certifications',
-              icon: Icons.verified_outlined,
-              title: 'Certifications & Credentials',
-              subtitle: '${_parsedResumeData?.certifications.length ?? 0} entries',
-              child: _buildCertificationsSection(context, isDarkMode),
-            ),
-            const SizedBox(height: 16),
-            _buildSectionCard(
-              context: context,
               sectionKey: 'extracurriculars',
               icon: Icons.interests_outlined,
               title: 'Extracurricular Activities',
@@ -1472,10 +1463,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               ),
             ),
             _buildTailoringCard(context, isDarkMode),
-            if (_jobDescriptionController.text.trim().isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildAtsGaugeCard(context, isDarkMode),
-            ],
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
               prevTitle: '← Back: Extracurriculars',
@@ -2862,23 +2849,39 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           spacing: 8,
           runSpacing: 8,
           children: _skills.map((skill) {
+            final isMatched = _matchedJobKeywords.any((k) {
+              final lk = k.trim().toLowerCase();
+              final ls = skill.trim().toLowerCase();
+              if (lk.isEmpty || ls.isEmpty) return false;
+              if (lk == ls) return true;
+              if (lk.length >= 2) {
+                final pattern = RegExp('(?<=^|[^a-zA-Z0-9])${RegExp.escape(lk)}(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
+                if (pattern.hasMatch(ls)) return true;
+              }
+              return false;
+            });
             return Chip(
               label: Text(
                 skill,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryOrange,
+                  fontWeight: isMatched ? FontWeight.w800 : FontWeight.w600,
+                  color: isMatched
+                      ? (isDarkMode ? Colors.white : const Color(0xFF0F172A))
+                      : AppTheme.primaryOrange,
                 ),
               ),
-              backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.12),
+              backgroundColor: isMatched
+                  ? AppTheme.primaryOrange.withValues(alpha: isDarkMode ? 0.35 : 0.22)
+                  : AppTheme.primaryOrange.withValues(alpha: 0.12),
               deleteIcon: const Icon(Icons.close,
                   size: 14, color: AppTheme.primaryOrange),
               onDeleted: () => _removeSkill(skill),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
-                side: BorderSide(
-                    color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
+                side: isMatched
+                    ? const BorderSide(color: AppTheme.primaryOrange, width: 1.5)
+                    : BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
               ),
             );
           }).toList(),
@@ -2961,17 +2964,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       if (index >= 0 && index < currentList.length) {
         currentList.removeAt(index);
         _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(extracurriculars: currentList);
-      }
-    });
-    _persistCurrentResume();
-  }
-
-  void _deleteCertification(int index) {
-    setState(() {
-      final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.certifications ?? []);
-      if (index >= 0 && index < currentList.length) {
-        currentList.removeAt(index);
-        _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(certifications: currentList);
       }
     });
     _persistCurrentResume();
@@ -4261,154 +4253,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
-  void _showCertificationDialog(BuildContext context, {ExtracurricularEntry? initial, int? index}) {
-    final nameController = TextEditingController(text: initial?.activity ?? '');
-    final issuerController = TextEditingController(text: initial?.organization ?? '');
-    final roleController = TextEditingController(text: initial?.role ?? '');
-    final descController = TextEditingController(text: initial?.description ?? '');
-
-    debugPrint('[Certification DEBUG] Input name: ${nameController.text}');
-    debugPrint('[Certification DEBUG] Input issuer: ${issuerController.text}');
-    debugPrint('[Certification DEBUG] Input URL/details: ${descController.text}');
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            initial == null ? 'Add Certification' : 'Edit Certification',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppTheme.getTextColor(ctx),
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Certification Name *',
-                    hint: 'e.g. AWS Certified Cloud Practitioner',
-                    icon: Icons.workspace_premium_outlined,
-                    controller: nameController,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Issuing Organization / Issuer',
-                    hint: 'e.g. Amazon Web Services',
-                    icon: Icons.business_center_outlined,
-                    controller: issuerController,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Role / Credential Level (Optional)',
-                    hint: 'e.g. Professional / Associate',
-                    icon: Icons.badge_outlined,
-                    controller: roleController,
-                  ),
-                  const SizedBox(height: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Date / Credential URL / Details',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.getTextColor(ctx),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: descController,
-                        maxLines: 2,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: AppTheme.getTextColor(ctx),
-                        ),
-                        decoration: _inputDecoration(
-                          ctx,
-                          'e.g. 2026 • https://aws.amazon.com/verification',
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.getMutedTextColor(ctx),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final certName = nameController.text.trim();
-                if (certName.isEmpty) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(content: Text('Certification Name is required.')),
-                  );
-                  return;
-                }
-
-                final entry = ExtracurricularEntry(
-                  activity: certName,
-                  organization: issuerController.text.trim(),
-                  role: roleController.text.trim(),
-                  description: descController.text.trim(),
-                );
-
-                final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.certifications ?? []);
-                debugPrint('[Certification DEBUG] Before save count: ${currentList.length}');
-
-                if (index != null && index >= 0 && index < currentList.length) {
-                  currentList[index] = entry;
-                } else {
-                  currentList.add(entry);
-                }
-
-                debugPrint('[Certification DEBUG] After save count: ${currentList.length}');
-
-                setState(() {
-                  _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(certifications: currentList);
-                });
-
-                debugPrint('[Certification DEBUG] ResumeModel certifications: ${_parsedResumeData?.certifications.length ?? 0}');
-
-                _persistCurrentResume();
-                Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryOrange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                'Save',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   void _showExtracurricularDialog(BuildContext context, {ExtracurricularEntry? initial, int? index}) {
     final activityController = TextEditingController(text: initial?.activity ?? '');
     final roleController = TextEditingController(text: initial?.role ?? '');
@@ -4645,9 +4489,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                                 ),
                               ),
                               Expanded(
-                                child: Text(
+                                child: _buildHighlightedText(
                                   cleaned,
-                                  style: GoogleFonts.plusJakartaSans(
+                                  context: context,
+                                  isDarkMode: isDarkMode,
+                                  baseStyle: GoogleFonts.plusJakartaSans(
                                     fontSize: 12,
                                     color: AppTheme.getTextColor(context),
                                     height: 1.4,
@@ -4833,9 +4679,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                               ),
                             ),
                             Expanded(
-                              child: Text(
+                              child: _buildHighlightedText(
                                 cleaned,
-                                style: GoogleFonts.plusJakartaSans(
+                                context: context,
+                                isDarkMode: isDarkMode,
+                                baseStyle: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   color: AppTheme.getTextColor(context),
                                   height: 1.4,
@@ -5105,148 +4953,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     );
   }
 
-  // ── Section 7: Certifications & Credentials ──
 
-  Widget _buildCertificationsSection(BuildContext context, bool isDarkMode) {
-    final certList = _parsedResumeData?.certifications ?? [];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (certList.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(
-              'No certification entries available.',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                color: AppTheme.getMutedTextColor(context),
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          )
-        else
-          ...certList.asMap().entries.map((entry) {
-            final idx = entry.key;
-            final item = entry.value;
-            final heading = item.activity.isNotEmpty
-                ? item.activity
-                : (item.role.isNotEmpty ? item.role : 'Certification');
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppTheme.getBgColor(context),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.getBorderColor(context)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          heading,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.getTextColor(context),
-                          ),
-                        ),
-                      ),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined,
-                                size: 18, color: AppTheme.primaryOrange),
-                            onPressed: () => _showCertificationDialog(context, initial: item, index: idx),
-                            tooltip: 'Edit certification entry',
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded,
-                                size: 18, color: Color(0xFFEF4444)),
-                            onPressed: () => _deleteCertification(idx),
-                            tooltip: 'Remove certification entry',
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (item.organization.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      item.organization,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.primaryOrange,
-                      ),
-                    ),
-                  ],
-                  if (item.description.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    ...item.description.split('\n').map((line) {
-                      final cleaned = _cleanBulletString(line);
-                      if (cleaned.isEmpty) return const SizedBox.shrink();
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Container(
-                              margin: const EdgeInsets.only(top: 6, right: 8),
-                              width: 5,
-                              height: 5,
-                              decoration: const BoxDecoration(
-                                color: AppTheme.primaryOrange,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            Expanded(
-                              child: Text(
-                                cleaned,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  color: AppTheme.getTextColor(context),
-                                  height: 1.4,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ],
-              ),
-            );
-          }),
-        const SizedBox(height: 4),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () => _showCertificationDialog(context),
-            icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
-            label: Text(
-              '+ Add Certification',
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                color: AppTheme.primaryOrange,
-                fontSize: 13,
-              ),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.5)),
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 
   // ── Section 8: Extracurricular Activities ──
 
@@ -5259,7 +4966,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Text(
-              'No certifications or extracurricular entries available.',
+              'No extracurricular entries available.',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
                 color: AppTheme.getMutedTextColor(context),
@@ -5273,7 +4980,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             final item = entry.value;
             final heading = item.activity.isNotEmpty
                 ? item.activity
-                : (item.role.isNotEmpty ? item.role : 'Certification / Activity');
+                : (item.role.isNotEmpty ? item.role : 'Activity');
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(14),
@@ -5305,13 +5012,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                             icon: const Icon(Icons.edit_outlined,
                                 size: 18, color: AppTheme.primaryOrange),
                             onPressed: () => _showExtracurricularDialog(context, initial: item, index: idx),
-                            tooltip: 'Edit certification/activity entry',
+                            tooltip: 'Edit activity entry',
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline_rounded,
                                 size: 18, color: Color(0xFFEF4444)),
                             onPressed: () => _deleteExtracurricular(idx),
-                            tooltip: 'Remove certification/activity entry',
+                            tooltip: 'Remove activity entry',
                           ),
                         ],
                       ),
@@ -5348,9 +5055,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                               ),
                             ),
                             Expanded(
-                              child: Text(
+                              child: _buildHighlightedText(
                                 cleaned,
-                                style: GoogleFonts.plusJakartaSans(
+                                context: context,
+                                isDarkMode: isDarkMode,
+                                baseStyle: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   color: AppTheme.getTextColor(context),
                                   height: 1.4,
@@ -5373,7 +5082,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             onPressed: () => _showExtracurricularDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
-              '+ Add Certification / Activity',
+              '+ Add Activity',
               style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryOrange,
@@ -5754,6 +5463,104 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         border: Border.all(color: AppTheme.getBorderColor(context)),
       ),
       child: AtsScoreGauge(score: _atsScore.toInt()),
+    );
+  }
+
+  Widget _buildHighlightedText(
+    String text, {
+    required BuildContext context,
+    required bool isDarkMode,
+    TextStyle? baseStyle,
+    int? maxLines,
+    TextOverflow? overflow,
+    TextAlign textAlign = TextAlign.start,
+  }) {
+    final style = baseStyle ??
+        GoogleFonts.plusJakartaSans(
+          fontSize: 12,
+          height: 1.4,
+          color: AppTheme.getTextColor(context),
+        );
+
+    if (text.trim().isEmpty || _matchedJobKeywords.isEmpty) {
+      return Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+        textAlign: textAlign,
+      );
+    }
+
+    final validKws = _matchedJobKeywords
+        .map((k) => k.trim())
+        .where((k) => k.length >= 2)
+        .toSet()
+        .toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    if (validKws.isEmpty) {
+      return Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+        textAlign: textAlign,
+      );
+    }
+
+    final escapedList = validKws.map(RegExp.escape).join('|');
+    final regExp = RegExp(
+      '(?<=^|[^a-zA-Z0-9])($escapedList)(?=[^a-zA-Z0-9]|\$)',
+      caseSensitive: false,
+    );
+
+    final matches = regExp.allMatches(text);
+    if (matches.isEmpty) {
+      return Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+        textAlign: textAlign,
+      );
+    }
+
+    final spans = <TextSpan>[];
+    int currentOffset = 0;
+
+    for (final match in matches) {
+      if (match.start > currentOffset) {
+        spans.add(TextSpan(
+          text: text.substring(currentOffset, match.start),
+          style: style,
+        ));
+      }
+
+      final matchedWord = text.substring(match.start, match.end);
+      spans.add(TextSpan(
+        text: matchedWord,
+        style: style.copyWith(
+          fontWeight: FontWeight.w800,
+          color: isDarkMode ? Colors.white : const Color(0xFF090D16),
+        ),
+      ));
+
+      currentOffset = match.end;
+    }
+
+    if (currentOffset < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(currentOffset),
+        style: style,
+      ));
+    }
+
+    return RichText(
+      text: TextSpan(children: spans),
+      maxLines: maxLines,
+      overflow: overflow ?? TextOverflow.clip,
+      textAlign: textAlign,
     );
   }
 
