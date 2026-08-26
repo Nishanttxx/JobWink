@@ -22,32 +22,49 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
   List<JobMatch> _jobQueue = [];
   bool _isRefreshing = false;
   int _currentIndex = 0;
+  double _scrollPosition = 0.0;
+  double _dragStartX = 0.0;
+  double _dragStartScrollPosition = 0.0;
+
   final List<JobMatch> _savedJobs = [];
   final List<JobMatch> _passedJobs = [];
 
-  Offset _cardOffset = Offset.zero;
-  double _cardRotation = 0.0;
+  late AnimationController _animController;
+  late Animation<double> _scrollAnimation;
 
-  late AnimationController _swipeAnimController;
-  late Animation<Offset> _cardOffsetAnimation;
-  late Animation<double> _cardRotationAnimation;
-  bool _isAnimating = false;
+  VoidCallback? _onAnimationCompletedCallback;
+  bool _isProcessingSwipe = false;
 
   @override
   void initState() {
     super.initState();
-    _swipeAnimController = AnimationController(
+    _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 280),
+      duration: const Duration(milliseconds: 360),
     );
-    _cardOffsetAnimation = Tween<Offset>(begin: Offset.zero, end: Offset.zero).animate(_swipeAnimController);
-    _cardRotationAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(_swipeAnimController);
 
-    _swipeAnimController.addListener(() {
+    _scrollAnimation = Tween<double>(begin: 0.0, end: 0.0).animate(_animController);
+
+    _animController.addListener(() {
       setState(() {
-        _cardOffset = _cardOffsetAnimation.value;
-        _cardRotation = _cardRotationAnimation.value;
+        _scrollPosition = _scrollAnimation.value;
       });
+    });
+
+    _animController.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        final cb = _onAnimationCompletedCallback;
+        _onAnimationCompletedCallback = null;
+        if (cb != null) {
+          cb();
+        } else {
+          if (mounted) {
+            setState(() {
+              _currentIndex = _scrollPosition.round().clamp(0, _jobQueue.isNotEmpty ? _jobQueue.length - 1 : 0);
+            });
+          }
+        }
+      }
     });
 
     _loadJobsInstant();
@@ -55,30 +72,186 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
 
   @override
   void dispose() {
-    _swipeAnimController.dispose();
+    _animController.dispose();
     super.dispose();
+  }
+
+  void _animateToPosition(double targetPosition, {VoidCallback? onComplete}) {
+    if (_animController.isAnimating) {
+      _animController.stop();
+    }
+    _onAnimationCompletedCallback = onComplete;
+    final startPos = _scrollPosition;
+    _scrollAnimation = Tween<double>(
+      begin: startPos,
+      end: targetPosition,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic, // power3.out equivalent
+    ));
+    _animController.forward(from: 0.0);
   }
 
   Future<void> _loadJobsInstant({bool forceRefresh = false}) async {
     if (_isRefreshing) return;
 
-    // Load instantly from service cache or fast fallback
     final initialJobs = await JobService.instance.fetchLatest48hJobs(forceRefresh: forceRefresh);
     
     if (mounted) {
       setState(() {
         _jobQueue = initialJobs;
         _currentIndex = 0;
+        _scrollPosition = 0.0;
         _isRefreshing = false;
+        _isProcessingSwipe = false;
       });
     }
   }
 
-  void _handleSwipe(bool isRight) async {
-    if (_currentIndex >= _jobQueue.length) return;
+  /// Arrow button navigation only: Moves to previous job card without applying or rejecting
+  void _navigatePrevious() {
+    if (_isProcessingSwipe || _jobQueue.isEmpty) return;
+    final current = _scrollPosition.round();
+    if (current > 0) {
+      _animateToPosition((current - 1).toDouble());
+    }
+  }
+
+  /// Arrow button navigation only: Moves to next job card without applying or rejecting
+  void _navigateNext() {
+    if (_isProcessingSwipe || _jobQueue.isEmpty) return;
+    final current = _scrollPosition.round();
+    if (current < _jobQueue.length - 1) {
+      _animateToPosition((current + 1).toDouble());
+    }
+  }
+
+  /// Opens the Apply URL for a specific job using existing url_launcher mechanism with validation
+  Future<void> _openJobApplyUrl(JobMatch job) async {
+    String? targetUrl = job.applyUrl ?? job.jobUrl;
+    if (targetUrl == null || targetUrl.trim().isEmpty) {
+      debugPrint('[SwipeMatcher] No valid apply URL for job: ${job.jobTitle}');
+      return;
+    }
+
+    targetUrl = targetUrl.trim();
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = 'https://$targetUrl';
+    }
+
+    try {
+      final uri = Uri.parse(targetUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        debugPrint('[SwipeMatcher] canLaunchUrl returned false for: $targetUrl');
+      }
+    } catch (e) {
+      debugPrint('[SwipeMatcher] Error launching job URL ($targetUrl): $e');
+    }
+  }
+
+  /// Handles completion of swipe action (Right = Apply, Left = Reject)
+  void _onSwipeActionCompleted({
+    required bool isRightSwipe,
+    required JobMatch swipedJob,
+    required int activeIndex,
+  }) {
+    if (!mounted) return;
+
+    setState(() {
+      if (activeIndex >= 0 && activeIndex < _jobQueue.length && _jobQueue[activeIndex].id == swipedJob.id) {
+        _jobQueue.removeAt(activeIndex);
+      } else {
+        _jobQueue.removeWhere((j) => j.id == swipedJob.id);
+      }
+
+      final maxIdx = _jobQueue.isNotEmpty ? _jobQueue.length - 1 : 0;
+      _currentIndex = activeIndex.clamp(0, maxIdx);
+      _scrollPosition = _currentIndex.toDouble();
+    });
+
+    if (isRightSwipe) {
+      // 1. Record Apply in database / analytics
+      JobService.instance.recordSwipeAction(jobId: swipedJob.id, isRightSwipe: true);
+      _savedJobs.add(swipedJob);
+
+      // 2. Feedback SnackBar
+      final String? targetUrl = swipedJob.applyUrl ?? swipedJob.jobUrl;
+      final bool hasUrl = targetUrl != null && targetUrl.trim().isNotEmpty;
+
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: Duration(milliseconds: hasUrl ? 2200 : 1200),
+          backgroundColor: const Color(0xFF10B981),
+          content: Text(
+            hasUrl
+                ? 'Applied to "${swipedJob.jobTitle}"! Opening website... 🚀'
+                : 'Saved "${swipedJob.jobTitle}"! 🎉',
+            style: GoogleFonts.plusJakartaSans(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+
+      // 3. Open captured job's Apply website
+      if (hasUrl) {
+        _openJobApplyUrl(swipedJob);
+      }
+    } else {
+      // LEFT SWIPE = REJECT
+      // 1. Record Reject in database / analytics
+      JobService.instance.recordSwipeAction(jobId: swipedJob.id, isRightSwipe: false);
+      _passedJobs.add(swipedJob);
+
+      // 2. Feedback SnackBar
+      ScaffoldMessenger.of(context).clearSnackBars();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(milliseconds: 1000),
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          content: Text(
+            'Rejected "${swipedJob.jobTitle}"',
+            style: GoogleFonts.plusJakartaSans(
+              color: AppTheme.getTextColor(context),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      );
+
+      // CRITICAL: Left swipe NEVER opens any URL or browser tab
+    }
+
+    _isProcessingSwipe = false;
+  }
+
+  void _handlePassAction() {
+    if (_isProcessingSwipe || _jobQueue.isEmpty || _currentIndex >= _jobQueue.length) return;
+    final activeIdx = _scrollPosition.round().clamp(0, _jobQueue.length - 1);
+    final swipedJob = _jobQueue[activeIdx];
+
+    _isProcessingSwipe = true;
+    _animateToPosition(
+      (activeIdx + 1.0),
+      onComplete: () => _onSwipeActionCompleted(
+        isRightSwipe: false,
+        swipedJob: swipedJob,
+        activeIndex: activeIdx,
+      ),
+    );
+  }
+
+  void _handleSaveAction() async {
+    if (_isProcessingSwipe || _jobQueue.isEmpty || _currentIndex >= _jobQueue.length) return;
+    final activeIdx = _scrollPosition.round().clamp(0, _jobQueue.length - 1);
+    final swipedJob = _jobQueue[activeIdx];
 
     final auth = AuthProviderScope.read(context);
-    if (isRight && !auth.isAuthenticated && DemoService.instance.isDemoMode) {
+    if (!auth.isAuthenticated && DemoService.instance.isDemoMode) {
       final proceed = await DemoUpsellDialog.show(
         context,
         actionTitle: 'Save Job Application',
@@ -90,90 +263,15 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
 
     if (!mounted) return;
 
-    final job = _jobQueue[_currentIndex];
-
-    // Non-blocking fire-and-forget swipe logging
-    JobService.instance.recordSwipeAction(
-      jobId: job.id,
-      isRightSwipe: isRight,
-    );
-
-    final String? targetUrl = job.applyUrl ?? job.jobUrl;
-    final bool hasPortalUrl = isRight && targetUrl != null && targetUrl.isNotEmpty && targetUrl.startsWith('http');
-
-    setState(() {
-      if (isRight) {
-        _savedJobs.add(job);
-      } else {
-        _passedJobs.add(job);
-      }
-      _currentIndex++;
-      _cardOffset = Offset.zero;
-      _cardRotation = 0.0;
-    });
-
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: Duration(milliseconds: hasPortalUrl ? 2500 : 1200),
-        backgroundColor: isRight ? const Color(0xFF10B981) : AppTheme.getSurfaceColor(context),
-        content: Text(
-          isRight
-              ? (hasPortalUrl
-                  ? 'Saved "${job.jobTitle}"! Redirecting to job portal... 🚀'
-                  : 'Saved "${job.jobTitle}"! 🎉')
-              : 'Passed on "${job.jobTitle}"',
-          style: GoogleFonts.plusJakartaSans(
-            color: isRight ? Colors.white : AppTheme.getTextColor(context),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+    _isProcessingSwipe = true;
+    _animateToPosition(
+      (activeIdx - 1.0),
+      onComplete: () => _onSwipeActionCompleted(
+        isRightSwipe: true,
+        swipedJob: swipedJob,
+        activeIndex: activeIdx,
       ),
     );
-
-    if (isRight && targetUrl != null && targetUrl.isNotEmpty && targetUrl.startsWith('http')) {
-      try {
-        final uri = Uri.parse(targetUrl);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      } catch (e) {
-        debugPrint('Error launching job portal URL: $e');
-      }
-    }
-  }
-
-  void _animateAndSwipe(bool isRight) {
-    if (_isAnimating || _currentIndex >= _jobQueue.length) return;
-    _isAnimating = true;
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final targetX = isRight ? (screenWidth > 600 ? 700.0 : 450.0) : (screenWidth > 600 ? -700.0 : -450.0);
-    final targetRotation = isRight ? 0.35 : -0.35;
-
-    _cardOffsetAnimation = Tween<Offset>(
-      begin: _cardOffset,
-      end: Offset(targetX, _cardOffset.dy + 35.0),
-    ).animate(CurvedAnimation(
-      parent: _swipeAnimController,
-      curve: Curves.easeOutCubic,
-    ));
-
-    _cardRotationAnimation = Tween<double>(
-      begin: _cardRotation,
-      end: targetRotation,
-    ).animate(CurvedAnimation(
-      parent: _swipeAnimController,
-      curve: Curves.easeOutCubic,
-    ));
-
-    _swipeAnimController.forward(from: 0.0).then((_) {
-      _handleSwipe(isRight);
-      _cardOffset = Offset.zero;
-      _cardRotation = 0.0;
-      _isAnimating = false;
-      _swipeAnimController.reset();
-    });
   }
 
   void _showSavedJobsModal(BuildContext context) {
@@ -314,40 +412,21 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
     );
   }
 
-  void _navigatePrevious() {
-    if (_currentIndex > 0) {
-      setState(() {
-        _currentIndex--;
-        _cardOffset = Offset.zero;
-        _cardRotation = 0.0;
-      });
-    }
-  }
-
-  void _navigateNext() {
-    if (_currentIndex < _jobQueue.length) {
-      setState(() {
-        _currentIndex++;
-        _cardOffset = Offset.zero;
-        _cardRotation = 0.0;
-      });
-    }
-  }
-
   Widget _buildCarouselIndicators(BuildContext context, bool isDarkMode) {
     if (_jobQueue.isEmpty || _currentIndex >= _jobQueue.length) {
       return const SizedBox.shrink();
     }
 
     final total = _jobQueue.length;
-    final current = _currentIndex + 1;
+    final activeIndex = _scrollPosition.round().clamp(0, total - 1);
+    final current = activeIndex + 1;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         children: [
           Text(
-            'Job $current of $total • Swipe or use arrows to browse',
+            'Job $current of $total • 3D Depth Swipe Feed',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 12,
               fontWeight: FontWeight.w600,
@@ -360,7 +439,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(total.clamp(0, 20), (index) {
-                final isActive = index == _currentIndex;
+                final isActive = index == activeIndex;
                 return Container(
                   margin: const EdgeInsets.symmetric(horizontal: 3),
                   width: isActive ? 18 : 6,
@@ -395,7 +474,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
               children: [
                 PageHeader(
                   title: 'Swipe Job Matcher ⚡',
-                  subtitle: 'Instant 48-hour feed with 10+ openings. Swipe or use arrows to browse.',
+                  subtitle: 'Instant 48-hour feed with 10+ openings. Swipe or use arrows to browse in 3D depth.',
                   action: GestureDetector(
                     onTap: () => _showSavedJobsModal(context),
                     child: Container(
@@ -437,7 +516,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                         // Carousel Progress Dots
                         _buildCarouselIndicators(context, isDarkMode),
 
-                        // Main Interactive Card Stack View with Desktop Arrow Navigation
+                        // Main 3D DepthCarousel View with Desktop Arrow Controls
                         if (_currentIndex < _jobQueue.length)
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -447,11 +526,11 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                                 Tooltip(
                                   message: 'Previous Job (←)',
                                   child: IconButton(
-                                    onPressed: _currentIndex > 0 ? _navigatePrevious : null,
+                                    onPressed: _scrollPosition.round() > 0 ? _navigatePrevious : null,
                                     icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
                                     style: IconButton.styleFrom(
                                       backgroundColor: AppTheme.getSurfaceColor(context),
-                                      foregroundColor: _currentIndex > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                      foregroundColor: _scrollPosition.round() > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
                                       padding: const EdgeInsets.all(16),
                                       side: BorderSide(color: AppTheme.getBorderColor(context)),
                                     ),
@@ -459,17 +538,17 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                                 ),
                                 const SizedBox(width: 16),
                               ],
-                              _buildInteractiveCard(context, isDesktop, isDarkMode),
+                              _buildDepthCarousel(context, isDesktop, isDarkMode),
                               if (isDesktop) ...[
                                 const SizedBox(width: 16),
                                 Tooltip(
                                   message: 'Next Job (→)',
                                   child: IconButton(
-                                    onPressed: _currentIndex < _jobQueue.length - 1 ? _navigateNext : null,
+                                    onPressed: _scrollPosition.round() < _jobQueue.length - 1 ? _navigateNext : null,
                                     icon: const Icon(Icons.arrow_forward_ios_rounded, size: 20),
                                     style: IconButton.styleFrom(
                                       backgroundColor: AppTheme.getSurfaceColor(context),
-                                      foregroundColor: _currentIndex < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                      foregroundColor: _scrollPosition.round() < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
                                       padding: const EdgeInsets.all(16),
                                       side: BorderSide(color: AppTheme.getBorderColor(context)),
                                     ),
@@ -492,11 +571,11 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                               Tooltip(
                                 message: 'Previous',
                                 child: IconButton.filled(
-                                  onPressed: _currentIndex > 0 ? _navigatePrevious : null,
+                                  onPressed: _scrollPosition.round() > 0 ? _navigatePrevious : null,
                                   icon: const Icon(Icons.arrow_back_rounded, size: 22),
                                   style: IconButton.styleFrom(
                                     backgroundColor: AppTheme.getSurfaceColor(context),
-                                    foregroundColor: _currentIndex > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                    foregroundColor: _scrollPosition.round() > 0 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
                                     padding: const EdgeInsets.all(14),
                                     side: BorderSide(color: AppTheme.getBorderColor(context)),
                                   ),
@@ -507,7 +586,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                               Tooltip(
                                 message: 'Pass (Swipe Left)',
                                 child: IconButton.filled(
-                                  onPressed: () => _animateAndSwipe(false),
+                                  onPressed: _handlePassAction,
                                   icon: const Icon(Icons.close_rounded, size: 28),
                                   iconSize: 28,
                                   style: IconButton.styleFrom(
@@ -538,7 +617,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                               Tooltip(
                                 message: 'Save & Apply (Swipe Right)',
                                 child: IconButton.filled(
-                                  onPressed: () => _animateAndSwipe(true),
+                                  onPressed: _handleSaveAction,
                                   icon: const Icon(Icons.favorite_rounded, size: 28),
                                   iconSize: 28,
                                   style: IconButton.styleFrom(
@@ -555,11 +634,11 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                               Tooltip(
                                 message: 'Next',
                                 child: IconButton.filled(
-                                  onPressed: _currentIndex < _jobQueue.length - 1 ? _navigateNext : null,
+                                  onPressed: _scrollPosition.round() < _jobQueue.length - 1 ? _navigateNext : null,
                                   icon: const Icon(Icons.arrow_forward_rounded, size: 22),
                                   style: IconButton.styleFrom(
                                     backgroundColor: AppTheme.getSurfaceColor(context),
-                                    foregroundColor: _currentIndex < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
+                                    foregroundColor: _scrollPosition.round() < _jobQueue.length - 1 ? AppTheme.getTextColor(context) : AppTheme.getMutedTextColor(context).withValues(alpha: 0.2),
                                     padding: const EdgeInsets.all(14),
                                     side: BorderSide(color: AppTheme.getBorderColor(context)),
                                   ),
@@ -579,151 +658,205 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
     );
   }
 
-  Widget _buildInteractiveCard(BuildContext context, bool isDesktop, bool isDarkMode) {
-    final currentJob = _jobQueue[_currentIndex];
-    final nextJob = (_currentIndex + 1 < _jobQueue.length) ? _jobQueue[_currentIndex + 1] : null;
-    final dragProgress = (_cardOffset.dx.abs() / 250.0).clamp(0.0, 1.0);
+  Widget _buildDepthCarousel(BuildContext context, bool isDesktop, bool isDarkMode) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = isDesktop ? 600.0 : (screenWidth - 48.0).clamp(280.0, 600.0);
+    final currentPos = _scrollPosition;
+    final total = _jobQueue.length;
 
-    return SizedBox(
-      width: isDesktop ? 620 : double.infinity,
-      child: Stack(
-        alignment: Alignment.topCenter,
-        clipBehavior: Clip.none,
-      children: [
-        // Stacked Background Card (3D Deck Effect with smooth scaling during drag)
-        if (nextJob != null)
-          Transform.translate(
-            offset: Offset(0, 14 - (8 * dragProgress)),
-            child: Transform.scale(
-              scale: 0.94 + (0.06 * dragProgress),
-              child: Opacity(
-                opacity: 0.6 + (0.4 * dragProgress),
-                child: _buildCardContent(context, nextJob, isDesktop, isDarkMode),
-              ),
+    // Calculate visible index window ([-2, +2] around fractional position)
+    final minIndex = (currentPos - 2.5).floor().clamp(0, total - 1);
+    final maxIndex = (currentPos + 2.5).ceil().clamp(0, total - 1);
+
+    final List<int> visibleIndices = [];
+    for (int i = minIndex; i <= maxIndex; i++) {
+      visibleIndices.add(i);
+    }
+
+    // Sort visible indices descending by distance so furthest cards paint first
+    // and the front card (|d| closest to 0) paints last on top.
+    visibleIndices.sort((a, b) {
+      final distA = (a - currentPos).abs();
+      final distB = (b - currentPos).abs();
+      return distB.compareTo(distA);
+    });
+
+    final activeIndex = currentPos.round().clamp(0, total - 1);
+    final dragOffsetFromActive = currentPos - activeIndex;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (details) {
+        if (_isProcessingSwipe) return;
+        if (_animController.isAnimating) {
+          _animController.stop();
+        }
+        _dragStartX = details.globalPosition.dx;
+        _dragStartScrollPosition = _scrollPosition;
+      },
+      onHorizontalDragUpdate: (details) {
+        if (_isProcessingSwipe) return;
+        final deltaX = details.globalPosition.dx - _dragStartX;
+        final displacement = -deltaX / (cardWidth * 0.72);
+        setState(() {
+          _scrollPosition = (_dragStartScrollPosition + displacement).clamp(
+            -0.75,
+            (total - 0.25).clamp(0.0, double.infinity),
+          );
+        });
+      },
+      onHorizontalDragEnd: (details) {
+        if (_isProcessingSwipe) return;
+        final deltaX = details.globalPosition.dx - _dragStartX;
+        final vx = details.velocity.pixelsPerSecond.dx;
+        final activeIdx = _dragStartScrollPosition.round().clamp(0, total - 1);
+
+        if (activeIdx >= total) return;
+        final swipedJob = _jobQueue[activeIdx];
+
+        // Sensible horizontal threshold (75px distance or fast flick 380px/s)
+        final isRightSwipe = deltaX > 75 || vx > 380;
+        final isLeftSwipe = deltaX < -75 || vx < -380;
+
+        if (isRightSwipe) {
+          // RIGHT SWIPE = APPLY
+          _isProcessingSwipe = true;
+          _animateToPosition(
+            (activeIdx - 1.0),
+            onComplete: () => _onSwipeActionCompleted(
+              isRightSwipe: true,
+              swipedJob: swipedJob,
+              activeIndex: activeIdx,
             ),
-          ),
+          );
+        } else if (isLeftSwipe) {
+          // LEFT SWIPE = REJECT
+          _isProcessingSwipe = true;
+          _animateToPosition(
+            (activeIdx + 1.0),
+            onComplete: () => _onSwipeActionCompleted(
+              isRightSwipe: false,
+              swipedJob: swipedJob,
+              activeIndex: activeIdx,
+            ),
+          );
+        } else {
+          // Snap back to center without triggering action
+          _animateToPosition(activeIdx.toDouble());
+        }
+      },
+      child: SizedBox(
+        width: cardWidth,
+        height: 520,
+        child: Stack(
+          alignment: Alignment.center,
+          clipBehavior: Clip.none,
+          children: [
+            ...visibleIndices.map((index) {
+              final job = _jobQueue[index];
+              final d = index - currentPos;
+              final absD = d.abs();
 
-        // Foreground Active Drag Card
-        GestureDetector(
-          onPanUpdate: (details) {
-            if (_isAnimating) return;
-            setState(() {
-              _cardOffset += details.delta;
-              _cardRotation = (_cardOffset.dx / 320.0).clamp(-0.4, 0.4);
-            });
-          },
-          onPanEnd: (details) {
-            if (_isAnimating) return;
+              // 3D Depth Transforms
+              final scale = (1.0 - (0.09 * absD)).clamp(0.72, 1.0);
+              final horizontalSpread = isDesktop ? 50.0 : 32.0;
+              final xOffset = d * horizontalSpread;
+              final yOffset = absD * 8.0;
+              final rotationY = (-d * 0.10).clamp(-0.28, 0.28);
+              final opacity = (1.0 - (0.28 * absD)).clamp(0.0, 1.0);
 
-            final vx = details.velocity.pixelsPerSecond.dx;
-            final dx = _cardOffset.dx;
+              final matrix = Matrix4.identity()
+                ..setEntry(3, 2, 0.001) // 3D perspective
+                ..translateByDouble(xOffset, yOffset, -absD * 25.0, 1.0)
+                ..scaleByDouble(scale, scale, 1.0, 1.0)
+                ..rotateY(rotationY);
 
-            if (dx > 110 || vx > 600) {
-              _animateAndSwipe(true);
-            } else if (dx < -110 || vx < -600) {
-              _animateAndSwipe(false);
-            } else {
-              _isAnimating = true;
-              _cardOffsetAnimation = Tween<Offset>(
-                begin: _cardOffset,
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: _swipeAnimController,
-                curve: Curves.easeOutBack,
-              ));
+              final isFrontCard = absD < 0.5;
 
-              _cardRotationAnimation = Tween<double>(
-                begin: _cardRotation,
-                end: 0.0,
-              ).animate(CurvedAnimation(
-                parent: _swipeAnimController,
-                curve: Curves.easeOutBack,
-              ));
+              return Positioned(
+                width: cardWidth,
+                child: Transform(
+                  alignment: Alignment.center,
+                  transform: matrix,
+                  child: Opacity(
+                    opacity: opacity,
+                    child: IgnorePointer(
+                      ignoring: !isFrontCard,
+                      child: Stack(
+                        children: [
+                          _buildCardContent(context, job, isDesktop, isDarkMode),
 
-              _swipeAnimController.forward(from: 0.0).then((_) {
-                _cardOffset = Offset.zero;
-                _cardRotation = 0.0;
-                _isAnimating = false;
-                _swipeAnimController.reset();
-              });
-            }
-          },
-          child: Transform.translate(
-            offset: _cardOffset,
-            child: Transform.rotate(
-              angle: _cardRotation,
-              child: Stack(
-                children: [
-                  _buildCardContent(context, currentJob, isDesktop, isDarkMode),
-
-                  // LIKE Stamp Overlay
-                  if (_cardOffset.dx > 15)
-                    Positioned(
-                      top: 32,
-                      left: 32,
-                      child: Transform.rotate(
-                        angle: -0.2,
-                        child: Opacity(
-                          opacity: (_cardOffset.dx / 100).clamp(0.0, 1.0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFF10B981), width: 3.5),
-                              borderRadius: BorderRadius.circular(14),
-                              color: const Color(0xFF10B981).withValues(alpha: 0.18),
-                            ),
-                            child: Text(
-                              'LIKE',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFF10B981),
-                                letterSpacing: 2,
+                          // LIKE Stamp Overlay when actively swiping right on front card
+                          if (isFrontCard && dragOffsetFromActive < -0.1)
+                            Positioned(
+                              top: 28,
+                              left: 28,
+                              child: Transform.rotate(
+                                angle: -0.2,
+                                child: Opacity(
+                                  opacity: (-dragOffsetFromActive * 2.0).clamp(0.0, 1.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFF10B981), width: 3.0),
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                                    ),
+                                    child: Text(
+                                      'LIKE',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFF10B981),
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
-                      ),
-                    ),
 
-                  // PASS Stamp Overlay
-                  if (_cardOffset.dx < -15)
-                    Positioned(
-                      top: 32,
-                      right: 32,
-                      child: Transform.rotate(
-                        angle: 0.2,
-                        child: Opacity(
-                          opacity: (-_cardOffset.dx / 100).clamp(0.0, 1.0),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFEF4444), width: 3.5),
-                              borderRadius: BorderRadius.circular(14),
-                              color: const Color(0xFFEF4444).withValues(alpha: 0.18),
-                            ),
-                            child: Text(
-                              'PASS',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: const Color(0xFFEF4444),
-                                letterSpacing: 2,
+                          // PASS Stamp Overlay when actively swiping left on front card
+                          if (isFrontCard && dragOffsetFromActive > 0.1)
+                            Positioned(
+                              top: 28,
+                              right: 28,
+                              child: Transform.rotate(
+                                angle: 0.2,
+                                child: Opacity(
+                                  opacity: (dragOffsetFromActive * 2.0).clamp(0.0, 1.0),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(color: const Color(0xFFEF4444), width: 3.0),
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: const Color(0xFFEF4444).withValues(alpha: 0.18),
+                                    ),
+                                    child: Text(
+                                      'PASS',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: const Color(0xFFEF4444),
+                                        letterSpacing: 2,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        ),
+                        ],
                       ),
                     ),
-                ],
-              ),
-            ),
-          ),
+                  ),
+                ),
+              );
+            }),
+          ],
         ),
-      ],
-    ),
-  );
-}
+      ),
+    );
+  }
 
   Widget _buildCardContent(BuildContext context, JobMatch job, bool isDesktop, bool isDarkMode) {
     return Container(
@@ -871,15 +1004,10 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                   ),
                 ),
               ),
-              if (job.applyUrl != null && job.applyUrl!.startsWith('http')) ...[
+              if (job.applyUrl != null && job.applyUrl!.trim().isNotEmpty) ...[
                 const SizedBox(width: 12),
                 InkWell(
-                  onTap: () async {
-                    final uri = Uri.parse(job.applyUrl!);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri);
-                    }
-                  },
+                  onTap: () => _openJobApplyUrl(job),
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(

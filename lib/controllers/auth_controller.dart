@@ -112,6 +112,7 @@ class AuthController extends ChangeNotifier {
           updatedAt: DateTime.now(),
         );
         _set(AuthStatus.authenticated);
+        _logProfileDebug(session.user.id);
 
         // Fetch full profile details asynchronously in background without blocking UI
         _fetchAndSetProfile(session.user.id);
@@ -204,6 +205,7 @@ class AuthController extends ChangeNotifier {
           }
         }
       }
+      _logProfileDebug(userId);
       notifyListeners();
 
       if (_currentUser?.avatarUrl != null &&
@@ -376,6 +378,13 @@ class AuthController extends ChangeNotifier {
 
   // ── Profile ───────────────────────────────────────────────────────────────
 
+  void _logProfileDebug(String userId) {
+    debugPrint('[PROFILE] Auth user ID: $userId');
+    debugPrint('[PROFILE] Account name loaded: ${_currentUser?.fullName ?? _currentUser?.displayName}');
+    debugPrint('[PROFILE] Account email loaded: ${_currentUser?.email}');
+    debugPrint('[PROFILE] Profile image loaded: ${_currentUser?.avatarUrl != null && _currentUser!.avatarUrl!.isNotEmpty}');
+  }
+
   /// Updates the current user's profile and refreshes [currentUser].
   Future<bool> updateProfile({
     String? fullName,
@@ -387,7 +396,6 @@ class AuthController extends ChangeNotifier {
     final uid = _repo.currentUser?.id;
     if (uid == null) return false;
 
-    _set(AuthStatus.loading);
     final result = await _repo.updateProfile(
       userId: uid,
       fullName: fullName,
@@ -398,12 +406,16 @@ class AuthController extends ChangeNotifier {
     );
     return result.when(
       onSuccess: (user) {
-        _currentUser = user;
-        _set(AuthStatus.authenticated);
+        if (user != null) {
+          _currentUser = user;
+        }
+        _logProfileDebug(uid);
+        notifyListeners();
         return true;
       },
       onFailure: (msg) {
-        _set(AuthStatus.error, error: msg);
+        _errorMessage = msg;
+        notifyListeners();
         return false;
       },
     );
@@ -417,7 +429,6 @@ class AuthController extends ChangeNotifier {
     final uid = _repo.currentUser?.id;
     if (uid == null) return false;
 
-    _set(AuthStatus.loading);
     final result = await _repo.uploadAvatar(
       userId: uid,
       fileBytes: fileBytes,
@@ -426,13 +437,16 @@ class AuthController extends ChangeNotifier {
     return result.when(
       onSuccess: (url) {
         if (_currentUser != null && url != null) {
+          AvatarImageHelper.clearFailed(url);
           _currentUser = _currentUser!.copyWith(avatarUrl: url);
         }
-        _set(AuthStatus.authenticated);
+        _logProfileDebug(uid);
+        notifyListeners();
         return true;
       },
       onFailure: (msg) {
-        _set(AuthStatus.error, error: msg);
+        _errorMessage = msg;
+        notifyListeners();
         return false;
       },
     );

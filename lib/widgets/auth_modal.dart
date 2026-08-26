@@ -139,15 +139,30 @@ class _AuthModalState extends State<AuthModal> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppTheme.isDarkMode(context);
+    final cardBg = AppTheme.getSurfaceColor(context);
+    final borderColor = AppTheme.getBorderColor(context);
+    final textPrimary = AppTheme.getTextColor(context);
+    final textMuted = AppTheme.getMutedTextColor(context);
+    final dividerColor = isDark ? const Color(0xFF282C38) : const Color(0xFFE2E8F0);
+    final closeBtnBg = isDark ? const Color(0xFF242834) : const Color(0xFFF1F5F9);
+
+    final googleBtnBg = isDark ? const Color(0xFF1F222B) : Colors.white;
+    final googleBtnText = isDark ? Colors.white : AppTheme.textDark;
+    final googleBtnBorder = isDark ? const Color(0xFF2E3342) : const Color(0xFFE2E8F0);
+
+    final githubBtnBg = isDark ? const Color(0xFF242834) : const Color(0xFF18181B);
+    final githubBtnBorder = isDark ? const Color(0xFF353B4D) : null;
+
     return Container(
       constraints: const BoxConstraints(maxWidth: 440),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cardBg,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFEDECE6), width: 1.5),
+        border: Border.all(color: borderColor, width: 1.5),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.18),
+            color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.18),
             blurRadius: 36,
             offset: const Offset(0, 16),
           ),
@@ -172,9 +187,9 @@ class _AuthModalState extends State<AuthModal> {
                         vertical: 5,
                       ),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryOrangeLight,
+                        color: AppTheme.getPrimaryLightColor(context),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.primaryOrangeBorder),
+                        border: Border.all(color: AppTheme.getPrimaryBorderColor(context)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -211,7 +226,7 @@ class _AuthModalState extends State<AuthModal> {
                     style: AppTheme.getDisplayFont(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      color: AppTheme.textDark,
+                      color: textPrimary,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -221,7 +236,7 @@ class _AuthModalState extends State<AuthModal> {
                         : 'Your resumes and application history stay securely synced to your account.',
                     style: AppTheme.getBodyFont(
                       fontSize: 13,
-                      color: AppTheme.textMuted,
+                      color: textMuted,
                       height: 1.5,
                     ),
                   ),
@@ -232,25 +247,26 @@ class _AuthModalState extends State<AuthModal> {
                     provider: OAuthProvider.google,
                     label: 'Continue with Google',
                     icon: _buildGoogleIcon(),
-                    bgColor: Colors.white,
-                    textColor: AppTheme.textDark,
-                    borderColor: const Color(0xFFE2E8F0),
+                    bgColor: googleBtnBg,
+                    textColor: googleBtnText,
+                    borderColor: googleBtnBorder,
                   ),
                   const SizedBox(height: 10),
                   _buildOAuthButton(
                     provider: OAuthProvider.github,
                     label: 'Continue with GitHub',
                     icon: const Icon(Icons.code_rounded, color: Colors.white, size: 18),
-                    bgColor: const Color(0xFF18181B),
+                    bgColor: githubBtnBg,
                     textColor: Colors.white,
+                    borderColor: githubBtnBorder,
                   ),
                   const SizedBox(height: 20),
 
                   // Divider
                   Row(
                     children: [
-                      const Expanded(
-                        child: Divider(color: Color(0xFFE2E8F0)),
+                      Expanded(
+                        child: Divider(color: dividerColor),
                       ),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -259,13 +275,13 @@ class _AuthModalState extends State<AuthModal> {
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 10,
                             fontWeight: FontWeight.w700,
-                            color: AppTheme.textMuted,
+                            color: textMuted,
                             letterSpacing: 0.8,
                           ),
                         ),
                       ),
-                      const Expanded(
-                        child: Divider(color: Color(0xFFE2E8F0)),
+                      Expanded(
+                        child: Divider(color: dividerColor),
                       ),
                     ],
                   ),
@@ -276,15 +292,15 @@ class _AuthModalState extends State<AuthModal> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFEF2F2),
+                        color: isDark ? const Color(0xFF361818) : const Color(0xFFFEF2F2),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                        border: Border.all(color: isDark ? const Color(0xFF7F1D1D) : const Color(0xFFFCA5A5)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.error_outline_rounded,
-                            color: Color(0xFFDC2626),
+                            color: isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626),
                             size: 18,
                           ),
                           const SizedBox(width: 8),
@@ -293,7 +309,7 @@ class _AuthModalState extends State<AuthModal> {
                               _errorMessage!,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 12,
-                                color: const Color(0xFFDC2626),
+                                color: isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626),
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -307,6 +323,7 @@ class _AuthModalState extends State<AuthModal> {
                   // Full Name (Sign Up only)
                   if (_isSignUp) ...[
                     _buildTextField(
+                      context: context,
                       controller: _fullNameController,
                       label: 'Full Name',
                       hint: 'John Doe',
@@ -320,6 +337,7 @@ class _AuthModalState extends State<AuthModal> {
 
                   // Email Input
                   _buildTextField(
+                    context: context,
                     controller: _emailController,
                     label: 'Email address',
                     hint: 'you@example.com',
@@ -333,6 +351,7 @@ class _AuthModalState extends State<AuthModal> {
 
                   // Password Input
                   _buildTextField(
+                    context: context,
                     controller: _passwordController,
                     label: 'Password',
                     hint: '••••••••',
@@ -344,7 +363,7 @@ class _AuthModalState extends State<AuthModal> {
                             ? Icons.visibility_off_outlined
                             : Icons.visibility_outlined,
                         size: 18,
-                        color: AppTheme.textMuted,
+                        color: textMuted,
                       ),
                       onPressed: () {
                         setState(() {
@@ -429,7 +448,7 @@ class _AuthModalState extends State<AuthModal> {
                             : "Don't have an account?",
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
-                          color: AppTheme.textMuted,
+                          color: textMuted,
                         ),
                       ),
                       GestureDetector(
@@ -470,12 +489,12 @@ class _AuthModalState extends State<AuthModal> {
                 child: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF1F5F9),
+                    color: closeBtnBg,
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.close_rounded,
-                    color: AppTheme.textDark,
+                    color: textPrimary,
                     size: 18,
                   ),
                 ),
@@ -530,6 +549,7 @@ class _AuthModalState extends State<AuthModal> {
   }
 
   Widget _buildTextField({
+    required BuildContext context,
     required TextEditingController controller,
     required String label,
     required String hint,
@@ -539,6 +559,12 @@ class _AuthModalState extends State<AuthModal> {
     TextInputType? keyboardType,
     String? Function(String?)? validator,
   }) {
+    final isDark = AppTheme.isDarkMode(context);
+    final textPrimary = AppTheme.getTextColor(context);
+    final textMuted = AppTheme.getMutedTextColor(context);
+    final inputBg = isDark ? const Color(0xFF1F222B) : const Color(0xFFF8FAFC);
+    final inputBorder = isDark ? const Color(0xFF2E3342) : const Color(0xFFE2E8F0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -547,7 +573,7 @@ class _AuthModalState extends State<AuthModal> {
           style: GoogleFonts.plusJakartaSans(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: AppTheme.textDark,
+            color: textPrimary,
           ),
         ),
         const SizedBox(height: 6),
@@ -558,28 +584,28 @@ class _AuthModalState extends State<AuthModal> {
           validator: validator,
           style: GoogleFonts.plusJakartaSans(
             fontSize: 14,
-            color: AppTheme.textDark,
+            color: textPrimary,
             fontWeight: FontWeight.w500,
           ),
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: GoogleFonts.plusJakartaSans(
               fontSize: 13,
-              color: AppTheme.textMuted.withValues(alpha: 0.6),
+              color: textMuted.withValues(alpha: 0.6),
             ),
-            prefixIcon: Icon(icon, size: 18, color: AppTheme.textMuted),
+            prefixIcon: Icon(icon, size: 18, color: textMuted),
             suffixIcon: suffixIcon,
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
+            fillColor: inputBg,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: BorderSide(color: inputBorder),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+              borderSide: BorderSide(color: inputBorder),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),

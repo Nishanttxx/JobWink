@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/resume_data.dart';
 import '../../services/jd_keyword_engine.dart';
 import '../../theme/app_theme.dart';
-import 'highlight_text.dart';
 
 
 class EducationCard extends StatelessWidget {
@@ -85,7 +84,7 @@ class EducationCard extends StatelessWidget {
                 onPressed: onAddEducation,
                 icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
                 label: Text(
-                  '+ Add Education',
+                  'Add Education',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
@@ -173,9 +172,8 @@ class EducationCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: HighlightText(
-                  text: edu.degree.isNotEmpty ? edu.degree : 'Degree',
-                  jobKeywords: jobKeywords,
+                child: Text(
+                  edu.degree.isNotEmpty ? edu.degree : 'Degree',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,

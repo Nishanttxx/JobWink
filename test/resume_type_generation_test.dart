@@ -29,6 +29,26 @@ void main() {
             'Optimized PDF export latency by 45% using headless rendering pipeline.',
           ],
         ),
+        ExperienceEntry(
+          company: 'TechCorp',
+          role: 'Software Engineer',
+          location: 'San Francisco, CA',
+          startDate: '2020',
+          endDate: '2022',
+          description: [
+            'Built scalable microservices and APIs.',
+          ],
+        ),
+        ExperienceEntry(
+          company: 'CloudStartup',
+          role: 'Junior Engineer',
+          location: 'San Francisco, CA',
+          startDate: '2019',
+          endDate: '2020',
+          description: [
+            'Developed backend components.',
+          ],
+        ),
       ],
       projects: [
         ProjectEntry(
@@ -36,6 +56,18 @@ void main() {
           type: 'Web & Mobile',
           descriptionBullets: ['Multi-provider AI pipeline supporting Gemini, OpenAI, Groq, and Mistral models.'],
           technologies: ['Flutter', 'Python', 'FastAPI'],
+        ),
+        ProjectEntry(
+          name: 'Nexus Search',
+          type: 'Search Engine',
+          descriptionBullets: ['Engineered AI search platform.'],
+          technologies: ['Flutter', 'Gemini API'],
+        ),
+        ProjectEntry(
+          name: 'GST Billing Suite',
+          type: 'Fintech App',
+          descriptionBullets: ['Cross-platform invoicing suite.'],
+          technologies: ['Flutter', 'Dart', 'Supabase'],
         ),
       ],
       education: [

@@ -145,12 +145,14 @@ class _StepsSectionState extends State<StepsSection> {
                             isTriggered: _isTriggered,
                             child: SizedBox(
                               width: cardWidth,
+                              height: isDesktop ? 235 : (isTablet ? 215 : null),
                               child: SpotlightCardTile(
                                 id: 'step_${step['number']}',
                                 hoverScale: 1.02,
                                 borderRadius: BorderRadius.circular(20),
                                 accentColor: accent,
                                 child: Container(
+                                height: double.infinity,
                                 padding: const EdgeInsets.all(24),
                                 decoration: BoxDecoration(
                                   color: AppTheme.getSurfaceColor(context),

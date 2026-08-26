@@ -216,6 +216,16 @@ class SupabaseService {
         .select()
         .single();
 
+    if (fullName != null || avatarUrl != null) {
+      try {
+        final metaData = <String, dynamic>{
+          'full_name': ?fullName,
+          'avatar_url': ?avatarUrl,
+        };
+        await c.auth.updateUser(UserAttributes(data: metaData));
+      } catch (_) {}
+    }
+
     return AppUser.fromMap(data);
   }
 

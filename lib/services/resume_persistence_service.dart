@@ -203,8 +203,10 @@ class ResumePersistenceService {
 
   /// Helper to ensure profile record exists without throwing RLS errors
   Future<void> _ensureProfileRow(String userId, ResumeData data) async {
-    final userEmail = _client.auth.currentUser?.email ??
-        (data.email.trim().isNotEmpty ? data.email.trim() : 'user_${userId.substring(0, 8)}@jobwink.app');
+    final authUser = _client.auth.currentUser;
+    final userEmail = authUser?.email ?? 'user_${userId.length > 8 ? userId.substring(0, 8) : userId}@jobwink.app';
+    final authName = authUser?.userMetadata?['full_name'] as String? ??
+        authUser?.userMetadata?['name'] as String?;
 
     try {
       final existing = await _client.from('profiles').select('id').eq('id', userId).maybeSingle();
@@ -212,7 +214,7 @@ class ResumePersistenceService {
         await _client.from('profiles').insert({
           'id': userId,
           'email': userEmail,
-          'full_name': data.fullName.isNotEmpty ? data.fullName : 'JobWink Candidate',
+          'full_name': authName ?? (userEmail.split('@').first),
           'updated_at': DateTime.now().toIso8601String(),
         });
       }

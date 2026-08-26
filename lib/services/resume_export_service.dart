@@ -364,9 +364,9 @@ class ResumeExportService {
     return s;
   }
 
-  /// Passes the original text cleanly to the PDF rendering layer, preserving every user character and punctuation exactly as entered.
+  /// Passes the original text cleanly to the PDF rendering layer, preserving every user character, space, and punctuation exactly as entered.
   static String _sanitizePdfText(String input) {
-    return _clean(input);
+    return input;
   }
 
   /// Extract a basic template config from original PDF bytes.
@@ -814,6 +814,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
               lineSpacing: lineSpacing,
               color: color,
               fontWeight: defaultWeight,
+              font: defaultWeight == pw.FontWeight.bold ? _unicodeBoldFont : _unicodeBaseFont,
             ),
           ),
         ];
@@ -829,6 +830,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
               lineSpacing: lineSpacing,
               color: color,
               fontWeight: defaultWeight,
+              font: defaultWeight == pw.FontWeight.bold ? _unicodeBoldFont : _unicodeBaseFont,
             ),
           ),
         ];
@@ -845,6 +847,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
               lineSpacing: lineSpacing,
               color: color,
               fontWeight: defaultWeight,
+              font: defaultWeight == pw.FontWeight.bold ? _unicodeBoldFont : _unicodeBaseFont,
             ),
           ));
         }
@@ -856,6 +859,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
             lineSpacing: lineSpacing,
             color: PdfColors.black,
             fontWeight: pw.FontWeight.bold,
+            font: _unicodeBoldFont,
           ),
         ));
         segLast = m.end;
@@ -868,8 +872,18 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
             lineSpacing: lineSpacing,
             color: color,
             fontWeight: defaultWeight,
+            font: defaultWeight == pw.FontWeight.bold ? _unicodeBoldFont : _unicodeBaseFont,
           ),
         ));
+      }
+      if (segSpans.length > 1) {
+        debugPrint('[HIGHLIGHT-8] GENERATED SPANS:');
+        for (final s in segSpans) {
+          if (s is pw.TextSpan) {
+            final isDark = s.style?.fontWeight == pw.FontWeight.bold;
+            debugPrint('  -> text: "${s.text}", style: ${isDark ? "DARK/BOLD" : "NORMAL"}, font: ${s.style?.font?.fontName ?? "ThemeFont"}');
+          }
+        }
       }
       return segSpans;
     }
@@ -890,18 +904,21 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       final rawUrl = match.group(0)!;
       final dest = _normalizeUrlForLink(rawUrl);
 
-      spans.add(pw.WidgetSpan(
-        child: pw.UrlLink(
-          destination: dest,
-          child: pw.Text(
-            _sanitizePdfText(rawUrl),
-            style: pw.TextStyle(
-              fontSize: fontSize,
-              lineSpacing: lineSpacing,
-              color: linkColor,
-            ),
-          ),
+      debugPrint('[PDF-LINK-DEBUG]');
+      debugPrint('Link text: $rawUrl');
+      debugPrint('Target URL: $dest');
+      debugPrint('Annotation created: YES');
+
+      spans.add(pw.TextSpan(
+        text: _sanitizePdfText(rawUrl),
+        style: pw.TextStyle(
+          fontSize: fontSize,
+          lineSpacing: lineSpacing,
+          color: linkColor,
+          fontWeight: defaultWeight,
+          font: defaultWeight == pw.FontWeight.bold ? _unicodeBoldFont : _unicodeBaseFont,
         ),
+        annotation: pw.AnnotationUrl(dest),
       ));
 
       lastEnd = match.end;
@@ -924,33 +941,25 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     final line1Parts = <pw.InlineSpan>[];
     final cleanEmail = _clean(resume.email);
     if (cleanEmail.isNotEmpty) {
-      line1Parts.add(pw.WidgetSpan(
-        child: pw.UrlLink(
-          destination: _normalizeUrlForLink(cleanEmail),
-          child: pw.Text(
-            _sanitizePdfText(cleanEmail),
-            style: pw.TextStyle(
-              fontSize: cfg.contactFontSize,
-              color: cfg.bodyTextColor,
-            ),
-          ),
+      line1Parts.add(pw.TextSpan(
+        text: cleanEmail,
+        style: pw.TextStyle(
+          fontSize: cfg.contactFontSize,
+          color: cfg.bodyTextColor,
         ),
+        annotation: pw.AnnotationUrl(_normalizeUrlForLink(cleanEmail)),
       ));
     }
     final cleanLiRaw = _clean(resume.linkedin);
     if (cleanLiRaw.isNotEmpty) {
       if (line1Parts.isNotEmpty) line1Parts.add(const pw.TextSpan(text: ' | '));
-      line1Parts.add(pw.WidgetSpan(
-        child: pw.UrlLink(
-          destination: _normalizeUrlForLink(cleanLiRaw),
-          child: pw.Text(
-            _sanitizePdfText(cleanLiRaw),
-            style: pw.TextStyle(
-              fontSize: cfg.contactFontSize,
-              color: cfg.linkColor,
-            ),
-          ),
+      line1Parts.add(pw.TextSpan(
+        text: cleanLiRaw,
+        style: pw.TextStyle(
+          fontSize: cfg.contactFontSize,
+          color: cfg.linkColor,
         ),
+        annotation: pw.AnnotationUrl(_normalizeUrlForLink(cleanLiRaw)),
       ));
     }
 
@@ -958,33 +967,25 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     final cleanPhone = _clean(resume.phone);
     if (cleanPhone.isNotEmpty) {
       final sanitizedPhone = cleanPhone.replaceAll(RegExp(r'[\s\-()]'), '');
-      line2Parts.add(pw.WidgetSpan(
-        child: pw.UrlLink(
-          destination: 'tel:$sanitizedPhone',
-          child: pw.Text(
-            _sanitizePdfText(cleanPhone),
-            style: pw.TextStyle(
-              fontSize: cfg.contactFontSize,
-              color: cfg.bodyTextColor,
-            ),
-          ),
+      line2Parts.add(pw.TextSpan(
+        text: cleanPhone,
+        style: pw.TextStyle(
+          fontSize: cfg.contactFontSize,
+          color: cfg.bodyTextColor,
         ),
+        annotation: pw.AnnotationUrl('tel:$sanitizedPhone'),
       ));
     }
     final cleanGhRaw = _clean(resume.github);
     if (cleanGhRaw.isNotEmpty) {
       if (line2Parts.isNotEmpty) line2Parts.add(const pw.TextSpan(text: ' | '));
-      line2Parts.add(pw.WidgetSpan(
-        child: pw.UrlLink(
-          destination: _normalizeUrlForLink(cleanGhRaw),
-          child: pw.Text(
-            _sanitizePdfText(cleanGhRaw),
-            style: pw.TextStyle(
-              fontSize: cfg.contactFontSize,
-              color: cfg.linkColor,
-            ),
-          ),
+      line2Parts.add(pw.TextSpan(
+        text: cleanGhRaw,
+        style: pw.TextStyle(
+          fontSize: cfg.contactFontSize,
+          color: cfg.linkColor,
         ),
+        annotation: pw.AnnotationUrl(_normalizeUrlForLink(cleanGhRaw)),
       ));
     }
 
@@ -1087,7 +1088,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     );
   }
 
-  List<pw.Widget> _buildSummaryWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
+  List<pw.Widget> _buildSummaryWidgets(ResumeData resume, PdfTemplateConfig cfg) {
     final cleanSummary = _clean(resume.summary);
     if (cleanSummary.isEmpty) return [];
     return [
@@ -1100,14 +1101,13 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
           lineSpacing: cfg.bodyLineSpacing,
           color: cfg.bodyTextColor,
           linkColor: cfg.linkColor,
-          highlightKeywords: highlightKeywords,
         ),
       ),
       pw.SizedBox(height: cfg.paragraphSpaceAfter),
     ];
   }
 
-  List<pw.Widget> _buildEducationWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
+  List<pw.Widget> _buildEducationWidgets(ResumeData resume, PdfTemplateConfig cfg) {
     if (resume.education.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('EDUCATION', cfg)];
 
@@ -1150,7 +1150,6 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
                 lineSpacing: 1.0,
                 color: cfg.bodyTextColor,
                 linkColor: cfg.linkColor,
-                highlightKeywords: highlightKeywords,
                 defaultWeight: pw.FontWeight.bold,
               ),
             ),
@@ -1167,7 +1166,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     return widgets;
   }
 
-  List<pw.Widget> _buildSkillsWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
+  List<pw.Widget> _buildSkillsWidgets(ResumeData resume, PdfTemplateConfig cfg) {
     if (resume.skills.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('SKILLS', cfg)];
 
@@ -1223,7 +1222,6 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
                 lineSpacing: 1.0,
                 color: cfg.bodyTextColor,
                 linkColor: cfg.linkColor,
-                highlightKeywords: highlightKeywords,
               ),
             ),
           ],
@@ -1241,44 +1239,26 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     for (final proj in resume.projects) {
       final title = _clean(proj.name);
       if (title.isEmpty) continue;
-      final typeStr = _clean(proj.type).isNotEmpty ? ' (${_clean(proj.type)})' : '';
+      final typeStr = _clean(proj.type).isNotEmpty ? ' | ${_clean(proj.type)}' : '';
       final cleanTechs = proj.technologies.map(_clean).where((t) => t.isNotEmpty).toList();
-      final techStr = cleanTechs.isNotEmpty ? ' | ${cleanTechs.join(", ")}' : '';
+      final techStr = cleanTechs.isNotEmpty && _clean(proj.type).isEmpty ? ' | ${cleanTechs.join(", ")}' : '';
       final rawUrl = _clean(proj.url).isNotEmpty
           ? _clean(proj.url)
           : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
+      final urlStr = rawUrl.isNotEmpty ? ' | $rawUrl' : '';
+
+      final headingText = '$title$typeStr$techStr$urlStr';
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: pw.RichText(
-          text: pw.TextSpan(
-            children: [
-              pw.TextSpan(
-                text: _sanitizePdfText('$title$typeStr$techStr'),
-                style: pw.TextStyle(
-                  fontSize: cfg.subheadingFontSize,
-                  fontWeight: pw.FontWeight.bold,
-                  color: cfg.bodyTextColor,
-                ),
-              ),
-              if (rawUrl.isNotEmpty) ...[
-                const pw.TextSpan(text: ' | '),
-                pw.WidgetSpan(
-                  child: pw.UrlLink(
-                    destination: _normalizeUrlForLink(rawUrl),
-                    child: pw.Text(
-                      _sanitizePdfText(rawUrl),
-                      style: pw.TextStyle(
-                        fontSize: cfg.subheadingFontSize,
-                        fontWeight: pw.FontWeight.bold,
-                        color: cfg.linkColor,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          ),
+        child: _buildTextWithLinks(
+          headingText,
+          fontSize: cfg.subheadingFontSize,
+          lineSpacing: 1.0,
+          color: cfg.bodyTextColor,
+          linkColor: cfg.linkColor,
+          highlightKeywords: highlightKeywords,
+          defaultWeight: pw.FontWeight.bold,
         ),
       ));
 
@@ -1315,13 +1295,14 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
             pw.Expanded(
-              child: pw.Text(
-                _sanitizePdfText(titleCompanyLoc),
-                style: pw.TextStyle(
-                  fontSize: cfg.subheadingFontSize,
-                  fontWeight: pw.FontWeight.bold,
-                  color: cfg.bodyTextColor,
-                ),
+              child: _buildTextWithLinks(
+                titleCompanyLoc,
+                fontSize: cfg.subheadingFontSize,
+                lineSpacing: 1.0,
+                color: cfg.bodyTextColor,
+                linkColor: cfg.linkColor,
+                highlightKeywords: highlightKeywords,
+                defaultWeight: pw.FontWeight.bold,
               ),
             ),
             if (dates.isNotEmpty)
@@ -1342,41 +1323,123 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     return widgets;
   }
 
-  List<pw.Widget> _buildExtraWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
+  List<pw.Widget> _buildExtraWidgets(ResumeData resume, PdfTemplateConfig cfg) {
     if (resume.extracurriculars.isEmpty) return [];
-    final widgets = <pw.Widget>[_buildSectionHeading('CERTIFICATIONS & EXTRA-CURRICULAR ACTIVITIES', cfg)];
+    final widgets = <pw.Widget>[_buildSectionHeading('EXTRA-CURRICULAR ACTIVITIES & ACHIEVEMENTS', cfg)];
 
     for (final item in resume.extracurriculars) {
       var heading = _clean(item.activity).isNotEmpty
           ? _clean(item.activity)
           : (_clean(item.role).isNotEmpty ? _clean(item.role) : _clean(item.organization));
       if (heading.isEmpty && _clean(item.description).isNotEmpty) {
-        heading = 'Certification / Activity';
+        heading = 'Activity / Achievement';
       }
-      if (heading.isEmpty) continue;
+      if (heading.isEmpty && _clean(item.description).isEmpty) continue;
 
-      final parts = <String>[heading];
+      final parts = <String>[];
+      if (heading.isNotEmpty) parts.add(heading);
       if (_clean(item.organization).isNotEmpty && _clean(item.activity) != _clean(item.organization) && heading != _clean(item.organization)) {
         parts.add(_clean(item.organization));
       }
+      final rawLink = _clean(item.url.isNotEmpty ? item.url : item.link);
+      if (rawLink.isNotEmpty) {
+        parts.add(rawLink);
+      }
 
-      widgets.add(pw.Padding(
-        padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: _buildTextWithLinks(
-          parts.join(' | '),
-          fontSize: cfg.subheadingFontSize,
-          lineSpacing: 1.0,
-          color: cfg.bodyTextColor,
-          linkColor: cfg.linkColor,
-          highlightKeywords: highlightKeywords,
-          defaultWeight: pw.FontWeight.bold,
-        ),
-      ));
+      final dateStr = _clean(item.formattedDate);
+
+      if (parts.isNotEmpty) {
+        widgets.add(pw.Padding(
+          padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(
+                child: _buildTextWithLinks(
+                  parts.join(' | '),
+                  fontSize: cfg.subheadingFontSize,
+                  lineSpacing: 1.0,
+                  color: cfg.bodyTextColor,
+                  linkColor: cfg.linkColor,
+                  defaultWeight: pw.FontWeight.bold,
+                ),
+              ),
+              if (dateStr.isNotEmpty)
+                pw.Text(
+                  _sanitizePdfText(dateStr),
+                  style: pw.TextStyle(fontSize: cfg.contactFontSize, color: cfg.bodyTextColor),
+                ),
+            ],
+          ),
+        ));
+      }
 
       if (_clean(item.description).isNotEmpty) {
         for (final line in item.description.split('\n')) {
           final cleaned = _cleanBulletString(line);
-          if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
+          if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg));
+        }
+      }
+      widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
+    }
+    return widgets;
+  }
+
+  List<pw.Widget> _buildCertificationsWidgets(ResumeData resume, PdfTemplateConfig cfg) {
+    if (resume.certifications.isEmpty) return [];
+    final widgets = <pw.Widget>[_buildSectionHeading('CERTIFICATIONS', cfg)];
+
+    for (final item in resume.certifications) {
+      var heading = _clean(item.activity).isNotEmpty
+          ? _clean(item.activity)
+          : (_clean(item.role).isNotEmpty ? _clean(item.role) : _clean(item.organization));
+      if (heading.isEmpty && _clean(item.description).isNotEmpty) {
+        heading = 'Certification';
+      }
+      if (heading.isEmpty && _clean(item.description).isEmpty) continue;
+
+      final parts = <String>[];
+      if (heading.isNotEmpty) parts.add(heading);
+      if (_clean(item.organization).isNotEmpty && _clean(item.activity) != _clean(item.organization) && heading != _clean(item.organization)) {
+        parts.add(_clean(item.organization));
+      }
+      final rawLink = _clean(item.url.isNotEmpty ? item.url : item.link);
+      if (rawLink.isNotEmpty) {
+        parts.add(rawLink);
+      }
+
+      final dateStr = _clean(item.formattedDate);
+
+      if (parts.isNotEmpty) {
+        widgets.add(pw.Padding(
+          padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Expanded(
+                child: _buildTextWithLinks(
+                  parts.join(' | '),
+                  fontSize: cfg.subheadingFontSize,
+                  lineSpacing: 1.0,
+                  color: cfg.bodyTextColor,
+                  linkColor: cfg.linkColor,
+                  defaultWeight: pw.FontWeight.bold,
+                ),
+              ),
+              if (dateStr.isNotEmpty)
+                pw.Text(
+                  _sanitizePdfText(dateStr),
+                  style: pw.TextStyle(fontSize: cfg.contactFontSize, color: cfg.bodyTextColor),
+                ),
+            ],
+          ),
+        ));
+      }
+
+      if (_clean(item.description).isNotEmpty) {
+        for (final line in item.description.split('\n')) {
+          final cleaned = _cleanBulletString(line);
+          if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg));
         }
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
@@ -1388,12 +1451,13 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
   List<pw.Widget> _buildResumeContent(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     return [
       ..._buildHeaderWidgets(resume, cfg),
-      ..._buildSummaryWidgets(resume, cfg, highlightKeywords: highlightKeywords),
-      ..._buildEducationWidgets(resume, cfg, highlightKeywords: highlightKeywords),
-      ..._buildSkillsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
+      ..._buildSummaryWidgets(resume, cfg),
+      ..._buildEducationWidgets(resume, cfg),
+      ..._buildSkillsWidgets(resume, cfg),
       ..._buildProjectsWidgets(resume, cfg, highlightKeywords: highlightKeywords),
       ..._buildExperienceWidgets(resume, cfg, highlightKeywords: highlightKeywords),
-      ..._buildExtraWidgets(resume, cfg, highlightKeywords: highlightKeywords),
+      ..._buildCertificationsWidgets(resume, cfg),
+      ..._buildExtraWidgets(resume, cfg),
     ];
   }
 
@@ -1442,6 +1506,9 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     for (final ex in resume.extracurriculars) {
       sb.write('${ex.activity}:${ex.organization}:${ex.role}:${ex.description}');
     }
+    for (final c in resume.certifications) {
+      sb.write('${c.activity}:${c.organization}:${c.role}:${c.url}:${c.description}');
+    }
     sb.write(selectedResumeType.name);
     sb.write(highlightKeywords.join(','));
     return sb.toString();
@@ -1487,6 +1554,13 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     var activeResume = resume;
     var cfg = optimizeResumeConfig(activeResume, baseConfig, fontTheme: fontTheme);
 
+    debugPrint('[HIGHLIGHT-9] PDF RENDERER INPUT:');
+    debugPrint('  keywords: $highlightKeywords');
+    debugPrint('  sections: ${resume.projects.length} projects, ${resume.experience.length} experiences');
+    debugPrint('[HIGHLIGHT-10] DARK FONT SELECTED: ${_unicodeBoldFont != null ? "true (${_unicodeBoldFont!.fontName})" : "false"}');
+    debugPrint('[KEYWORD DEBUG] PDF renderer received keywords: $highlightKeywords');
+    debugPrint('[KEYWORD DEBUG] PDF renderer received styled spans: ${highlightKeywords.isNotEmpty ? "YES" : "NO (no keywords supplied)"}');
+
     // 2. Strict One-Page PDF Construction & Verification
     pw.Document pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
     int attempts = 0;
@@ -1497,6 +1571,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
     }
 
+    debugPrint('[KEYWORD DEBUG] Dark keyword spans rendered: ${highlightKeywords.isNotEmpty ? "YES" : "NO"}');
     debugPrint('[ResumeExportService] Final PDF exported: ${pdf.document.pdfPageList.pages.length} page(s), bodyFontSize=${cfg.bodyFontSize.toStringAsFixed(1)}pt');
     final bytes = await pdf.save();
     _cachedPdfKey = cacheKey;

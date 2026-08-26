@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../models/resume_data.dart';
 import '../../services/jd_keyword_engine.dart';
 import '../../theme/app_theme.dart';
-import 'highlight_text.dart';
 
 
 class CertificationsCard extends StatelessWidget {
@@ -75,7 +74,7 @@ class CertificationsCard extends StatelessWidget {
                 onPressed: onAddActivity,
                 icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
                 label: Text(
-                  '+ Add Certification / Activity',
+                  'Add Certification / Activity',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,
@@ -99,7 +98,7 @@ class CertificationsCard extends StatelessWidget {
                 ),
               ),
               child: Text(
-                'No certifications or activities added yet. Click "+ Add Certification / Activity" to add items.',
+                'No certifications or activities added yet. Click "Add Certification / Activity" to add items.',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
@@ -151,14 +150,32 @@ class CertificationsCard extends StatelessWidget {
                         color: AppTheme.getTextColor(context),
                       ),
                     ),
-                    if (act.organization.isNotEmpty || act.role.isNotEmpty) ...[
+                    if (act.organization.isNotEmpty || act.role.isNotEmpty || act.formattedDate.isNotEmpty) ...[
                       const SizedBox(height: 2),
-                      Text(
-                        '${act.role}${act.organization.isNotEmpty ? ' • ${act.organization}' : ''}',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          color: AppTheme.getMutedTextColor(context),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              [
+                                if (act.role.isNotEmpty) act.role,
+                                if (act.organization.isNotEmpty) act.organization,
+                              ].join(' • '),
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                color: AppTheme.getMutedTextColor(context),
+                              ),
+                            ),
+                          ),
+                          if (act.formattedDate.isNotEmpty)
+                            Text(
+                              act.formattedDate,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.getMutedTextColor(context),
+                              ),
+                            ),
+                        ],
                       ),
                     ],
                   ],
@@ -195,13 +212,34 @@ class CertificationsCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: HighlightText(
-                    text: act.description,
-                    jobKeywords: jobKeywords,
+                  child: Text(
+                    act.description,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       height: 1.3,
                       color: AppTheme.getTextColor(context),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (act.url.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(Icons.link_rounded, size: 13, color: AppTheme.primaryOrange),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    act.url,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primaryOrange,
+                      decoration: TextDecoration.underline,
                     ),
                   ),
                 ),

@@ -75,7 +75,7 @@ class ProjectsCard extends StatelessWidget {
                 onPressed: onAddProject,
                 icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
                 label: Text(
-                  '+ Add Project',
+                  'Add Project',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,

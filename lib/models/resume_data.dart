@@ -3017,13 +3017,67 @@ class ExtracurricularEntry {
   final String role;
   final String organization;
   final String description;
+  final String startDate;
+  final String endDate;
+  final String startMonth;
+  final String startYear;
+  final String endMonth;
+  final String endYear;
+  final String url;
+
+  String get link => url;
 
   const ExtracurricularEntry({
     this.activity = '',
     this.role = '',
     this.organization = '',
     this.description = '',
+    this.startDate = '',
+    this.endDate = '',
+    this.startMonth = '',
+    this.startYear = '',
+    this.endMonth = '',
+    this.endYear = '',
+    this.url = '',
   });
+
+  /// Formats date according to exact business rules:
+  /// - Both start and end: "Start – End"
+  /// - Only start: "Start"
+  /// - Only end: "End" (no leading "-")
+  /// - Neither: "" (no separator)
+  String get formattedDate {
+    final sMonth = startMonth.trim();
+    final sYear = startYear.trim();
+    final eMonth = endMonth.trim();
+    final eYear = endYear.trim();
+
+    final hasStart = sMonth.isNotEmpty && sYear.isNotEmpty;
+    final startStr = hasStart ? '$sMonth $sYear' : (sYear.isNotEmpty ? sYear : (sMonth.isNotEmpty ? sMonth : ''));
+
+    final hasEnd = eMonth.isNotEmpty && eYear.isNotEmpty;
+    final endStr = hasEnd ? '$eMonth $eYear' : (eYear.isNotEmpty ? eYear : (eMonth.isNotEmpty ? eMonth : ''));
+
+    if (startStr.isNotEmpty && endStr.isNotEmpty) {
+      return '$startStr – $endStr';
+    } else if (startStr.isNotEmpty) {
+      return startStr;
+    } else if (endStr.isNotEmpty) {
+      return endStr;
+    }
+
+    final sDate = startDate.trim();
+    final eDate = endDate.trim();
+    if (sDate.isNotEmpty && eDate.isNotEmpty) {
+      return '$sDate – $eDate';
+    } else if (sDate.isNotEmpty) {
+      return sDate;
+    } else if (eDate.isNotEmpty) {
+      return eDate;
+    }
+
+    return '';
+  }
 
   factory ExtracurricularEntry.fromJson(dynamic json) {
     if (json is String) {
@@ -3062,11 +3116,54 @@ class ExtracurricularEntry {
         return '';
       }
 
+      var sStartMonth = getStr(['startMonth', 'start_month']);
+      var sStartYear = getStr(['startYear', 'start_year']);
+      var sEndMonth = getStr(['endMonth', 'end_month']);
+      var sEndYear = getStr(['endYear', 'end_year']);
+      var sStartDate = getStr(['startDate', 'start_date', 'from']);
+      var sEndDate = getStr(['endDate', 'end_date', 'to', 'issueDate', 'issuedDate', 'year']);
+
+      // Attempt parsing dates if startMonth/startYear/endMonth/endYear are empty
+      if (sStartMonth.isEmpty && sStartYear.isEmpty && sStartDate.isNotEmpty) {
+        final parts = sStartDate.split(RegExp(r'[\s/,-]+')).where((p) => p.isNotEmpty).toList();
+        if (parts.length >= 2) {
+          sStartMonth = parts[0];
+          sStartYear = parts[1];
+        } else if (parts.length == 1) {
+          if (parts[0].length == 4 && int.tryParse(parts[0]) != null) {
+            sStartYear = parts[0];
+          } else {
+            sStartMonth = parts[0];
+          }
+        }
+      }
+
+      if (sEndMonth.isEmpty && sEndYear.isEmpty && sEndDate.isNotEmpty) {
+        final parts = sEndDate.split(RegExp(r'[\s/,-]+')).where((p) => p.isNotEmpty).toList();
+        if (parts.length >= 2) {
+          sEndMonth = parts[0];
+          sEndYear = parts[1];
+        } else if (parts.length == 1) {
+          if (parts[0].length == 4 && int.tryParse(parts[0]) != null) {
+            sEndYear = parts[0];
+          } else {
+            sEndMonth = parts[0];
+          }
+        }
+      }
+
       return ExtracurricularEntry(
         activity: getStr(['activity', 'title', 'name', 'certificateName', 'certificationName', 'certification', 'certificate', 'certName', 'award', 'course', 'courseName', 'license', 'licenseName']),
         role: getStr(['role', 'position', 'grade', 'level', 'type']),
         organization: getStr(['organization', 'issuingOrganization', 'issuer', 'authority', 'company', 'institution', 'vendor', 'issuedBy', 'provider', 'school']),
-        description: getStr(['description', 'details', 'summary', 'date', 'year', 'issueDate', 'issuedDate', 'dates', 'credentialId', 'credential_id', 'link', 'url']),
+        description: getStr(['description', 'details', 'summary', 'credentialId', 'credential_id']),
+        url: getStr(['url', 'link', 'certificateUrl', 'certificateLink', 'credentialUrl', 'credentialLink', 'website', 'href']),
+        startDate: sStartDate,
+        endDate: sEndDate,
+        startMonth: sStartMonth,
+        startYear: sStartYear,
+        endMonth: sEndMonth,
+        endYear: sEndYear,
       );
     }
     return const ExtracurricularEntry();
@@ -3077,12 +3174,27 @@ class ExtracurricularEntry {
     String? role,
     String? organization,
     String? description,
+    String? startDate,
+    String? endDate,
+    String? startMonth,
+    String? startYear,
+    String? endMonth,
+    String? endYear,
+    String? url,
+    String? link,
   }) {
     return ExtracurricularEntry(
       activity: activity ?? this.activity,
       role: role ?? this.role,
       organization: organization ?? this.organization,
       description: description ?? this.description,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      startMonth: startMonth ?? this.startMonth,
+      startYear: startYear ?? this.startYear,
+      endMonth: endMonth ?? this.endMonth,
+      endYear: endYear ?? this.endYear,
+      url: url ?? (link ?? this.url),
     );
   }
 
@@ -3091,6 +3203,14 @@ class ExtracurricularEntry {
         'role': role,
         'organization': organization,
         'description': description,
+        'url': url,
+        'link': url,
+        'startDate': startDate.isNotEmpty ? startDate : (startMonth.isNotEmpty && startYear.isNotEmpty ? '$startMonth $startYear' : (startYear.isNotEmpty ? startYear : '')),
+        'endDate': endDate.isNotEmpty ? endDate : (endMonth.isNotEmpty && endYear.isNotEmpty ? '$endMonth $endYear' : (endYear.isNotEmpty ? endYear : '')),
+        'startMonth': startMonth,
+        'startYear': startYear,
+        'endMonth': endMonth,
+        'endYear': endYear,
       };
 }
 
@@ -3173,6 +3293,7 @@ class JobKeywordsAnalysisResult {
   final List<String> matchedKeywords;
   final List<String> partiallyMatchedKeywords;
   final List<String> missingKeywords;
+  final List<String> projectAndExperienceKeywords;
   final List<String> strengths;
   final List<String> gaps;
 
@@ -3192,6 +3313,7 @@ class JobKeywordsAnalysisResult {
     this.matchedKeywords = const [],
     this.partiallyMatchedKeywords = const [],
     this.missingKeywords = const [],
+    this.projectAndExperienceKeywords = const [],
     this.strengths = const [],
     this.gaps = const [],
   });
@@ -3220,6 +3342,7 @@ class JobKeywordsAnalysisResult {
     final matched = ResumeData._parseStringList(json['matchedKeywords']);
     final partial = ResumeData._parseStringList(json['partiallyMatchedKeywords']);
     final missing = ResumeData._parseStringList(json['missingKeywords']);
+    final projExp = ResumeData._parseStringList(json['projectAndExperienceKeywords']);
 
     final allExtracted = <String>[...matched, ...partial, ...missing];
 
@@ -3253,6 +3376,7 @@ class JobKeywordsAnalysisResult {
       matchedKeywords: matched,
       partiallyMatchedKeywords: partial,
       missingKeywords: missing,
+      projectAndExperienceKeywords: projExp,
       strengths: ResumeData._parseStringList(json['strengths']),
       gaps: ResumeData._parseStringList(json['gaps']),
     );

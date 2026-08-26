@@ -1,11 +1,11 @@
 {
-    "name": "jobwink",
-    "short_name": "jobwink",
+    "name": "JobWink",
+    "short_name": "JobWink",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#060709",
+    "theme_color": "#F95716",
+    "description": "JobWink - Build a Job Winning Resume with AI",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

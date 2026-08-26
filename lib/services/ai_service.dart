@@ -11,6 +11,7 @@ import 'ai_usage_service.dart';
 import 'cerebras_service.dart';
 import 'gemini_service.dart';
 import 'groq_service.dart';
+import 'jd_keyword_engine.dart';
 import 'mistral_service.dart';
 import 'nvidia_service.dart';
 import 'openai_service.dart';
@@ -696,6 +697,13 @@ Return ONLY a valid JSON object matching this exact schema:
           }
         }
 
+        final allExtracted = [...verifiedMatched, ...verifiedPartial, ...verifiedMissing];
+        final projExpKeywords = extractProjectsAndExperienceKeywords(
+          extractedJobKeywords: allExtracted,
+          resume: currentResume,
+          jobDescription: jd,
+        );
+
         final validatedResult = JobKeywordsAnalysisResult(
           atsScore: parsed.atsScore,
           matchScore: parsed.atsScore,
@@ -703,10 +711,11 @@ Return ONLY a valid JSON object matching this exact schema:
               ? parsed.summary
               : 'Resume evaluated against job requirements with an overall ATS score of ${parsed.atsScore.toInt()}%.',
           categoryScores: parsed.categoryScores,
-          extractedJobKeywords: [...verifiedMatched, ...verifiedPartial, ...verifiedMissing],
+          extractedJobKeywords: allExtracted,
           matchedKeywords: verifiedMatched,
           partiallyMatchedKeywords: verifiedPartial,
           missingKeywords: verifiedMissing,
+          projectAndExperienceKeywords: projExpKeywords,
           strengths: parsed.strengths,
           gaps: parsed.gaps,
         );
@@ -865,6 +874,12 @@ Return ONLY a valid JSON object matching this exact schema:
       gaps.add('$kw experience is not present in resume');
     }
 
+    final projExpKeywords = extractProjectsAndExperienceKeywords(
+      extractedJobKeywords: extracted,
+      resume: currentResume,
+      jobDescription: jobDescription,
+    );
+
     return JobKeywordsAnalysisResult(
       atsScore: finalScore,
       matchScore: finalScore,
@@ -881,8 +896,27 @@ Return ONLY a valid JSON object matching this exact schema:
       matchedKeywords: matched,
       partiallyMatchedKeywords: const [],
       missingKeywords: missing,
+      projectAndExperienceKeywords: projExpKeywords,
       strengths: strengths,
       gaps: gaps,
+    );
+  }
+
+  /// Extracts job-description keywords that authentically exist ONLY within
+  /// the candidate's Projects and Experience sections.
+  ///
+  /// Strictly excludes Skills, Summary, Education, Certifications, Extracurriculars, etc.
+  List<String> extractProjectsAndExperienceKeywords({
+    required List<String> extractedJobKeywords,
+    required ResumeData resume,
+    String jobDescription = '',
+  }) {
+    if (extractedJobKeywords.isEmpty && jobDescription.trim().isEmpty) return const [];
+
+    return JdKeywordEngine.instance.extractProjectsAndExperienceKeywords(
+      jobDescription: jobDescription.isNotEmpty ? jobDescription : extractedJobKeywords.join(' \n'),
+      resume: resume,
+      aiExtractedKeywords: extractedJobKeywords,
     );
   }
 
@@ -890,7 +924,6 @@ Return ONLY a valid JSON object matching this exact schema:
   String _buildResumeSearchCorpus(ResumeData resume) {
     final sb = StringBuffer();
     sb.writeln(resume.fullName);
-    sb.writeln(resume.title);
     sb.writeln(resume.summary);
     for (final s in resume.skills) {
       sb.writeln(s);
@@ -967,10 +1000,8 @@ Return ONLY a valid JSON object matching this exact schema:
   }
 
   bool _isSafeSemanticMatch(String kw, String text) {
-    if (kw == text) return true;
-    // Disallow false substring matches (e.g. Java vs JavaScript, C vs Cloud)
+    if (kw == 'c' && text != 'c' && !text.contains('c programming')) return false;
     if (kw == 'java' && text.contains('javascript')) return false;
-    if (kw == 'c' && text != 'c' && text != 'c/c++') return false;
     if (kw == 'go' && text != 'go' && text != 'golang') return false;
     if (kw == 'r' && text != 'r' && !text.contains('r language')) return false;
     return true;
@@ -991,6 +1022,9 @@ Return ONLY a valid JSON object matching this exact schema:
       case 'ai':
       case 'ai/ml':
         return ['artificial intelligence', 'ai', 'ai/ml', 'genai', 'generative ai'];
+      case 'git':
+      case 'github':
+        return ['git', 'github'];
       case 'react':
       case 'react.js':
       case 'reactjs':
@@ -1002,6 +1036,17 @@ Return ONLY a valid JSON object matching this exact schema:
       case 'postgres':
       case 'postgresql':
         return ['postgres', 'postgresql'];
+      case 'prompt engineering':
+        return ['prompt engineering'];
+      case 'decision tree':
+      case 'decision trees':
+        return ['decision tree', 'decision trees'];
+      case 'logistic regression':
+        return ['logistic regression'];
+      case 'knn':
+        return ['knn', 'k-nearest neighbors'];
+      case 'api testing':
+        return ['api testing'];
       case 'k8s':
       case 'kubernetes':
         return ['k8s', 'kubernetes'];
@@ -1039,6 +1084,32 @@ Return ONLY a valid JSON object matching this exact schema:
       case 'generative ai':
       case 'gen ai':
         return ['genai', 'generative ai', 'gen ai'];
+      case 'model deployment':
+        return ['model deployment', 'deploy machine learning models', 'model deployment and nlp'];
+      case 'gridsearchcv':
+        return ['gridsearchcv', 'hyperparameters via gridsearchcv'];
+      case 'data processing':
+      case 'datasets':
+      case 'process datasets':
+        return ['data processing', 'datasets', 'process datasets', 'automated analysis', 'data synchronization', 'data optimization', 'ai-driven data optimization', 'data-driven models'];
+      case 'software engineer':
+      case 'software engineering':
+        return ['software engineer', 'software engineering', 'software development'];
+      case 'scalable solutions':
+      case 'scalable backend services':
+        return ['scalable solutions', 'scalable backend services'];
+      case 'api orchestration':
+        return ['api orchestration'];
+      case 'gemini api':
+        return ['gemini api'];
+      case 'scikit-learn':
+        return ['scikit-learn', 'sklearn'];
+      case 'riverpod':
+        return ['riverpod'];
+      case 'supabase':
+        return ['supabase'];
+      case 'cloud':
+        return ['cloud', 'cloud backend', 'cloud computing'];
       default:
         return [];
     }
@@ -1047,10 +1118,9 @@ Return ONLY a valid JSON object matching this exact schema:
   double _computeProfileCompleteness(ResumeData resume) {
     double score = 0.0;
     if (resume.fullName.isNotEmpty) score += 0.15;
-    if (resume.email.isNotEmpty) score += 0.1;
-    if (resume.phone.isNotEmpty) score += 0.1;
-    if (resume.summary.isNotEmpty) score += 0.2;
-    if (resume.skills.isNotEmpty) score += 0.2;
+    if (resume.summary.isNotEmpty) score += 0.15;
+    if (resume.skills.isNotEmpty || resume.skillGroups.isNotEmpty) score += 0.25;
+    if (resume.projects.isNotEmpty) score += 0.25;
     if (resume.experience.isNotEmpty) score += 0.15;
     if (resume.education.isNotEmpty) score += 0.1;
     return score.clamp(0.0, 1.0);
@@ -1064,7 +1134,11 @@ Return ONLY a valid JSON object matching this exact schema:
       'git', 'github', 'rest api', 'rest apis', 'graphql', 'grpc', 'sql', 'postgresql',
       'mysql', 'mongodb', 'redis', 'firebase', 'supabase', 'sqlite', 'kafka', 'rabbitmq',
       'machine learning', 'deep learning', 'nlp', 'pytorch', 'tensorflow', 'keras',
-      'scikit-learn', 'pandas', 'numpy', 'opencv', 'llm', 'generative ai', 'ai/ml',
+      'scikit-learn', 'pandas', 'numpy', 'opencv', 'llm', 'generative ai', 'ai/ml', 'ai',
+      'prompt engineering', 'decision tree', 'logistic regression', 'knn', 'api testing',
+      'natural language processing', 'artificial intelligence', 'model deployment',
+      'gridsearchcv', 'data processing', 'model evaluation', 'software engineer', 'software engineering',
+      'api orchestration', 'data synchronization', 'gemini api', 'riverpod', 'cloud',
       'data structures', 'algorithms', 'agile', 'scrum', 'unit testing', 'microservices',
       'linux', 'html', 'css', 'tailwind', 'redux', 'next.js', 'vue', 'angular',
     ];
@@ -1088,6 +1162,10 @@ Return ONLY a valid JSON object matching this exact schema:
     if (term == 'sql') return 'SQL';
     if (term == 'rest api' || term == 'rest apis') return 'REST APIs';
     if (term == 'ai/ml') return 'AI/ML';
+    if (term == 'ai') return 'AI';
+    if (term == 'git') return 'Git';
+    if (term == 'react') return 'React';
+    if (term == 'knn') return 'KNN';
     if (term == 'html') return 'HTML';
     if (term == 'css') return 'CSS';
     if (term == 'nlp') return 'NLP';
@@ -1110,6 +1188,13 @@ Return ONLY a valid JSON object matching this exact schema:
     if (term == 'flutter') return 'Flutter';
     if (term == 'dart') return 'Dart';
     if (term == 'golang') return 'Go';
+    if (term == 'scikit-learn') return 'scikit-learn';
+    if (term == 'gridsearchcv') return 'GridSearchCV';
+    if (term == 'gemini api') return 'Gemini API';
+    if (term == 'supabase') return 'Supabase';
+    if (term == 'riverpod') return 'Riverpod';
+    if (term == 'software engineer') return 'Software Engineer';
+    if (term == 'software engineering') return 'Software Engineering';
     return term.split(' ').map((w) => w.isNotEmpty ? '${w[0].toUpperCase()}${w.substring(1)}' : '').join(' ');
   }
 

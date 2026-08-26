@@ -7,11 +7,13 @@ import 'animations/page_transitions.dart';
 import 'providers/auth_provider.dart';
 import 'config/ai_config.dart';
 import 'services/ai_service.dart';
+import 'services/cookie_consent_service.dart';
 import 'services/demo_service.dart';
 import 'services/supabase_service.dart';
 import 'services/theme_service.dart';
 import 'theme/app_theme.dart';
 import 'widgets/ai_intelligence_section.dart';
+import 'widgets/cookie_consent_banner.dart';
 import 'widgets/cta_form_section.dart';
 import 'widgets/features_section.dart';
 import 'widgets/footer_section.dart';
@@ -49,6 +51,7 @@ void main() async {
   await Future.wait([
     SupabaseService.initialize(),
     ThemeService.instance.init(),
+    CookieConsentService.instance.init(),
   ]);
   AIService.instance.initialize(
     geminiKey: AIConfig.geminiApiKey,
@@ -96,6 +99,8 @@ class _JobwinkAppState extends State<JobwinkApp> {
               darkTheme: AppTheme.darkTheme,
               initialRoute: '/',
               onGenerateRoute: AppRouteTransitions.generateRoute,
+              builder: (context, child) =>
+                  CookieConsentWrapper(child: child ?? const SizedBox.shrink()),
             );
           },
         ),

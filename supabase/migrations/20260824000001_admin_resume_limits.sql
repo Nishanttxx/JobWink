@@ -162,8 +162,8 @@ BEGIN
 
   v_limit := COALESCE(v_limit_record.daily_limit, 4);
 
-  -- Daily Reset Logic: if recorded date is prior to current date, reset usage count to 0
-  IF v_limit_record.usage_date < v_today THEN
+  -- Daily Reset Logic: if recorded date is not current date, reset usage count to 0
+  IF v_limit_record.usage_date != v_today THEN
     v_used := 0;
   ELSE
     v_used := COALESCE(v_limit_record.usage_count, 0);
@@ -320,7 +320,7 @@ BEGIN
     WHERE user_id = v_user_id;
   END IF;
 
-  IF v_limit_record.usage_date < v_today THEN
+  IF v_limit_record.usage_date != v_today THEN
     v_used := 0;
     UPDATE public.user_resume_limits
     SET usage_count = 0,

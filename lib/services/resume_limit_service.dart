@@ -91,6 +91,14 @@ class ResumeLimitService {
     return email.trim().toLowerCase() == targetAdminEmail;
   }
 
+  /// Formats date to strict ISO format YYYY-MM-DD
+  static String formatDateOnly(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
   /// Atomically checks and reserves one unit of resume creation quota.
   ///
   /// Calls the Supabase PostgreSQL RPC `check_and_reserve_resume_limit`.
@@ -113,7 +121,9 @@ class ResumeLimitService {
     // Guest / Demo mode quota handling
     if (user == null || client == null) {
       final now = DateTime.now();
-      if (now.day != _guestUsageDate.day || now.month != _guestUsageDate.month || now.year != _guestUsageDate.year) {
+      final todayStr = formatDateOnly(now);
+      final guestDateStr = formatDateOnly(_guestUsageDate);
+      if (todayStr != guestDateStr) {
         _guestUsageCount = 0;
         _guestUsageDate = now;
       }
@@ -171,12 +181,12 @@ class ResumeLimitService {
 
     // 2. Direct Table Transaction Fallback (if RPC is pending or network fallback)
     try {
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final todayStr = formatDateOnly(DateTime.now());
       final userId = user.id;
 
       final existing = await client
           .from('user_resume_limits')
-          .select('id, daily_limit, usage_count, usage_date')
+          .select('id, daily_limit, usage_count, resumes_generated_today, usage_date')
           .eq('user_id', userId)
           .maybeSingle();
 
@@ -195,16 +205,27 @@ class ResumeLimitService {
           remaining: 3,
         );
       } else {
-        final recordDate = existing['usage_date']?.toString() ?? '';
+        final rawDate = existing['usage_date']?.toString() ?? '';
+        final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
         final dailyLimit = (existing['daily_limit'] as num? ?? 4).toInt();
-        int currentUsage = (existing['usage_count'] as num? ?? 0).toInt();
+        int currentUsage = (existing['usage_count'] as num? ?? existing['resumes_generated_today'] as num? ?? 0).toInt();
 
-        // Lazy daily reset
+        // Calendar day reset: If stored date != todayStr, usage starts from 0
         if (recordDate != todayStr) {
           currentUsage = 0;
         }
 
         if (currentUsage >= dailyLimit) {
+          if (recordDate != todayStr) {
+            try {
+              await client.from('user_resume_limits').update({
+                'usage_count': 0,
+                'usage_date': todayStr,
+                'updated_at': DateTime.now().toIso8601String(),
+              }).eq('id', existing['id']);
+            } catch (_) {}
+          }
+
           return ResumeLimitCheckResult(
             allowed: false,
             dailyLimit: dailyLimit,
@@ -257,11 +278,12 @@ class ResumeLimitService {
     }
   }
 
-  /// Retrieves the current user's daily quota and usage status.
+  /// Retrieves the current user's daily quota and usage status with automatic daily calendar reset.
   Future<Map<String, dynamic>> getUserResumeUsage() async {
     final client = _client;
     final user = client?.auth.currentUser;
     const defaultLimit = 4;
+    final todayStr = formatDateOnly(DateTime.now());
 
     // Admin has unlimited creations
     if (user != null && isUserAdmin(user.email)) {
@@ -272,12 +294,14 @@ class ResumeLimitService {
         'remaining': 999999,
         'allowed': true,
         'is_unlimited': true,
+        'usage_date': todayStr,
       };
     }
 
     if (user == null || client == null) {
       final now = DateTime.now();
-      if (now.day != _guestUsageDate.day || now.month != _guestUsageDate.month || now.year != _guestUsageDate.year) {
+      final guestDateStr = formatDateOnly(_guestUsageDate);
+      if (todayStr != guestDateStr) {
         _guestUsageCount = 0;
         _guestUsageDate = now;
       }
@@ -287,6 +311,7 @@ class ResumeLimitService {
         'resumes_generated_today': _guestUsageCount,
         'remaining': (defaultLimit - _guestUsageCount).clamp(0, defaultLimit),
         'allowed': _guestUsageCount < defaultLimit,
+        'usage_date': todayStr,
       };
     }
 
@@ -298,17 +323,31 @@ class ResumeLimitService {
     } catch (_) {}
 
     try {
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
       final existing = await client
           .from('user_resume_limits')
-          .select('daily_limit, usage_count, usage_date')
+          .select('id, daily_limit, usage_count, resumes_generated_today, usage_date')
           .eq('user_id', user.id)
           .maybeSingle();
 
       if (existing != null) {
         final dailyLimit = (existing['daily_limit'] as num? ?? defaultLimit).toInt();
-        final recordDate = existing['usage_date']?.toString() ?? '';
-        final used = recordDate == todayStr ? (existing['usage_count'] as num? ?? 0).toInt() : 0;
+        final rawDate = existing['usage_date']?.toString() ?? '';
+        final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+        final rawUsed = (existing['usage_count'] as num? ?? existing['resumes_generated_today'] as num? ?? 0).toInt();
+
+        // Calendar day reset: If stored date != todayStr, usage is 0
+        final isDifferentDay = recordDate != todayStr;
+        final used = isDifferentDay ? 0 : rawUsed;
+
+        if (isDifferentDay) {
+          try {
+            await client.from('user_resume_limits').update({
+              'usage_count': 0,
+              'usage_date': todayStr,
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('id', existing['id']);
+          } catch (_) {}
+        }
 
         return {
           'daily_limit': dailyLimit,
@@ -316,6 +355,7 @@ class ResumeLimitService {
           'resumes_generated_today': used,
           'remaining': (dailyLimit - used).clamp(0, dailyLimit),
           'allowed': used < dailyLimit,
+          'usage_date': todayStr,
         };
       }
     } catch (_) {}
@@ -326,6 +366,7 @@ class ResumeLimitService {
       'resumes_generated_today': 0,
       'remaining': defaultLimit,
       'allowed': true,
+      'usage_date': todayStr,
     };
   }
 
@@ -354,7 +395,7 @@ class ResumeLimitService {
 
     // Direct database query fallback
     try {
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final todayStr = formatDateOnly(DateTime.now());
       int totalUsers = 0;
       try {
         final profilesRes = await client.from('profiles').select('id');
@@ -367,7 +408,8 @@ class ResumeLimitService {
       int atLimit = 0;
 
       for (final row in (limits as List)) {
-        final date = row['usage_date']?.toString() ?? '';
+        final rawDate = row['usage_date']?.toString() ?? '';
+        final date = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
         final used = (row['usage_count'] as num? ?? row['resumes_generated_today'] as num? ?? 0).toInt();
         final limit = (row['daily_limit'] as num? ?? 4).toInt();
 
@@ -414,7 +456,7 @@ class ResumeLimitService {
 
     // Direct table query fallback
     try {
-      final todayStr = DateTime.now().toIso8601String().substring(0, 10);
+      final todayStr = formatDateOnly(DateTime.now());
       final profiles = await client.from('profiles').select('id, email, full_name, created_at');
       final limits = await client.from('user_resume_limits').select('user_id, daily_limit, usage_count, resumes_generated_today, usage_date');
 
@@ -429,7 +471,8 @@ class ResumeLimitService {
         final uid = prof['id']?.toString() ?? '';
         final lim = limitsMap[uid];
         final dailyLimit = (lim?['daily_limit'] as num? ?? 4).toInt();
-        final date = lim?['usage_date']?.toString() ?? todayStr;
+        final rawDate = lim?['usage_date']?.toString() ?? todayStr;
+        final date = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
         final rawUsed = (lim?['usage_count'] as num? ?? lim?['resumes_generated_today'] as num? ?? 0).toInt();
         final used = date == todayStr ? rawUsed : 0;
         final remaining = (dailyLimit - used).clamp(0, 999999);

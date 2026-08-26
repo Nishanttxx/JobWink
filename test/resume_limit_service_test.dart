@@ -96,8 +96,24 @@ void main() {
   });
 
   group('Resume Creation Limit Enforcement Simulation Tests', () {
-    test('guest demo user gets exactly 4 creation attempts per day', () async {
+    test('formatDateOnly formats consistently as YYYY-MM-DD', () {
+      final d1 = DateTime(2026, 8, 26);
+      expect(ResumeLimitService.formatDateOnly(d1), '2026-08-26');
+
+      final d2 = DateTime(2026, 1, 5);
+      expect(ResumeLimitService.formatDateOnly(d2), '2026-01-05');
+
+      final d3 = DateTime(2026, 12, 31);
+      expect(ResumeLimitService.formatDateOnly(d3), '2026-12-31');
+    });
+
+    test('guest demo user gets exactly 4 creation attempts per day and respects daily reset', () async {
       final service = ResumeLimitService.instance;
+
+      // User usage check before creations
+      final initialUsage = await service.getUserResumeUsage();
+      expect(initialUsage['daily_limit'], 4);
+      expect(initialUsage['usage_date'], ResumeLimitService.formatDateOnly(DateTime.now()));
 
       // First 4 calls allowed
       final check1 = await service.checkAndReserveLimit();
@@ -117,7 +133,13 @@ void main() {
       expect(check5.allowed, isFalse);
       expect(check5.message, contains('Daily resume limit reached'));
 
-      // Refund gives back 1 slot
+      // Check usage returns 4 used and allowed = false
+      final fullUsage = await service.getUserResumeUsage();
+      expect(fullUsage['usage_count'], 4);
+      expect(fullUsage['remaining'], 0);
+      expect(fullUsage['allowed'], isFalse);
+
+      // Refund gives back 1 slot on failure
       await service.refundLimit();
       final checkAfterRefund = await service.checkAndReserveLimit();
       expect(checkAfterRefund.allowed, isTrue);

@@ -3,16 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../services/jd_keyword_engine.dart';
 import '../../theme/app_theme.dart';
 
-
-
 /// A widget that renders text with visual darkening/emphasis applied to matched
-/// job keywords based on priority (High, Medium, Low).
+/// high-weight job keywords.
 ///
 /// **Crucial Rule**: The original [text] string is never altered or mutated.
 /// Highlighting is purely a visual rendering layer using [RichText] and [TextSpan].
 class HighlightText extends StatelessWidget {
   final String text;
   final List<JobKeyword>? jobKeywords;
+  final List<String>? matchedKeywords;
   final TextStyle? style;
   final int? maxLines;
   final TextOverflow? overflow;
@@ -22,6 +21,7 @@ class HighlightText extends StatelessWidget {
     super.key,
     required this.text,
     this.jobKeywords,
+    this.matchedKeywords,
     this.style,
     this.maxLines,
     this.overflow,
@@ -37,45 +37,21 @@ class HighlightText extends StatelessWidget {
     );
     final baseStyle = style ?? defaultStyle;
 
-    // If text is empty or no matched keywords exist, render plain text.
-    if (text.trim().isEmpty || jobKeywords == null || jobKeywords!.isEmpty) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: overflow,
-        textAlign: textAlign,
-      );
+    final targetKeywords = <String>{};
+    if (matchedKeywords != null && matchedKeywords!.isNotEmpty) {
+      targetKeywords.addAll(matchedKeywords!.map((k) => k.trim()).where((k) => k.length >= 2));
     }
-
-    final matchedKeywords = jobKeywords!.where((k) => k.matched).toList();
-    if (matchedKeywords.isEmpty) {
-      return Text(
-        text,
-        style: baseStyle,
-        maxLines: maxLines,
-        overflow: overflow,
-        textAlign: textAlign,
-      );
-    }
-
-    // Map keywords to their priority ('high', 'medium', 'low')
-    final Map<String, String> priorityMap = {};
-    for (final kw in matchedKeywords) {
-      final key = kw.keyword.toLowerCase().trim();
-      if (key.isNotEmpty) {
-        final p = kw.priority.toLowerCase().trim();
-        if (!priorityMap.containsKey(key) || p == 'high' || (p == 'medium' && priorityMap[key] == 'low')) {
-          priorityMap[key] = p;
+    if (jobKeywords != null && jobKeywords!.isNotEmpty) {
+      for (final kw in jobKeywords!) {
+        if (kw.matched || kw.priority == 'high' || kw.priority == 'medium') {
+          if (kw.keyword.trim().length >= 2) {
+            targetKeywords.add(kw.keyword.trim());
+          }
         }
       }
     }
 
-    // Sort keywords by length descending so longer multi-word phrases match first
-    final sortedKeys = priorityMap.keys.toList()
-      ..sort((a, b) => b.length.compareTo(a.length));
-
-    if (sortedKeys.isEmpty) {
+    if (text.trim().isEmpty || targetKeywords.isEmpty) {
       return Text(
         text,
         style: baseStyle,
@@ -85,9 +61,13 @@ class HighlightText extends StatelessWidget {
       );
     }
 
-    // Build regex pattern matching any of the sorted keywords with word boundaries
+    // Sort keywords by length descending so longer multi-word phrases match first
+    final sortedKeys = targetKeywords.toList()
+      ..sort((a, b) => b.length.compareTo(a.length));
+
+    // Build regex pattern matching any of the sorted keywords with strict word boundaries
     final escapedKeys = sortedKeys.map(RegExp.escape).join('|');
-    final regExp = RegExp('\\b($escapedKeys)\\b', caseSensitive: false);
+    final regExp = RegExp('(?<=^|[^a-zA-Z0-9])($escapedKeys)(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
 
     final matches = regExp.allMatches(text);
     if (matches.isEmpty) {
@@ -114,29 +94,11 @@ class HighlightText extends StatelessWidget {
       }
 
       final matchedWord = text.substring(match.start, match.end);
-      final keyLower = matchedWord.toLowerCase().trim();
-      final priority = priorityMap[keyLower] ?? 'low';
 
-      // Dynamic visual darkening & emphasis based on priority
-      TextStyle highlightedStyle;
-      if (priority == 'high') {
-        highlightedStyle = baseStyle.copyWith(
-          fontWeight: FontWeight.w800,
-          color: isDarkMode ? Colors.white : const Color(0xFF0F172A),
-          decoration: TextDecoration.underline,
-          decorationColor: AppTheme.primaryOrange.withValues(alpha: 0.6),
-          decorationThickness: 2.0,
-        );
-      } else if (priority == 'medium') {
-        highlightedStyle = baseStyle.copyWith(
-          fontWeight: FontWeight.w700,
-          color: isDarkMode ? const Color(0xFFF8FAFC) : const Color(0xFF1E293B),
-        );
-      } else {
-        highlightedStyle = baseStyle.copyWith(
-          fontWeight: FontWeight.w600,
-        );
-      }
+      final highlightedStyle = baseStyle.copyWith(
+        fontWeight: FontWeight.w800,
+        color: isDarkMode ? Colors.white : const Color(0xFF090D16),
+      );
 
       spans.add(TextSpan(
         text: matchedWord,

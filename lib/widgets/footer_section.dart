@@ -144,7 +144,6 @@ class _FooterSectionState extends State<FooterSection> {
       {'label': 'How it works', 'key': 'steps'},
       {'label': 'Report Bug 🐛', 'key': 'bug'},
       {'label': 'Privacy', 'key': 'privacy'},
-      {'label': 'Terms', 'key': 'terms'},
     ];
 
     return Column(
@@ -162,6 +161,8 @@ class _FooterSectionState extends State<FooterSection> {
                     onTap: () {
                       if (l['key'] == 'bug') {
                         ReportBugModal.show(context, routeName: 'LandingPage');
+                      } else if (l['key'] == 'privacy') {
+                        Navigator.pushNamed(context, '/privacy');
                       } else {
                         widget.onNavClick?.call(l['key']!);
                       }
@@ -190,7 +191,7 @@ class _FooterSectionState extends State<FooterSection> {
             ),
             const SizedBox(width: 6),
             Text(
-              'hello@jobwink.com',
+              'na6236786@gmail.com',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

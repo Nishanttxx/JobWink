@@ -53,7 +53,7 @@ void main() {
 
       final pdf1 = await ResumeExportService.instance.generateAtsPdf(
         resumeData,
-        selectedResumeType: ResumeType.hybrid,
+        selectedResumeType: ResumeType.fresher,
       );
 
       expect(pdf1, isNotNull);

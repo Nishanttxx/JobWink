@@ -83,7 +83,7 @@ class WorkExperienceCard extends StatelessWidget {
                 onPressed: onAddExperience,
                 icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
                 label: Text(
-                  '+ Add Work Experience',
+                  'Add Work Experience',
                   style: GoogleFonts.plusJakartaSans(
                     fontWeight: FontWeight.bold,
                     fontSize: 12,

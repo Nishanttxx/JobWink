@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/resume_data.dart';
 import '../models/resume_type.dart';
@@ -511,11 +512,20 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         targetJobTitle: _targetJobTitleController.text,
       );
 
+      debugPrint('============================================================');
+      debugPrint('[KEYWORD DEBUG]');
+      debugPrint('Job Description received: ${jd.isNotEmpty ? "YES" : "NO"}');
+      debugPrint('Extracted keywords: ${result.extractedJobKeywords}');
+      debugPrint('Matched keywords in Projects/Experience: ${result.projectAndExperienceKeywords}');
+      debugPrint('Missing keywords: ${result.missingKeywords}');
+      debugPrint('ATS Score: ${result.atsScore}');
+      debugPrint('============================================================');
+
       if (mounted) {
         setState(() {
           _jobMatchScore = result.matchScore;
           _atsScore = result.atsScore;
-          _matchedJobKeywords = result.matchedKeywords;
+          _matchedJobKeywords = result.projectAndExperienceKeywords;
           _missingJobKeywords = result.missingKeywords;
           _isAnalyzingKeywords = false;
         });
@@ -663,28 +673,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
     final fileBytes = bytes;
 
-    // ── Atomic Per-User Daily Resume Limit Enforcement ──
-    final limitCheck = await ResumeLimitService.instance.checkAndReserveLimit();
-    if (!limitCheck.allowed) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Text(
-              limitCheck.message.isNotEmpty
-                  ? limitCheck.message
-                  : 'Daily resume limit reached. Please try again tomorrow.',
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        );
-      }
-      return;
-    }
-
     debugPrint('[ResumePipeline] New resume uploaded - cache invalidated');
     debugPrint('[ResumePipeline] New resume detected - starting extraction');
 
@@ -737,26 +725,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         debugPrint('[ResumeEditor] AI extraction result: SUCCESS');
         debugPrint('[ResumeEditor] Extracted: name="${resumeData.fullName}", email="${resumeData.email}", phone="${resumeData.phone}"');
         debugPrint('[ResumeEditor] Extracted: exp=${resumeData.experience.length}, edu=${resumeData.education.length}, proj=${resumeData.projects.length}, skills=${resumeData.skills.length}');
+        debugPrint('[RESUME] Extracted resume name: ${resumeData.fullName}');
 
         setState(() {
           _isUploading = false;
           _isParsing = false;
           populateFormFromResume(resumeData);
         });
-
-        // Sync updated info to User Profile in background (only if valid data)
-        try {
-          final auth = AuthProviderScope.read(context);
-          if (auth.isAuthenticated) {
-            auth.updateProfile(
-              fullName: resumeData.fullName.isNotEmpty ? resumeData.fullName : null,
-              phone: resumeData.phone.isNotEmpty ? resumeData.phone : null,
-              location: resumeData.location.isNotEmpty ? resumeData.location : null,
-              linkedinUrl: resumeData.linkedin.isNotEmpty ? resumeData.linkedin : null,
-              githubUrl: resumeData.github.isNotEmpty ? resumeData.github : null,
-            );
-          }
-        } catch (_) {}
 
         // Background persistence — only save valid data
         ResumePersistenceService.instance.saveParsedResume(resumeData);
@@ -825,9 +800,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           }
         }
 
-        // Failed resume creation - refund reserved limit
-        ResumeLimitService.instance.refundLimit();
-
         setState(() {
           _isUploading = false;
           _isParsing = false;
@@ -850,7 +822,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         }
       }
     } on AIUsageLimitException catch (limitErr) {
-      ResumeLimitService.instance.refundLimit();
       setState(() {
         _isUploading = false;
         _isParsing = false;
@@ -871,7 +842,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         );
       }
     } catch (e) {
-      ResumeLimitService.instance.refundLimit();
       setState(() {
         _isUploading = false;
         _isParsing = false;
@@ -2265,7 +2235,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 const SizedBox(height: 2),
                 Text(
                   _isParsing
-                      ? 'Gemini AI is parsing PDF/Image data & populating form fields...'
+                      ? 'AI Parsing'
                       : (_parseError ??
                           (_uploadedFileName ??
                               'Upload PDF, DOCX, or Image (JPG/PNG) to auto-extract info.')),
@@ -2281,85 +2251,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         : FontWeight.normal,
                   ),
                 ),
-                if (kDebugMode) ...[
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: () {
-                      final testResume = ResumeData(
-                        fullName: 'Nishant Arya',
-                        email: 'nishant@example.com',
-                        phone: '+91 9876543210',
-                        location: 'New Delhi, India',
-                        linkedin: 'linkedin.com/in/nishantarya',
-                        github: 'github.com/Nishanttxx',
-                        title: 'Senior Mobile & AI Software Engineer',
-                        summary: 'Results-driven Senior Software Engineer specializing in cross-platform mobile app development with Flutter, Dart, and scalable backend AI integrations.',
-                        skills: ['Flutter', 'Dart', 'Python', 'AI Integration', 'REST APIs', 'Supabase', 'Docker', 'Git'],
-                        experience: const [
-                          ExperienceEntry(
-                            company: 'JobWink Tech',
-                            role: 'Lead Flutter Developer',
-                            startDate: '2023',
-                            endDate: 'Present',
-                            description: [
-                              'Architected real-time AI resume extraction and tailoring engine across multi-provider LLMs.',
-                              'Optimized mobile and web UI performance, resulting in 40% faster render times.'
-                            ],
-                          ),
-                        ],
-                        education: const [
-                          EducationEntry(
-                            institution: 'Indian Institute of Technology',
-                            degree: 'Bachelor of Technology',
-                            fieldOfStudy: 'Computer Science & Engineering',
-                            startDate: '2019',
-                            endDate: '2023',
-                            gpa: '8.8 / 10',
-                          ),
-                        ],
-                        projects: [
-                          ProjectEntry(
-                            name: 'JobWink Resume Studio',
-                            description: 'Smart AI resume parser and ATS tailor for job seekers.',
-                            technologies: ['Flutter', 'Gemini AI', 'Groq', 'Supabase'],
-                            url: 'github.com/Nishanttxx/jobwink',
-                          ),
-                        ],
-                      );
-                      setState(() {
-                        populateFormFromResume(testResume);
-                      });
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          backgroundColor: const Color(0xFF10B981),
-                          content: Text(
-                            'Sample resume loaded! Form fields populated successfully.',
-                            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        ),
-                      );
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.description_outlined, size: 14, color: AppTheme.getMutedTextColor(context)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Load Sample Resume',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.getMutedTextColor(context),
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
                 if (_uploadedFileBytes != null && _parseError != null) ...[
                   const SizedBox(height: 6),
                   InkWell(
@@ -2849,39 +2740,22 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           spacing: 8,
           runSpacing: 8,
           children: _skills.map((skill) {
-            final isMatched = _matchedJobKeywords.any((k) {
-              final lk = k.trim().toLowerCase();
-              final ls = skill.trim().toLowerCase();
-              if (lk.isEmpty || ls.isEmpty) return false;
-              if (lk == ls) return true;
-              if (lk.length >= 2) {
-                final pattern = RegExp('(?<=^|[^a-zA-Z0-9])${RegExp.escape(lk)}(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
-                if (pattern.hasMatch(ls)) return true;
-              }
-              return false;
-            });
             return Chip(
               label: Text(
                 skill,
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 12,
-                  fontWeight: isMatched ? FontWeight.w800 : FontWeight.w600,
-                  color: isMatched
-                      ? (isDarkMode ? Colors.white : const Color(0xFF0F172A))
-                      : AppTheme.primaryOrange,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryOrange,
                 ),
               ),
-              backgroundColor: isMatched
-                  ? AppTheme.primaryOrange.withValues(alpha: isDarkMode ? 0.35 : 0.22)
-                  : AppTheme.primaryOrange.withValues(alpha: 0.12),
+              backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.12),
               deleteIcon: const Icon(Icons.close,
                   size: 14, color: AppTheme.primaryOrange),
               onDeleted: () => _removeSkill(skill),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
-                side: isMatched
-                    ? const BorderSide(color: AppTheme.primaryOrange, width: 1.5)
-                    : BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
+                side: BorderSide(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
               ),
             );
           }).toList(),
@@ -3478,7 +3352,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         },
                         icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
                         label: Text(
-                          '+ Add Bullet Point',
+                          'Add Bullet Point',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
@@ -4257,126 +4131,375 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final activityController = TextEditingController(text: initial?.activity ?? '');
     final roleController = TextEditingController(text: initial?.role ?? '');
     final orgController = TextEditingController(text: initial?.organization ?? '');
+    final linkController = TextEditingController(
+      text: (initial?.url.isNotEmpty == true)
+          ? initial!.url
+          : (initial?.link.isNotEmpty == true ? initial!.link : ''),
+    );
     final descController = TextEditingController(text: initial?.description ?? '');
+
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+
+    String? normalizeMonth(String? m) {
+      if (m == null || m.isEmpty) return null;
+      final mLow = m.toLowerCase().trim();
+      const mMap = {
+        'january': 'Jan', 'jan': 'Jan', '01': 'Jan', '1': 'Jan',
+        'february': 'Feb', 'feb': 'Feb', '02': 'Feb', '2': 'Feb',
+        'march': 'Mar', 'mar': 'Mar', '03': 'Mar', '3': 'Mar',
+        'april': 'Apr', 'apr': 'Apr', '04': 'Apr', '4': 'Apr',
+        'may': 'May', '05': 'May', '5': 'May',
+        'june': 'Jun', 'jun': 'Jun', '06': 'Jun', '6': 'Jun',
+        'july': 'Jul', 'jul': 'Jul', '07': 'Jul', '7': 'Jul',
+        'august': 'Aug', 'aug': 'Aug', '08': 'Aug', '8': 'Aug',
+        'september': 'Sep', 'sep': 'Sep', '09': 'Sep', '9': 'Sep',
+        'october': 'Oct', 'oct': 'Oct', '10': 'Oct',
+        'november': 'Nov', 'nov': 'Nov', '11': 'Nov',
+        'december': 'Dec', 'dec': 'Dec', '12': 'Dec',
+      };
+      return mMap[mLow] ?? (months.contains(m) ? m : null);
+    }
+
+    String? startMonth = normalizeMonth(initial?.startMonth);
+    String? startYear = initial?.startYear.isNotEmpty == true ? initial!.startYear : null;
+    String? endMonth = normalizeMonth(initial?.endMonth);
+    String? endYear = initial?.endYear.isNotEmpty == true ? initial!.endYear : null;
+
+    if (startMonth == null && startYear == null && (initial?.startDate.isNotEmpty == true)) {
+      final sParts = initial!.startDate.split(RegExp(r'[\s/,-]+')).where((p) => p.isNotEmpty).toList();
+      for (final p in sParts) {
+        final m = normalizeMonth(p);
+        if (m != null && startMonth == null) {
+          startMonth = m;
+        } else if (p.length == 4 && int.tryParse(p) != null && startYear == null) {
+          startYear = p;
+        }
+      }
+    }
+
+    if (endMonth == null && endYear == null && (initial?.endDate.isNotEmpty == true)) {
+      final eParts = initial!.endDate.split(RegExp(r'[\s/,-]+')).where((p) => p.isNotEmpty).toList();
+      for (final p in eParts) {
+        final m = normalizeMonth(p);
+        if (m != null && endMonth == null) {
+          endMonth = m;
+        } else if (p.length == 4 && int.tryParse(p) != null && endYear == null) {
+          endYear = p;
+        }
+      }
+    }
+
+    final currentYear = DateTime.now().year;
+    final years = List<String>.generate(currentYear + 6 - 1980, (i) => (currentYear + 5 - i).toString());
+
+    Widget buildDropdown({
+      required BuildContext ctx,
+      required String hint,
+      required String? value,
+      required List<String> items,
+      required ValueChanged<String?> onChanged,
+    }) {
+      final isDark = AppTheme.isDarkMode(ctx);
+      return Container(
+        height: 44,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF161B22) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isDark ? const Color(0xFF30363D) : const Color(0xFFCBD5E1),
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: items.contains(value) ? value : null,
+            isExpanded: true,
+            hint: Text(
+              hint,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                color: AppTheme.getMutedTextColor(ctx),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+            icon: Icon(
+              Icons.arrow_drop_down_rounded,
+              color: AppTheme.getMutedTextColor(ctx),
+            ),
+            dropdownColor: AppTheme.getSurfaceColor(ctx),
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 13,
+              color: AppTheme.getTextColor(ctx),
+            ),
+            items: [
+              DropdownMenuItem<String>(
+                value: null,
+                child: Text(
+                  '-- None --',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    color: AppTheme.getMutedTextColor(ctx),
+                  ),
+                ),
+              ),
+              ...items.map(
+                (item) => DropdownMenuItem<String>(
+                  value: item,
+                  child: Text(
+                    item,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13,
+                      color: AppTheme.getTextColor(ctx),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+            onChanged: onChanged,
+          ),
+        ),
+      );
+    }
 
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            initial == null ? 'Add Certification / Activity' : 'Edit Certification / Activity',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppTheme.getTextColor(ctx),
-            ),
-          ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Certification / Activity Title',
-                    hint: 'e.g. AWS Certified Solutions Architect',
-                    icon: Icons.workspace_premium_outlined,
-                    controller: activityController,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Role / Level (Optional)',
-                    hint: 'e.g. Certificate Holder / Lead Organizer',
-                    icon: Icons.badge_outlined,
-                    controller: roleController,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildFormField(
-                    context: ctx,
-                    label: 'Organization / Issuer',
-                    hint: 'e.g. Amazon Web Services',
-                    icon: Icons.business_center_outlined,
-                    controller: orgController,
-                  ),
-                  const SizedBox(height: 12),
-                  Column(
+        return StatefulBuilder(
+          builder: (dialogCtx, setModalState) {
+            return AlertDialog(
+              backgroundColor: AppTheme.getSurfaceColor(dialogCtx),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                initial == null ? 'Add Certification / Activity' : 'Edit Certification / Activity',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppTheme.getTextColor(dialogCtx),
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 480,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Details / Date',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.getTextColor(ctx),
-                        ),
+                      _buildFormField(
+                        context: dialogCtx,
+                        label: 'Certification / Activity Title',
+                        hint: 'e.g. AWS Certified Solutions Architect',
+                        icon: Icons.workspace_premium_outlined,
+                        controller: activityController,
                       ),
-                      const SizedBox(height: 6),
-                      TextField(
-                        controller: descController,
-                        maxLines: 2,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 13,
-                          color: AppTheme.getTextColor(ctx),
-                        ),
-                        decoration: _inputDecoration(
-                          ctx,
-                          'e.g. Issued Aug 2023 • Credential ID 12345',
-                        ),
+                      const SizedBox(height: 12),
+                      _buildFormField(
+                        context: dialogCtx,
+                        label: 'Role / Level (Optional)',
+                        hint: 'e.g. Certificate Holder / Lead Organizer',
+                        icon: Icons.badge_outlined,
+                        controller: roleController,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildFormField(
+                        context: dialogCtx,
+                        label: 'Organization / Issuer',
+                        hint: 'e.g. Amazon Web Services',
+                        icon: Icons.business_center_outlined,
+                        controller: orgController,
+                      ),
+                      const SizedBox(height: 12),
+                      _buildFormField(
+                        context: dialogCtx,
+                        label: 'Certificate / Activity Link (Optional)',
+                        hint: 'https://...',
+                        icon: Icons.link_rounded,
+                        controller: linkController,
+                      ),
+                      const SizedBox(height: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Details (Optional)',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.getTextColor(dialogCtx),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextField(
+                            controller: descController,
+                            maxLines: 2,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              color: AppTheme.getTextColor(dialogCtx),
+                            ),
+                            decoration: _inputDecoration(
+                              dialogCtx,
+                              'e.g. Credential ID 12345 • Score: 95%',
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Start Date (Optional)',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.getTextColor(dialogCtx),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: buildDropdown(
+                                        ctx: dialogCtx,
+                                        hint: 'Month',
+                                        value: startMonth,
+                                        items: months,
+                                        onChanged: (v) => setModalState(() => startMonth = v),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: buildDropdown(
+                                        ctx: dialogCtx,
+                                        hint: 'Year',
+                                        value: startYear,
+                                        items: years,
+                                        onChanged: (v) => setModalState(() => startYear = v),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'End Date (Optional)',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.getTextColor(dialogCtx),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: buildDropdown(
+                                        ctx: dialogCtx,
+                                        hint: 'Month',
+                                        value: endMonth,
+                                        items: months,
+                                        onChanged: (v) => setModalState(() => endMonth = v),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: buildDropdown(
+                                        ctx: dialogCtx,
+                                        hint: 'Year',
+                                        value: endYear,
+                                        items: years,
+                                        onChanged: (v) => setModalState(() => endYear = v),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.getMutedTextColor(ctx),
-                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final entry = ExtracurricularEntry(
-                  activity: activityController.text.trim(),
-                  role: roleController.text.trim(),
-                  organization: orgController.text.trim(),
-                  description: descController.text.trim(),
-                );
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: AppTheme.getMutedTextColor(dialogCtx),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final sM = (startMonth != null && startYear != null) ? startMonth! : '';
+                    final sY = (startMonth != null && startYear != null) ? startYear! : (startYear ?? '');
+                    final eM = (endMonth != null && endYear != null) ? endMonth! : '';
+                    final eY = (endMonth != null && endYear != null) ? endYear! : (endYear ?? '');
 
-                final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.extracurriculars ?? []);
-                if (index != null && index >= 0 && index < currentList.length) {
-                  currentList[index] = entry;
-                } else {
-                  currentList.add(entry);
-                }
+                    String rawUrl = linkController.text.trim();
+                    if (rawUrl.isNotEmpty &&
+                        !rawUrl.startsWith('http://') &&
+                        !rawUrl.startsWith('https://') &&
+                        !rawUrl.startsWith('mailto:')) {
+                      if (rawUrl.contains('.') && !rawUrl.contains(' ')) {
+                        rawUrl = 'https://$rawUrl';
+                      }
+                    }
 
-                setState(() {
-                  _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(extracurriculars: currentList);
-                });
-                _persistCurrentResume();
-                Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryOrange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-              child: Text(
-                'Save',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+                    final entry = ExtracurricularEntry(
+                      activity: activityController.text.trim(),
+                      role: roleController.text.trim(),
+                      organization: orgController.text.trim(),
+                      description: descController.text.trim(),
+                      url: rawUrl,
+                      startMonth: sM,
+                      startYear: sY,
+                      endMonth: eM,
+                      endYear: eY,
+                    );
+
+                    final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.extracurriculars ?? []);
+                    if (index != null && index >= 0 && index < currentList.length) {
+                      currentList[index] = entry;
+                    } else {
+                      currentList.add(entry);
+                    }
+
+                    setState(() {
+                      _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(extracurriculars: currentList);
+                    });
+                    _persistCurrentResume();
+                    Navigator.pop(dialogCtx);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryOrange,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text(
+                    'Save',
+                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -4517,7 +4640,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             onPressed: () => _showExperienceDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
-              '+ Add Work Experience',
+              'Add Work Experience',
               style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryOrange,
@@ -4807,7 +4930,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             onPressed: () => _showAddProjectChoiceDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
-              '+ Add Project',
+              'Add Project',
               style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryOrange,
@@ -4935,7 +5058,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             onPressed: () => _showEducationDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
-              '+ Add Education',
+              'Add Education',
               style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryOrange,
@@ -5035,6 +5158,37 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                       ),
                     ),
                   ],
+                  if (item.url.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: GestureDetector(
+                        onTap: () => _launchExternalUrl(item.url),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.link_rounded, size: 14, color: AppTheme.primaryOrange),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _normalizeUrl(item.url),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primaryOrange,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 3),
+                            const Icon(Icons.open_in_new_rounded, size: 11, color: AppTheme.primaryOrange),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   if (item.description.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     ...item.description.split('\n').map((line) {
@@ -5055,11 +5209,9 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                               ),
                             ),
                             Expanded(
-                              child: _buildHighlightedText(
+                              child: Text(
                                 cleaned,
-                                context: context,
-                                isDarkMode: isDarkMode,
-                                baseStyle: GoogleFonts.plusJakartaSans(
+                                style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   color: AppTheme.getTextColor(context),
                                   height: 1.4,
@@ -5082,7 +5234,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
             onPressed: () => _showExtracurricularDialog(context),
             icon: const Icon(Icons.add_rounded, size: 16, color: AppTheme.primaryOrange),
             label: Text(
-              '+ Add Activity',
+              'Add Activity',
               style: GoogleFonts.plusJakartaSans(
                 fontWeight: FontWeight.bold,
                 color: AppTheme.primaryOrange,
@@ -5134,6 +5286,41 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       return;
     }
 
+    if (_isDownloadingResume) return;
+
+    // ── Check Per-User Daily Quota Before Proceeding ──
+    final usageInfo = await ResumeLimitService.instance.getUserResumeUsage();
+    final user = Supabase.instance.client.auth.currentUser;
+    final userId = user?.id ?? 'guest';
+    final dailyLimit = (usageInfo['daily_limit'] as num? ?? 4).toInt();
+    final usedBefore = (usageInfo['usage_count'] as num? ?? 0).toInt();
+    final remainingBefore = (usageInfo['remaining'] as num? ?? 0).toInt();
+    final isAllowed = usageInfo['allowed'] == true;
+
+    debugPrint('[QUOTA DEBUG]');
+    debugPrint('User ID: $userId');
+    debugPrint('Daily Limit: $dailyLimit');
+    debugPrint('Used Before Download: $usedBefore');
+    debugPrint('Remaining Before Download: $remainingBefore');
+
+    if (!isAllowed || remainingBefore <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: const Color(0xFFEF4444),
+            content: Text(
+              'Daily resume download limit reached ($dailyLimit/$dailyLimit). Please try again tomorrow.',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isDownloadingResume = true);
 
     // Yield control to event loop so Flutter paints the loading button state immediately
@@ -5162,7 +5349,17 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         format == 'pdf' ? 'application/pdf' : 'text/plain',
       );
 
+      // ── Successful Download: Consume Exactly 1 Quota Atomically in Database ──
+      final reserveResult = await ResumeLimitService.instance.checkAndReserveLimit();
+
+      debugPrint('[QUOTA DEBUG]');
+      debugPrint('Download Successful: YES');
+      debugPrint('Quota Consumed: 1');
+      debugPrint('Used After Download: ${reserveResult.usageCount}');
+      debugPrint('Remaining After Download: ${reserveResult.remaining}');
+
       if (mounted) {
+        setState(() {});
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: const Color(0xFF10B981),
@@ -5185,6 +5382,9 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         );
       }
     } catch (e) {
+      debugPrint('[QUOTA DEBUG]');
+      debugPrint('Download Successful: NO');
+      debugPrint('Quota Consumed: 0');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

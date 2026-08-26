@@ -5,6 +5,7 @@ import '../screens/admin_dashboard_screen.dart';
 import '../screens/email_verify_screen.dart';
 import '../screens/forgot_password_screen.dart';
 import '../screens/main_dashboard_wrapper.dart';
+import '../screens/privacy_policy_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/reset_password_screen.dart';
 import '../services/demo_service.dart';
@@ -56,6 +57,9 @@ class AppRouteTransitions {
         break;
       case '/verify-email':
         targetScreen = const EmailVerifyScreen();
+        break;
+      case '/privacy':
+        targetScreen = const PrivacyPolicyScreen();
         break;
 
       // ── Profile (Strict Auth Only - No Demo) ─────────────────────────────
