@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SUPABASE MIGRATION: Fix is_admin_caller() — use role-based check, no app_config
 -- Migration File: supabase/migrations/20260827000001_dynamic_admin_config.sql
 -- ============================================================================
@@ -6,8 +6,8 @@
 -- raw_app_meta_data role check. Admin access is controlled by setting:
 --
 --   UPDATE auth.users
---   SET raw_app_meta_data = raw_app_meta_data || '"'"'{"role":"admin"}'"'"'::jsonb
---   WHERE email = '"'"'your-admin@email.com'"'"';
+--   SET raw_app_meta_data = raw_app_meta_data || '{"role":"admin"}'::jsonb
+--   WHERE email = 'your-admin@email.com';
 --
 -- Run that once via Supabase SQL Editor (requires service role).
 -- No hardcoded email is stored in migration files or DB schema.
@@ -25,7 +25,7 @@ BEGIN
   RETURN (
     auth.uid() IS NOT NULL AND
     (
-      SELECT (raw_app_meta_data->>'"'"'role'"'"') = '"'"'admin'"'"'
+      SELECT (raw_app_meta_data->>'role') = 'admin'
       FROM auth.users
       WHERE id = auth.uid()
     )
@@ -43,3 +43,4 @@ CREATE POLICY "Users can view their own resume limit"
   ON public.user_resume_limits FOR SELECT
   TO authenticated
   USING (auth.uid() = user_id OR public.is_admin_caller());
+
