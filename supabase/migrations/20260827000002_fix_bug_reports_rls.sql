@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SUPABASE MIGRATION: Fix bug_reports RLS — remove hardcoded admin email
 -- Migration File: supabase/migrations/20260827000002_fix_bug_reports_rls.sql
 -- ============================================================================
@@ -13,9 +13,9 @@ DROP POLICY IF EXISTS "Admins can view all bug reports" ON public.bug_reports;
 CREATE POLICY "Allow admins to read bug_reports"
 ON public.bug_reports
 FOR SELECT
+TO authenticated
 USING (
-    auth.uid() IS NOT NULL AND
-    (SELECT (raw_app_meta_data->>'role') FROM auth.users WHERE id = auth.uid()) = 'admin'
+    public.is_admin_caller()
 );
 
 -- Note: To grant admin access to a user, run via Service Role:
