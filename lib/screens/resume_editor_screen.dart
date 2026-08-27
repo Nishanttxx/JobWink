@@ -631,28 +631,25 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       return;
     }
 
-    final pickerResult = await FilePicker.pickFiles(
+    final pickerResult = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'txt'],
+      withData: true,
     );
 
-    if (pickerResult.isEmpty) return;
+    if (pickerResult == null || pickerResult.files.isEmpty) return;
 
-    final pickedFile = pickerResult.first;
-    Uint8List? bytes;
+    final pickedFile = pickerResult.files.first;
+    Uint8List? bytes = pickedFile.bytes;
 
-    try {
-      bytes = await pickedFile.readAsBytes();
-    } catch (_) {
-      if (pickedFile.path != null && pickedFile.path!.isNotEmpty) {
-        try {
-          final file = File(pickedFile.path!);
-          if (await file.exists()) {
-            bytes = await file.readAsBytes();
-          }
-        } catch (e) {
-          debugPrint('Error reading file from path: $e');
+    if (bytes == null && pickedFile.path != null && pickedFile.path!.isNotEmpty) {
+      try {
+        final file = File(pickedFile.path!);
+        if (await file.exists()) {
+          bytes = await file.readAsBytes();
         }
+      } catch (e) {
+        debugPrint('Error reading file from path: $e');
       }
     }
 

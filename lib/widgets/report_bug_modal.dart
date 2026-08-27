@@ -107,21 +107,17 @@ class _ReportBugModalState extends State<ReportBugModal> {
     });
 
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
+        withData: true,
       );
 
-      if (result.isNotEmpty) {
-        final file = result.first;
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.first;
         final name = file.name;
-        Uint8List? bytes;
-        try {
-          bytes = await file.readAsBytes();
-        } catch (e) {
-          debugPrint('Error reading screenshot bytes: $e');
-        }
-        final size = bytes?.length ?? 0;
+        final size = file.size;
+        final bytes = file.bytes;
 
         final valErr = BugReportService.instance.validateScreenshot(
           fileName: name,

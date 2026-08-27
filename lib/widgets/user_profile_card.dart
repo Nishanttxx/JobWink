@@ -35,22 +35,18 @@ class _UserProfileCardState extends State<UserProfileCard> {
     if (effectiveUser == null || _isUploadingAvatar) return;
 
     try {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: _allowedExtensions,
+        withData: true,
       );
 
-      if (result.isEmpty) return;
+      if (result == null || result.files.isEmpty) return;
 
-      final file = result.first;
+      final file = result.files.first;
       final fileExtension = file.extension?.toLowerCase() ?? '';
-      Uint8List? bytes;
-      try {
-        bytes = await file.readAsBytes();
-      } catch (e) {
-        debugPrint('Error reading avatar bytes: $e');
-      }
-      final size = bytes?.length ?? 0;
+      final bytes = file.bytes;
+      final size = file.size;
 
       // 1. Extension Validation
       if (!_allowedExtensions.contains(fileExtension)) {
