@@ -46,6 +46,10 @@ class AppRouteTransitions {
         targetScreen =
             const _AuthGate(child: MainDashboardWrapper(initialIndex: 4));
         break;
+      case '/history':
+        targetScreen =
+            const _AuthGate(child: MainDashboardWrapper(initialIndex: 5));
+        break;
 
 
       // ── Auth screens ─────────────────────────────────────────────────────
@@ -70,10 +74,10 @@ class AppRouteTransitions {
         );
         break;
 
-      // ── Landing (default) ────────────────────────────────────────────────
+      // ── Root / Landing (Dynamic Gate) ────────────────────────────────────
       case '/':
       default:
-        targetScreen = const LandingPage();
+        targetScreen = const AppRootGate();
         return PageRouteBuilder(
           settings: settings,
           pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
@@ -163,6 +167,11 @@ class _AuthGateState extends State<_AuthGate> {
 
     // Still initializing — wait for the next rebuild when status settles.
     if (auth.isInitializing) return;
+
+    if (auth.isAuthenticated) {
+      _redirected = false;
+      return;
+    }
 
     if (!auth.isAuthenticated) {
       if (widget.allowDemoMode) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../screens/job_prediction_screen.dart';
 import '../screens/resume_editor_screen.dart';
+import '../screens/resume_history_screen.dart';
 import '../screens/swipe_matcher_screen.dart';
 import '../widgets/app_layout.dart';
 
@@ -20,11 +21,12 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
   late PageController _pageController;
   late int _currentIndex;
   final GlobalKey<ResumeEditorScreenState> _resumeEditorKey = GlobalKey<ResumeEditorScreenState>();
+  final GlobalKey<ResumeHistoryScreenState> _resumeHistoryKey = GlobalKey<ResumeHistoryScreenState>();
 
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex.clamp(0, 4);
+    _currentIndex = widget.initialIndex.clamp(0, 5);
     _pageController = PageController(initialPage: _currentIndex);
   }
 
@@ -38,13 +40,15 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
     switch (index) {
       case 0:
       case 2:
-        return 'AI Resume Tailoring Studio';
+        return 'Resume Tailoring';
       case 1:
         return 'Swipe Job Matcher';
       case 3:
         return 'Job Match ML Prediction';
       case 4:
         return 'ATS Score Analysis';
+      case 5:
+        return 'Resume History';
       default:
         return 'JobWink Workspace';
     }
@@ -111,6 +115,9 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
           setState(() {
             _currentIndex = index;
           });
+          if (index == 5) {
+            _resumeHistoryKey.currentState?.loadHistory();
+          }
         },
         children: [
           const ResumeEditorScreen(key: ValueKey('editor_overview_tab')),
@@ -123,8 +130,25 @@ class _MainDashboardWrapperState extends State<MainDashboardWrapper> {
           ),
           const JobPredictionScreen(),
           const ResumeEditorScreen(key: ValueKey('ats_score_editor'), initialTab: 3),
+          ResumeHistoryScreen(
+            key: _resumeHistoryKey,
+            onOpenResume: (historicalResume) {
+              _resumeEditorKey.currentState?.populateFormFromResume(historicalResume);
+              _pageController.jumpToPage(2);
+              setState(() {
+                _currentIndex = 2;
+              });
+            },
+            onCreateNewResume: () {
+              _pageController.jumpToPage(2);
+              setState(() {
+                _currentIndex = 2;
+              });
+            },
+          ),
         ],
       ),
     );
   }
 }
+

@@ -138,56 +138,48 @@ class _AppLayoutState extends State<AppLayout> {
                   ),
                   child: Row(
                     children: [
-                      // Mobile Drawer Toggle Button
-                      if (!isDesktop)
+                      // Mobile Drawer Toggle Button & Brand Indicator
+                      if (!isDesktop) ...[
                         IconButton(
                           icon: Icon(Icons.menu, color: AppTheme.getTextColor(context)),
                           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                           tooltip: 'Open Menu',
                         ),
-
-                      // Brand Logo / Page Context Indicator
-                      Row(
-                        children: [
-                          if (!isDesktop) ...[
-                            Text(
-                              'JobWink',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.primaryOrange,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF94A3B8),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          Text(
-                            widget.title,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.getTextColor(context),
-                            ),
+                        Text(
+                          'JobWink',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.primaryOrange,
                           ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 4,
+                          height: 4,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF94A3B8),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          widget.title,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.getTextColor(context),
+                          ),
+                        ),
+                      ],
 
-                      const Spacer(),
-
-                      // Top Navbar Navigation Links (Desktop & Tablet)
+                      // Desktop Navigation Links
                       if (isDesktop) ...[
+                        // LEFT SIDE:
                         _NavbarButton(
                           label: 'Resume Tailoring',
                           icon: Icons.tune_rounded,
-                          isActive: widget.activeIndex == 2,
+                          isActive: widget.activeIndex == 2 || widget.activeIndex == 0,
                           onTap: () => _handleTabSelected(2, '/cv-studio'),
                         ),
                         const SizedBox(width: 8),
@@ -204,8 +196,18 @@ class _AppLayoutState extends State<AppLayout> {
                           isActive: widget.activeIndex == 3,
                           onTap: () => _handleTabSelected(3, '/job-prediction'),
                         ),
+
+                        // FLEX / SPACER
+                        const Spacer(),
+
+                        // RIGHT SIDE:
+                        _NavbarButton(
+                          label: 'Resume History',
+                          icon: Icons.history_rounded,
+                          isActive: widget.activeIndex == 5,
+                          onTap: () => _handleTabSelected(5, '/history'),
+                        ),
                       ],
-                      const Spacer(),
                     ],
                   ),
                 ),

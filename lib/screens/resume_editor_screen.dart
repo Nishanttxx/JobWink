@@ -922,7 +922,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               children: [
                 // Header Bar
                 PageHeader(
-                  title: 'CV Studio & Resume Tailoring 📝',
+                  title: 'RESUME TAILORING 📝',
                   subtitle: 'Upload existing resume or tailor your CV to any target job description in real-time.',
                   action: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),

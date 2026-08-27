@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/resume_data.dart';
+import '../models/resume_history_item.dart';
 
 /// Persists AI-parsed resume data to Supabase (resumes + resume_versions tables).
 class ResumePersistenceService {
@@ -182,6 +183,75 @@ class ResumePersistenceService {
     }
 
     return null;
+  }
+
+  /// Fetches historical resume versions scoped strictly to the authenticated user.
+  ///
+  /// Newest resumes appear first (ordered by `created_at` descending).
+  /// Enforces database Row-Level Security (RLS) and does NOT consume resume quota.
+  Future<List<ResumeHistoryItem>> loadResumeHistory({int limit = 50, int offset = 0}) async {
+    final userId = _userId;
+    if (userId == null) {
+      debugPrint('[ResumePersistence] loadResumeHistory: No authenticated user');
+      return [];
+    }
+
+    try {
+      // 1. Query resume_versions with parent resumes join scoped to current user
+      final versionsResponse = await _client
+          .from('resume_versions')
+          .select('id, resume_id, user_id, version_number, parsed_content, change_summary, created_at, updated_at, resumes(id, title, template_type)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
+
+      final List<dynamic> rows = versionsResponse as List<dynamic>;
+      final List<ResumeHistoryItem> items = [];
+
+      for (final row in rows) {
+        if (row is Map<String, dynamic>) {
+          try {
+            final item = ResumeHistoryItem.fromMap(row);
+            if (item.resumeData.hasUsableData ||
+                item.resumeData.fullName.isNotEmpty ||
+                item.resumeData.hasStructuredSections) {
+              items.add(item);
+            }
+          } catch (itemErr) {
+            debugPrint('[ResumePersistence] Error parsing history item: $itemErr');
+          }
+        }
+      }
+
+      // 2. Fallback: If no resume_versions found, check `resumes` table directly
+      if (items.isEmpty) {
+        final legacyResumes = await _client
+            .from('resumes')
+            .select('id, user_id, title, template_type, extracted_data, created_at, updated_at')
+            .eq('user_id', userId)
+            .order('created_at', ascending: false)
+            .range(offset, offset + limit - 1);
+
+        for (final row in (legacyResumes as List<dynamic>)) {
+          if (row is Map<String, dynamic> && row['extracted_data'] != null) {
+            try {
+              final item = ResumeHistoryItem.fromMap(row);
+              if (item.resumeData.hasUsableData ||
+                  item.resumeData.fullName.isNotEmpty ||
+                  item.resumeData.hasStructuredSections) {
+                items.add(item);
+              }
+            } catch (_) {}
+          }
+        }
+      }
+
+      debugPrint('[ResumePersistence] Loaded ${items.length} historical resume(s) for user $userId');
+      return items;
+    } catch (e) {
+      debugPrint('[ResumePersistence] loadResumeHistory error: $e');
+      return [];
+    }
   }
 
   /// Fetches all resumes owned by the authenticated user.

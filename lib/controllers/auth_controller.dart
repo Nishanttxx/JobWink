@@ -51,6 +51,21 @@ enum AuthStatus {
 class AuthController extends ChangeNotifier {
   AuthController({AuthRepository? repository})
       : _repo = repository ?? AuthRepository() {
+    // Eager synchronous session check if Supabase is already initialized
+    final initialSession = _repo.currentSession;
+    if (initialSession != null) {
+      _currentUser = AppUser(
+        id: initialSession.user.id,
+        email: initialSession.user.email ?? '',
+        fullName: initialSession.user.userMetadata?['full_name'] ??
+            initialSession.user.userMetadata?['name'],
+        avatarUrl: initialSession.user.userMetadata?['avatar_url'] ??
+            initialSession.user.userMetadata?['picture'],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      _status = AuthStatus.authenticated;
+    }
     _init();
   }
 
@@ -97,17 +112,18 @@ class AuthController extends ChangeNotifier {
         },
       );
 
-      // Auto-login: restore persisted session on cold start instantly.
+      // Restore persisted session on start
       final session = _repo.currentSession;
       if (session != null) {
         debugPrint('[AUTH] Session found: true');
         debugPrint('[AUTH] Session established');
-        // Populate basic user info synchronously from local session
         _currentUser = AppUser(
           id: session.user.id,
           email: session.user.email ?? '',
-          fullName: session.user.userMetadata?['full_name'],
-          avatarUrl: session.user.userMetadata?['avatar_url'],
+          fullName: session.user.userMetadata?['full_name'] ??
+              session.user.userMetadata?['name'],
+          avatarUrl: session.user.userMetadata?['avatar_url'] ??
+              session.user.userMetadata?['picture'],
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );
@@ -138,14 +154,25 @@ class AuthController extends ChangeNotifier {
           if (uid != null && state.session != null) {
             debugPrint('[AUTH] OAuth callback received');
             debugPrint('[AUTH] Session established');
-            await _fetchAndSetProfile(uid);
-            _pendingVerificationEmail = null;
+            _currentUser ??= AppUser(
+              id: uid,
+              email: state.session!.user.email ?? '',
+              fullName: state.session!.user.userMetadata?['full_name'] ??
+                  state.session!.user.userMetadata?['name'],
+              avatarUrl: state.session!.user.userMetadata?['avatar_url'] ??
+                  state.session!.user.userMetadata?['picture'],
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
             _set(AuthStatus.authenticated);
+            _pendingVerificationEmail = null;
+            await _fetchAndSetProfile(uid);
           } else {
             _set(AuthStatus.unauthenticated);
           }
 
         case AuthChangeEvent.signedOut:
+          DemoService.instance.exitDemoMode();
           _currentUser = null;
           _pendingVerificationEmail = null;
           _set(AuthStatus.unauthenticated);
@@ -160,7 +187,7 @@ class AuthController extends ChangeNotifier {
           _set(AuthStatus.authenticated);
 
         case AuthChangeEvent.tokenRefreshed:
-          // Silent refresh — no state change needed.
+          // Silent refresh — session remains active.
           break;
 
         default:
@@ -460,6 +487,11 @@ class AuthController extends ChangeNotifier {
   /// The auth state stream fires [AuthChangeEvent.signedOut] and sets
   /// [status] to [AuthStatus.unauthenticated] automatically.
   Future<void> signOut() async {
+    DemoService.instance.exitDemoMode();
+    _currentUser = null;
+    _pendingVerificationEmail = null;
+    _status = AuthStatus.unauthenticated;
+    notifyListeners();
     await _repo.signOut();
   }
 

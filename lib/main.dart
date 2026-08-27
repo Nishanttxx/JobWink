@@ -23,6 +23,7 @@ import 'widgets/logo_cloud.dart';
 import 'widgets/product_preview_section.dart';
 import 'widgets/shape_grid_background.dart';
 import 'widgets/steps_section.dart';
+import 'screens/main_dashboard_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -109,6 +110,75 @@ class _JobwinkAppState extends State<JobwinkApp> {
   }
 }
 
+/// Dynamic root gate for the application ('/').
+///
+/// Resolves authenticated session state BEFORE choosing whether to render
+/// the Landing Page, Login Flow, or Dashboard directly without any UI flash.
+class AppRootGate extends StatelessWidget {
+  const AppRootGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = AuthProviderScope.of(context);
+
+    // 1. Session resolution in progress: display clean themed startup state
+    if (auth.isInitializing) {
+      return Scaffold(
+        backgroundColor: AppTheme.getBgColor(context),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 54,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: AppTheme.primaryOrange.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                    width: 1.5,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome,
+                  color: AppTheme.primaryOrange,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.2,
+                  color: AppTheme.primaryOrange,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 2. Authenticated user: open dashboard directly (no landing flash)
+    if (auth.isAuthenticated) {
+      if (DemoService.instance.isDemoMode) {
+        DemoService.instance.exitDemoMode();
+      }
+      return const MainDashboardWrapper(initialIndex: 2);
+    }
+
+    // 3. Demo mode user: open dashboard
+    if (DemoService.instance.isDemoMode) {
+      return const MainDashboardWrapper(initialIndex: 2);
+    }
+
+    // 4. Unauthenticated user: show landing page
+    return const LandingPage();
+  }
+}
+
 class LandingPage extends StatefulWidget {
   const LandingPage({super.key});
 
@@ -120,8 +190,6 @@ class _LandingPageState extends State<LandingPage> {
   final ScrollController _scrollController = ScrollController();
   final ValueNotifier<Offset?> _mousePositionNotifier =
       ValueNotifier<Offset?>(null);
-  StreamSubscription<AuthState>? _authSub;
-  bool _navigatedToDashboard = false;
 
   // Global Keys for smooth section scrolling
   final GlobalKey _heroKey = GlobalKey();
@@ -130,37 +198,6 @@ class _LandingPageState extends State<LandingPage> {
   final GlobalKey _stepsKey = GlobalKey();
   final GlobalKey _aiKey = GlobalKey();
   final GlobalKey _ctaKey = GlobalKey();
-
-  @override
-  void initState() {
-    super.initState();
-    // Check if session is already established on startup
-    final currentSession = SupabaseService.instance.currentSession;
-    if (currentSession != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_navigatedToDashboard) {
-          _navigatedToDashboard = true;
-          DemoService.instance.exitDemoMode();
-          debugPrint('[AUTH] Redirecting to dashboard');
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
-      });
-    }
-
-    _authSub = SupabaseService.instance.onAuthStateChange.listen((data) {
-      if (mounted &&
-          data.session != null &&
-          (data.event == AuthChangeEvent.signedIn ||
-           data.event == AuthChangeEvent.initialSession)) {
-        if (!_navigatedToDashboard) {
-          _navigatedToDashboard = true;
-          DemoService.instance.exitDemoMode();
-          debugPrint('[AUTH] Redirecting to dashboard');
-          Navigator.pushReplacementNamed(context, '/dashboard');
-        }
-      }
-    });
-  }
 
   void _scrollToSection(String sectionKey) {
     GlobalKey? targetKey;
@@ -199,7 +236,6 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
-    _authSub?.cancel();
     _mousePositionNotifier.dispose();
     _scrollController.dispose();
     super.dispose();

@@ -321,6 +321,21 @@ class _AppSidebarState extends State<AppSidebar> {
                     ),
                   ),
 
+                // Resume History Menu Item
+                _SidebarCustomActionButton(
+                  label: 'Resume History',
+                  icon: Icons.history_rounded,
+                  isCollapsed: widget.isCollapsed,
+                  accentColor: AppTheme.primaryOrange,
+                  onTap: () {
+                    if (widget.onTabSelected != null) {
+                      widget.onTabSelected!(5, '/history');
+                    } else {
+                      Navigator.pushNamed(context, '/history');
+                    }
+                  },
+                ),
+
                 // Report Bug Menu Item
                 _SidebarCustomActionButton(
                   label: 'Report Bug',
@@ -477,12 +492,18 @@ class _AppSidebarState extends State<AppSidebar> {
                         onSelected: (val) async {
                           if (val == 'admin') {
                             Navigator.pushNamed(context, '/admin');
+                          } else if (val == 'history') {
+                            if (widget.onTabSelected != null) {
+                              widget.onTabSelected!(5, '/history');
+                            } else {
+                              Navigator.pushNamed(context, '/history');
+                            }
                           } else if (val == 'profile') {
                             Navigator.pushNamed(context, '/profile');
                           } else if (val == 'logout') {
                             await auth.signOut();
                             if (context.mounted) {
-                              Navigator.pushReplacementNamed(context, '/');
+                              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
                             }
                           }
                         },
@@ -498,6 +519,16 @@ class _AppSidebarState extends State<AppSidebar> {
                                 ],
                               ),
                             ),
+                          const PopupMenuItem(
+                            value: 'history',
+                            child: Row(
+                              children: [
+                                Icon(Icons.history_rounded, size: 16, color: AppTheme.primaryOrange),
+                                SizedBox(width: 8),
+                                Text('Resume History'),
+                              ],
+                            ),
+                          ),
                           const PopupMenuItem(
                             value: 'profile',
                             child: Row(
