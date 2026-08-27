@@ -2,38 +2,47 @@
 set -e
 
 # ==============================================================================
-# JobWink — Production Web Deployment & Build Script
-# Ensures Flutter 3.47.2 (Dart 3.13.2 >= 3.8.0) is installed and used.
+# JobWink — Production Web Deployment & Build Script for Cloudflare Pages
+# Ensures Flutter 3.47.2 (Dart 3.13.2 >= 3.8.0) is installed and used in an
+# isolated directory outside the project root to prevent analyzer recursion.
 # ==============================================================================
 
 echo "============================================================"
 echo "INITIAL CLOUDFLARE BUILD ENVIRONMENT INSPECTION"
 echo "============================================================"
-echo "Working directory:"
+echo "Current working directory:"
 pwd
+
 echo "Current Git commit:"
 git rev-parse HEAD
-echo "Locating pubspec.yaml:"
-find . -name pubspec.yaml -print
+
+echo "Locating Jobwink pubspec.yaml:"
+find . -maxdepth 2 -name pubspec.yaml -print
+
 echo "Pre-install which flutter:"
 which flutter || true
+
 echo "Pre-install which dart:"
 which dart || true
+
 echo "Pre-install flutter --version:"
 flutter --version || true
+
 echo "Pre-install dart --version:"
 dart --version || true
 
 echo "============================================================"
-echo "INSTALLING FLUTTER 3.47.2 (DART 3.13.2 >= 3.8.0)"
+echo "INSTALLING FLUTTER 3.47.2 (ISOLATED IN \$HOME/flutter)"
 echo "============================================================"
 
 FLUTTER_VERSION="3.47.2"
-FLUTTER_DIR="$PWD/flutter_sdk"
+FLUTTER_DIR="$HOME/flutter"
+FLUTTER_BIN="$FLUTTER_DIR/bin/flutter"
+DART_BIN="$FLUTTER_DIR/bin/dart"
 
 # Check if compatible Flutter SDK exists or needs installation / cache invalidation
 if [ -d "$FLUTTER_DIR" ]; then
-    CURRENT_VER=$("$FLUTTER_DIR/bin/flutter" --version 2>&1 | head -n 1 || true)
+    CURRENT_VER=$("$FLUTTER_BIN" --version 2>&1 | head -n 1 || true)
     if [[ "$CURRENT_VER" != *"$FLUTTER_VERSION"* ]]; then
         echo "Detected outdated cached Flutter SDK ($CURRENT_VER). Removing cache..."
         rm -rf "$FLUTTER_DIR"
@@ -61,25 +70,30 @@ echo "Dart executable path:"
 which dart
 
 echo "Flutter version details:"
-flutter --version
+"$FLUTTER_BIN" --version
 
 echo "Dart version details:"
-dart --version
+"$DART_BIN" --version
 
 # Fail-safe check: Stop immediately if Dart 3.1.0 is still resolved
-DART_INFO=$(dart --version 2>&1)
+DART_INFO=$("$DART_BIN" --version 2>&1)
 if [[ "$DART_INFO" == *"version: 3.1.0"* ]]; then
     echo "ERROR: Build environment is still executing legacy Dart 3.1.0! Aborting before pub get."
     exit 1
 fi
 
 echo "============================================================"
-echo "RESOLVING DEPENDENCIES & BUILDING WEB APPLICATION"
+echo "RESOLVING DEPENDENCIES & BUILDING JOBWINK"
 echo "============================================================"
 
-flutter clean
-flutter pub get
-flutter analyze
+echo "Running flutter clean..."
+"$FLUTTER_BIN" clean
+
+echo "Running flutter pub get on Jobwink..."
+"$FLUTTER_BIN" pub get
+
+echo "Running flutter analyze on Jobwink (lib/ and test/ only)..."
+"$FLUTTER_BIN" analyze lib test
 
 # Build production web bundle with environment variables
 BUILD_ARGS=()
@@ -107,8 +121,8 @@ if [ -n "$BACKEND_URL" ]; then
     BUILD_ARGS+=("--dart-define=BACKEND_URL=$BACKEND_URL")
 fi
 
-echo "Executing: flutter build web --release ${BUILD_ARGS[*]}"
-flutter build web --release "${BUILD_ARGS[@]}"
+echo "Building web release: $FLUTTER_BIN build web --release ${BUILD_ARGS[*]}"
+"$FLUTTER_BIN" build web --release "${BUILD_ARGS[@]}"
 
 echo "============================================================"
 echo "BUILD SUCCEEDED — Artifacts available in build/web"
