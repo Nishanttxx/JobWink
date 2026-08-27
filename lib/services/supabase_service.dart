@@ -121,8 +121,15 @@ class SupabaseService {
   /// Sign In with a social OAuth provider (Google, GitHub, …).
   Future<bool> signInWithOAuth(OAuthProvider provider) async {
     final c = client;
-    if (c == null) return false;
+    if (c == null) {
+      debugPrint('[OAUTH-DEBUG] Provider: ${provider.name}');
+      debugPrint('[OAUTH-DEBUG] Login initiated: NO (Supabase not initialized)');
+      return false;
+    }
     final redirectTo = kIsWeb ? Uri.base.origin : null;
+    debugPrint('[OAUTH-DEBUG] Provider: ${provider.name}');
+    debugPrint('[OAUTH-DEBUG] Login initiated: YES');
+    debugPrint('[OAUTH-DEBUG] Redirect URL: $redirectTo');
     final success = await c.auth.signInWithOAuth(
       provider,
       redirectTo: redirectTo,

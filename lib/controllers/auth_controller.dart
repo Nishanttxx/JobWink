@@ -155,8 +155,10 @@ class AuthController extends ChangeNotifier {
         case AuthChangeEvent.signedIn:
           final uid = state.session?.user.id;
           if (uid != null && state.session != null) {
-            debugPrint('[AUTH] OAuth callback received');
-            debugPrint('[AUTH] Session established');
+            debugPrint('[OAUTH-DEBUG] OAuth callback received: YES');
+            debugPrint('[OAUTH-DEBUG] Session detected: YES');
+            debugPrint('[OAUTH-DEBUG] Authenticated user ID: $uid');
+            debugPrint('[OAUTH-DEBUG] Final route: /dashboard');
             _currentUser ??= AppUser(
               id: uid,
               email: state.session!.user.email ?? '',
@@ -197,6 +199,7 @@ class AuthController extends ChangeNotifier {
           break;
       }
     } catch (e) {
+      debugPrint('[OAUTH-DEBUG] Error: $e');
       debugPrint('[AuthController] Auth stream exception caught: $e');
       _set(AuthStatus.unauthenticated, error: e.toString());
     }
@@ -208,6 +211,7 @@ class AuthController extends ChangeNotifier {
     if (result is AuthSuccess<AppUser?>) {
       if (result.value != null) {
         _currentUser = result.value;
+        debugPrint('[OAUTH-DEBUG] Profile loaded: YES');
       } else {
         // First login: ensure profile row exists in Supabase profiles table linked to auth.uid()
         final authUser = _repo.currentUser;
@@ -223,6 +227,7 @@ class AuthController extends ChangeNotifier {
           );
           if (updateRes is AuthSuccess<AppUser?> && updateRes.value != null) {
             _currentUser = updateRes.value;
+            debugPrint('[OAUTH-DEBUG] Profile loaded: YES (New profile created)');
           } else {
             _currentUser = AppUser(
               id: userId,
@@ -232,6 +237,7 @@ class AuthController extends ChangeNotifier {
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
             );
+            debugPrint('[OAUTH-DEBUG] Profile loaded: YES (Fallback profile)');
           }
         }
       }

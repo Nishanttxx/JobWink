@@ -59,7 +59,13 @@ class AuthErrorHandler {
     }
 
     // OAuth / provider errors
-    if (msg.contains('oauth') || msg.contains('provider')) {
+    if (code == 'access_denied' || msg.contains('access_denied')) {
+      return 'Sign-in cancelled or access denied by provider.';
+    }
+    if (code == 'redirect_uri_mismatch' || msg.contains('redirect_uri_mismatch')) {
+      return 'OAuth configuration mismatch. Please check redirect URLs.';
+    }
+    if (msg.contains('oauth') || msg.contains('provider') || msg.contains('social')) {
       return 'Social sign-in failed. Please try again or use email.';
     }
 
