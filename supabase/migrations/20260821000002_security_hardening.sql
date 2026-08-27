@@ -12,13 +12,17 @@
 -- ============================================================
 DROP FUNCTION IF EXISTS is_admin_caller() CASCADE;
 
+-- NOTE: This initial definition is overridden by migration 20260827000001_dynamic_admin_config.sql
+-- which replaces the email-based check with a role-based check (raw_app_meta_data->>'role' = 'admin').
+-- Do NOT add hardcoded email addresses here.
 CREATE FUNCTION is_admin_caller()
 RETURNS boolean
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  RETURN auth.email() = 'na6236786@gmail.com';
+  -- Placeholder: overridden by later migration 20260827000001
+  RETURN false;
 END;
 $$;
 
@@ -179,7 +183,7 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.' USING ERRCODE = 'P0001';
   END IF;
 
-  -- Admin account (na6236786@gmail.com) has unlimited creations
+  -- Admin account has unlimited creations (role = 'admin' in app_metadata)
   IF is_admin_caller() THEN
     RETURN json_build_object('allowed', true, 'used', 0, 'limit', 999999, 'remaining', 999999, 'is_admin', true);
   END IF;

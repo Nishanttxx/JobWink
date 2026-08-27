@@ -8,7 +8,7 @@ void main() {
     test('1. Certification object creation, serialization to JSON and deserialization from JSON', () {
       const initialResume = ResumeData(
         fullName: 'Nishant Arya',
-        email: 'na6236786@gmail.com',
+        email: 'test-user@example.com',
         certifications: [],
       );
 

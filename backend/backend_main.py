@@ -962,21 +962,39 @@ class BugReportPayload(BaseModel):
 
 
 def send_bug_report_email(report: BugReportPayload, report_id: str) -> tuple[bool, Optional[str], Optional[str]]:
-    """Delivers the bug report to the configured admin email with Reply-To."""
+    """Delivers the bug report to the configured admin email with Reply-To.
+
+    Reads ADMIN_EMAIL exclusively from the server environment (backend/.env or OS env).
+    The admin recipient is NEVER exposed to or sent from the frontend.
+    The reporter's email (report.user_email) is stored in bug_reports.user_email
+    and used only as the Reply-To header so the admin can reply directly to the reporter.
+    """
     print("[BUG-EMAIL] email function started")
-    admin_email = os.environ.get("ADMIN_EMAIL", "na6236786@gmail.com").strip()
+    admin_email = os.environ.get("ADMIN_EMAIL", "").strip()
     smtp_server = os.environ.get("SMTP_SERVER", "smtp.gmail.com").strip()
     smtp_port = int(os.environ.get("SMTP_PORT", 587))
-    smtp_user = os.environ.get("SMTP_USER", admin_email).strip()
+    smtp_user = os.environ.get("SMTP_USER", "").strip()
     smtp_password = os.environ.get("SMTP_PASSWORD", "").strip()
 
     has_admin = bool(admin_email and "@" in admin_email)
     has_pwd = bool(smtp_password)
+    has_smtp_user = bool(smtp_user)
     print(f"[BUG-EMAIL] ADMIN_EMAIL configured: {has_admin}")
+    print(f"[BUG-EMAIL] SMTP_USER configured: {has_smtp_user}")
     print(f"[BUG-EMAIL] SMTP_PASSWORD configured: {has_pwd}")
-    print(f"[BUG-EMAIL] recipient: {admin_email}")
-    print(f"[BUG-EMAIL] sender: JobWink Bug Reports <{smtp_user}>")
+    # Do NOT log the actual admin_email value — keep recipient private in logs
     print(f"[BUG-EMAIL] reply_to: {report.user_email.strip()}")
+
+    if not admin_email or "@" not in admin_email:
+        print("[BUG-EMAIL] Warning: ADMIN_EMAIL is not configured. Email delivery skipped.")
+        print("[BUG-EMAIL] provider response status: 503 Service Unavailable (Missing ADMIN_EMAIL)")
+        print("[BUG-EMAIL] provider accepted message: false")
+        print("[BUG-EMAIL] final result: FAILURE")
+        return False, None, "ADMIN_EMAIL not configured on server"
+
+    if not smtp_user:
+        smtp_user = admin_email  # fall back to admin_email as SMTP sender only if SMTP_USER not set
+        print("[BUG-EMAIL] SMTP_USER not set; using ADMIN_EMAIL as sender account")
 
     if not smtp_password:
         print("[BUG-EMAIL] Warning: SMTP_PASSWORD is not configured. Email delivery skipped.")

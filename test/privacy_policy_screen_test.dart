@@ -38,6 +38,6 @@ void main() {
     expect(find.text('12. Contact Information'), findsOneWidget);
 
     // Verify Official Contact Email
-    expect(find.text('na6236786@gmail.com'), findsWidgets);
+    expect(find.text('test-user@example.com'), findsWidgets);
   });
 }

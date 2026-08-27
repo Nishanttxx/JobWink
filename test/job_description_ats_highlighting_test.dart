@@ -340,7 +340,7 @@ void main() {
     test('10. Section 28 Test: Software engineer with Python, Docker, REST APIs, Git, Machine Learning, React, PostgreSQL, AI', () async {
       final resume = ResumeData(
         fullName: 'Nishant Arya',
-        email: 'na6236786@gmail.com',
+        email: 'test-user@example.com',
         github: 'github.com/Nishanttxx',
         linkedin: 'linkedin.com/in/nishant-arya-838168321',
         skills: ['Python', 'Docker', 'REST APIs', 'Git', 'Machine Learning', 'React', 'PostgreSQL', 'AI', 'Java'],

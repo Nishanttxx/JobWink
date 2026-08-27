@@ -10,7 +10,7 @@ void main() {
   test('Generate full Nishant Arya ATS PDF and verify one-page output', () async {
     final resume = ResumeData(
       fullName: 'Nishant Arya',
-      email: 'na6236786@gmail.com',
+      email: 'test-user@example.com',
       phone: '+91 8088031526',
       location: 'Nitte, Karkala, Karnataka - 574110',
       linkedin: 'https://linkedin.com/in/nishant-arya-b40b7921a/',

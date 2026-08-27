@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jobwink/config/backend_config.dart';
 import 'package:jobwink/services/resume_limit_service.dart';
 
 void main() {
@@ -72,26 +73,30 @@ void main() {
   });
 
   group('Admin Authorization Tests', () {
-    test('only na6236786@gmail.com is identified as admin', () {
+    test('isUserAdmin returns false when ADMIN_EMAIL not configured', () {
+      // When ADMIN_EMAIL dart-define is empty, no user should be admin
       final service = ResumeLimitService.instance;
-
-      expect(service.isUserAdmin('na6236786@gmail.com'), isTrue);
-      expect(service.isUserAdmin('NA6236786@GMAIL.COM'), isTrue);
-      expect(service.isUserAdmin(' na6236786@gmail.com '), isTrue);
-
-      expect(service.isUserAdmin('other@gmail.com'), isFalse);
-      expect(service.isUserAdmin('admin@jobwink.app'), isFalse);
-      expect(service.isUserAdmin(null), isFalse);
-      expect(service.isUserAdmin(''), isFalse);
+      if (BackendConfig.adminEmail.isEmpty) {
+        expect(service.isUserAdmin('any@email.com'), isFalse);
+        expect(service.isUserAdmin(null), isFalse);
+      } else {
+        // When ADMIN_EMAIL is set, only that exact email is admin
+        final adminEmail = BackendConfig.adminEmail;
+        expect(service.isUserAdmin(adminEmail), isTrue);
+        expect(service.isUserAdmin(adminEmail.toUpperCase()), isTrue);
+        expect(service.isUserAdmin(' $adminEmail '), isTrue);
+        expect(service.isUserAdmin('other@gmail.com'), isFalse);
+        expect(service.isUserAdmin(null), isFalse);
+        expect(service.isUserAdmin(''), isFalse);
+      }
     });
   });
 
   group('Admin Unlimited Resume Creations Tests', () {
-    test('na6236786@gmail.com is recognized as unlimited admin', () {
+    test('isUserAdmin respects ADMIN_EMAIL configuration', () {
       final service = ResumeLimitService.instance;
-      expect(service.isUserAdmin('na6236786@gmail.com'), isTrue);
-      expect(service.isUserAdmin('NA6236786@GMAIL.COM'), isTrue);
       expect(service.isUserAdmin('other_user@example.com'), isFalse);
+      expect(service.isUserAdmin(null), isFalse);
     });
   });
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../config/backend_config.dart';
 import '../theme/app_theme.dart';
 import '../widgets/footer_section.dart';
 
@@ -232,7 +233,7 @@ class PrivacyPolicyScreen extends StatelessWidget {
                           ),
                           _buildSubItem(
                             subtitle: 'Data Retention & Deletion:',
-                            content: 'Your resume versions and account profile remain stored as long as your account is active so you can return to edit your resumes. You may edit, overwrite, or clear resume content at any time in the resume editor. If you wish to completely delete your account and all associated database records, please submit a deletion request to na6236786@gmail.com for manual processing.',
+                            content: 'Your resume versions and account profile remain stored as long as your account is active so you can return to edit your resumes. You may edit, overwrite, or clear resume content at any time in the resume editor. If you wish to completely delete your account and all associated database records, please submit a deletion request to our contact address for manual processing.',
                             textColor: textColor,
                           ),
                         ],
@@ -356,7 +357,9 @@ class PrivacyPolicyScreen extends StatelessWidget {
                               const Icon(Icons.email_outlined, color: AppTheme.primaryOrange, size: 18),
                               const SizedBox(width: 8),
                               Text(
-                                'na6236786@gmail.com',
+                                BackendConfig.adminEmail.isNotEmpty
+                                    ? BackendConfig.adminEmail
+                                    : 'contact@jobwink.app',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,

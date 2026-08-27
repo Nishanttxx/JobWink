@@ -36,12 +36,12 @@ ALTER TABLE public.user_resume_limits ENABLE ROW LEVEL SECURITY;
 
 -- 2. Row Level Security Policies
 -- Authenticated users can view ONLY their own limit record.
--- The admin (na6236786@gmail.com) can view all rows.
+-- The admin (role = 'admin' in app_metadata) can view all rows.
 DROP POLICY IF EXISTS "Users can view their own resume limit" ON public.user_resume_limits;
 CREATE POLICY "Users can view their own resume limit"
   ON public.user_resume_limits FOR SELECT
   TO authenticated
-  USING (auth.uid() = user_id OR auth.email() = 'na6236786@gmail.com');
+  USING (auth.uid() = user_id OR public.is_admin_caller());
 
 -- All mutations (INSERT/UPDATE/DELETE) must execute via SECURITY DEFINER functions or Service Role.
 -- Normal users cannot directly insert, update, or delete from this table.
@@ -89,6 +89,7 @@ END $$;
 
 
 -- 4. Server-Side Admin Authorization Helper
+-- NOTE: Overridden by migration 20260827000001 (role-based check, no hardcoded email)
 DROP FUNCTION IF EXISTS public.is_admin_caller() CASCADE;
 CREATE OR REPLACE FUNCTION public.is_admin_caller()
 RETURNS boolean
@@ -96,7 +97,8 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  RETURN auth.email() = 'na6236786@gmail.com';
+  -- Placeholder: overridden by later migration 20260827000001_dynamic_admin_config.sql
+  RETURN false;
 END;
 $$;
 

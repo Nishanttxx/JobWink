@@ -35,15 +35,12 @@ ON public.bug_reports
 FOR INSERT
 WITH CHECK (true);
 
--- Policy: Only admin email or role can read bug reports
+-- Policy: Only admin role can read bug reports (admin set via raw_app_meta_data->>'role' = 'admin')
 CREATE POLICY "Allow admins to read bug_reports"
 ON public.bug_reports
 FOR SELECT
 USING (
-    auth.uid() IS NOT NULL AND (
-        (SELECT email FROM auth.users WHERE id = auth.uid()) = 'na6236786@gmail.com'
-        OR (SELECT (raw_app_meta_data->>'role') FROM auth.users WHERE id = auth.uid()) = 'admin'
-    )
+    auth.uid() IS NOT NULL AND public.is_admin_caller()
 );
 
 -- 2. Create Storage Bucket for bug screenshots if storage schema exists

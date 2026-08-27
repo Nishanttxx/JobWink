@@ -7,7 +7,7 @@ void main() {
   testWidgets('ResumePreviewDialog renders cleanly', (WidgetTester tester) async {
     final testResume = ResumeData(
       fullName: 'Nishant Arya',
-      email: 'na6236786@gmail.com',
+      email: 'test-user@example.com',
       phone: '+91 9876543210',
       summary: 'Experienced software engineer.',
       skills: ['Flutter', 'Dart', 'Python'],
