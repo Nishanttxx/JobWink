@@ -225,27 +225,34 @@ class _HeaderNavState extends State<HeaderNav> {
                             ),
                           ] else ...[
                             // Log In
-                            MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              child: GestureDetector(
-                                onTap: () => AuthModal.show(context),
-                                child: Text(
-                                  'Log In',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: textPrimaryColor,
-                                  ),
+                            TextButton(
+                              onPressed: () => AuthModal.show(context),
+                              style: TextButton.styleFrom(
+                                foregroundColor: textPrimaryColor,
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: Text(
+                                'Log In',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: textPrimaryColor,
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 16),
+                            const SizedBox(width: 8),
                             // Get Started / Dashboard CTA (Secondary Outlined to avoid competing with Hero primary CTA)
                             OutlinedButton(
                               onPressed: () {
-                                if (_currentUser == null &&
-                                    Supabase.instance.client.auth.currentUser ==
-                                        null) {
+                                final user = _currentUser ??
+                                    SupabaseService.instance.currentUser;
+                                if (user == null) {
                                   debugPrint('[AUTH] Demo mode enabled');
                                   DemoService.instance.enterDemoMode();
                                 }
@@ -397,8 +404,9 @@ class _HeaderNavState extends State<HeaderNav> {
                         child: OutlinedButton(
                           onPressed: () {
                             setState(() => _isMobileMenuOpen = false);
-                            if (Supabase.instance.client.auth.currentUser ==
-                                null) {
+                            final user = _currentUser ??
+                                SupabaseService.instance.currentUser;
+                            if (user == null) {
                               debugPrint('[AUTH] Demo mode enabled');
                               DemoService.instance.enterDemoMode();
                             }

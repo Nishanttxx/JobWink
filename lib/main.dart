@@ -321,10 +321,7 @@ class _LandingPageState extends State<LandingPage> {
                               child: HeroSection(
                                 onStartFreeTap: () {
                                   if (SupabaseService.instance.currentUser ==
-                                          null &&
-                                      Supabase.instance.client.auth
-                                              .currentUser ==
-                                          null) {
+                                      null) {
                                     debugPrint('[AUTH] Demo mode enabled');
                                     DemoService.instance.enterDemoMode();
                                   }

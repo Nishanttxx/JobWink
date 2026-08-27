@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'supabase_service.dart';
 
 /// Singleton service managing ephemeral, read-only Demo Mode state.
 class DemoService extends ChangeNotifier {
@@ -12,25 +12,21 @@ class DemoService extends ChangeNotifier {
   /// Whether the app is currently running in unauthenticated Demo Mode.
   /// Always returns false if a valid Supabase user session exists.
   bool get isDemoMode {
-    try {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        return false;
-      }
-    } catch (_) {}
+    if (SupabaseService.instance.currentUser != null) {
+      return false;
+    }
     return _isDemoMode;
   }
 
   /// Enable Demo Mode (in-memory only). Ignored if user is authenticated.
   void enterDemoMode() {
-    try {
-      if (Supabase.instance.client.auth.currentUser != null) {
-        if (_isDemoMode) {
-          _isDemoMode = false;
-          notifyListeners();
-        }
-        return;
+    if (SupabaseService.instance.currentUser != null) {
+      if (_isDemoMode) {
+        _isDemoMode = false;
+        notifyListeners();
       }
-    } catch (_) {}
+      return;
+    }
 
     if (!_isDemoMode) {
       _isDemoMode = true;
