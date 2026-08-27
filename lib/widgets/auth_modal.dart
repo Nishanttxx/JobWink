@@ -124,13 +124,16 @@ class _AuthModalState extends State<AuthModal> {
       // Dashboard will ONLY open after the auth callback completes and session is verified.
       if (success && mounted) {
         Navigator.of(context).pop();
+      } else if (mounted) {
+        setState(() => _errorMessage =
+            auth.errorMessage ?? 'Failed to connect to ${provider.name}.');
       }
     } on AuthException catch (e) {
       if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {
       if (mounted) {
         setState(() =>
-            _errorMessage = 'Failed to connect to ${provider.name}.');
+            _errorMessage = 'Failed to connect to ${provider.name}: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
