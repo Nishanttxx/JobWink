@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -24,11 +25,11 @@ class UserProfileCard extends StatefulWidget {
 }
 
 class _UserProfileCardState extends State<UserProfileCard> {
+  static const int _maxFileSizeBytes = 5 * 1024 * 1024; // 5 MB
+  static const List<String> _allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
+
   bool _isHoveringAvatar = false;
   bool _isUploadingAvatar = false;
-
-  static const List<String> _allowedExtensions = ['jpg', 'jpeg', 'png', 'webp'];
-  static const int _maxFileSizeBytes = 5 * 1024 * 1024; // 5MB
 
   Future<void> _handleAvatarPick(AppUser? effectiveUser) async {
     if (effectiveUser == null || _isUploadingAvatar) return;
@@ -37,15 +38,19 @@ class _UserProfileCardState extends State<UserProfileCard> {
       final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: _allowedExtensions,
-        withData: true,
       );
 
-      if (result == null || result.files.isEmpty) return;
+      if (result.isEmpty) return;
 
-      final file = result.files.first;
+      final file = result.first;
       final fileExtension = file.extension?.toLowerCase() ?? '';
-      final bytes = file.bytes;
-      final size = file.size;
+      Uint8List? bytes;
+      try {
+        bytes = await file.readAsBytes();
+      } catch (e) {
+        debugPrint('Error reading avatar bytes: $e');
+      }
+      final size = bytes?.length ?? 0;
 
       // 1. Extension Validation
       if (!_allowedExtensions.contains(fileExtension)) {
