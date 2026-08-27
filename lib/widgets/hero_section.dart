@@ -289,12 +289,18 @@ class _HeroSectionState extends State<HeroSection> {
                                       ),
                                     ],
                                   ),
-                                  Text(
-                                    'JobWink Studio — Interactive Resume & ATS Match Engine',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white70,
+                                  Flexible(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                                      child: Text(
+                                        'JobWink Studio — Interactive Resume & ATS Match Engine',
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.plusJakartaSans(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   Container(

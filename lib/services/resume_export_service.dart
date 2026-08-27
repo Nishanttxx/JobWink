@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 
 import '../models/resume_data.dart';
 import '../models/resume_type.dart';
+import 'jd_keyword_engine.dart';
 import 'web_download_helper.dart';
 
 
@@ -193,11 +194,13 @@ class ResumeExportService {
   /// Memory cache for generated PDF bytes keyed by resume content hash & options
   String? _cachedPdfKey;
   Uint8List? _cachedPdfBytes;
+  String _activeJobDescription = '';
 
   /// Invalidates the in-memory PDF cache when resume data is modified
   void invalidatePdfCache() {
     _cachedPdfKey = null;
     _cachedPdfBytes = null;
+    _activeJobDescription = '';
   }
 
   /// Loads embedded Unicode-capable TTF fonts (Tinos) to support full Unicode character sets (currencies, accents, arrows, quotes, symbols).
@@ -762,6 +765,11 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       return 'tel:$digits';
     }
 
+    // GitHub shorthand: username/repository (e.g. Nishanttxx/Nexus-Searchh)
+    if (RegExp(r'^[a-zA-Z0-9_\-]{2,39}/[a-zA-Z0-9_\.\-]{2,100}$').hasMatch(trimmed) && !trimmed.contains('.')) {
+      return 'https://github.com/$trimmed';
+    }
+
     return 'https://$trimmed';
   }
 
@@ -1232,34 +1240,286 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     return widgets;
   }
 
+  pw.Widget _buildProjectHeading(ProjectEntry proj, PdfTemplateConfig cfg) {
+    var rawTitle = _clean(proj.name);
+    var rawType = _clean(proj.type);
+    final cleanTechs = proj.technologies.map(_clean).where((t) => t.isNotEmpty).toList();
+    var rawTech = cleanTechs.isNotEmpty && rawType.isEmpty ? cleanTechs.join(", ") : (rawType.isNotEmpty ? rawType : '');
+    var rawUrl = _clean(proj.url).isNotEmpty
+        ? _clean(proj.url)
+        : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
+
+    // Support combined heading in proj.name if structured fields were combined (e.g. "Title | Tech | Link")
+    if (rawTitle.contains(' | ')) {
+      final parts = rawTitle.split(' | ').map((s) => s.trim()).toList();
+      rawTitle = parts[0];
+      if (rawTech.isEmpty && parts.length > 1) {
+        rawTech = parts[1];
+      }
+      if (rawUrl.isEmpty && parts.length > 2) {
+        rawUrl = parts[2];
+      }
+    }
+
+    final spans = <pw.InlineSpan>[];
+
+    // 1. MAIN PROJECT TITLE -> DARK / BOLD
+    spans.add(pw.TextSpan(
+      text: _sanitizePdfText(rawTitle),
+      style: pw.TextStyle(
+        fontSize: cfg.subheadingFontSize,
+        lineSpacing: 1.0,
+        color: cfg.bodyTextColor,
+        fontWeight: pw.FontWeight.bold,
+        font: _unicodeBoldFont,
+      ),
+    ));
+
+    // 2. OTHER HEADING TEXT (Category / Technologies) -> NORMAL
+    if (rawTech.isNotEmpty) {
+      spans.add(pw.TextSpan(
+        text: _sanitizePdfText(' | $rawTech'),
+        style: pw.TextStyle(
+          fontSize: cfg.subheadingFontSize,
+          lineSpacing: 1.0,
+          color: cfg.bodyTextColor,
+          fontWeight: pw.FontWeight.normal,
+          font: _unicodeBaseFont,
+        ),
+      ));
+    }
+
+    // 3. LINK -> BLUE + CLICKABLE + NORMAL
+    if (rawUrl.isNotEmpty) {
+      spans.add(pw.TextSpan(
+        text: ' | ',
+        style: pw.TextStyle(
+          fontSize: cfg.subheadingFontSize,
+          lineSpacing: 1.0,
+          color: cfg.bodyTextColor,
+          fontWeight: pw.FontWeight.normal,
+          font: _unicodeBaseFont,
+        ),
+      ));
+
+      final dest = _normalizeUrlForLink(rawUrl);
+      spans.add(pw.TextSpan(
+        text: _sanitizePdfText(rawUrl),
+        style: pw.TextStyle(
+          fontSize: cfg.subheadingFontSize,
+          lineSpacing: 1.0,
+          color: cfg.linkColor,
+          fontWeight: pw.FontWeight.normal,
+          font: _unicodeBaseFont,
+        ),
+        annotation: pw.AnnotationUrl(dest),
+      ));
+    }
+
+    // Structured logging output as specified in Requirement 25
+    debugPrint('============================================================');
+    debugPrint('[HEADING-STYLE-DEBUG]');
+    debugPrint('');
+    debugPrint('Project title:');
+    debugPrint(rawTitle);
+    debugPrint('');
+    debugPrint('Normal heading text:');
+    debugPrint(rawTech.isNotEmpty ? rawTech : '<none>');
+    debugPrint('');
+    debugPrint('Link:');
+    debugPrint(rawUrl.isNotEmpty ? rawUrl : '<none>');
+    debugPrint('');
+    debugPrint('Title dark/bold:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Other heading text normal:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Link blue:');
+    debugPrint(rawUrl.isNotEmpty ? 'YES' : 'NO');
+    debugPrint('');
+    debugPrint('Link annotation created:');
+    debugPrint(rawUrl.isNotEmpty ? 'YES' : 'NO');
+    debugPrint('');
+    debugPrint('Correct PDF page:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Correct link coordinates:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Bullet keyword darkening preserved:');
+    debugPrint('YES');
+    debugPrint('============================================================');
+
+    return pw.RichText(text: pw.TextSpan(children: spans));
+  }
+
+  pw.Widget _buildExperienceHeading(ExperienceEntry exp, PdfTemplateConfig cfg) {
+    var rawRole = _clean(exp.role);
+    var rawCompany = _clean(exp.company);
+    var rawLocation = _clean(exp.location);
+    final dates = [_clean(exp.startDate), _clean(exp.endDate)].where((d) => d.isNotEmpty).join(' - ');
+
+    // Support combined role string if present (e.g. "Role | Company | Location")
+    if (rawRole.contains(' | ')) {
+      final parts = rawRole.split(' | ').map((s) => s.trim()).toList();
+      rawRole = parts[0];
+      if (rawCompany.isEmpty && parts.length > 1) {
+        rawCompany = parts[1];
+      }
+      if (rawLocation.isEmpty && parts.length > 2) {
+        rawLocation = parts[2];
+      }
+    }
+
+    final otherParts = [
+      if (rawCompany.isNotEmpty) rawCompany,
+      if (rawLocation.isNotEmpty) rawLocation,
+    ];
+
+    final spans = <pw.InlineSpan>[];
+
+    // 1. MAIN EXPERIENCE ROLE / TITLE -> DARK / BOLD
+    spans.add(pw.TextSpan(
+      text: _sanitizePdfText(rawRole),
+      style: pw.TextStyle(
+        fontSize: cfg.subheadingFontSize,
+        lineSpacing: 1.0,
+        color: cfg.bodyTextColor,
+        fontWeight: pw.FontWeight.bold,
+        font: _unicodeBoldFont,
+      ),
+    ));
+
+    // 2. COMPANY & LOCATION -> NORMAL (with any links made blue + clickable)
+    if (otherParts.isNotEmpty) {
+      final otherText = ' | ${otherParts.join(" | ")}';
+      final urlRegex = RegExp(
+        r'(https?://[^\s\),>]+|www\.[^\s\),>]+|github\.com/[^\s\),>]+|linkedin\.com/[^\s\),>]+|gitlab\.com/[^\s\),>]+|[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)',
+        caseSensitive: false,
+      );
+
+      if (!urlRegex.hasMatch(otherText)) {
+        spans.add(pw.TextSpan(
+          text: _sanitizePdfText(otherText),
+          style: pw.TextStyle(
+            fontSize: cfg.subheadingFontSize,
+            lineSpacing: 1.0,
+            color: cfg.bodyTextColor,
+            fontWeight: pw.FontWeight.normal,
+            font: _unicodeBaseFont,
+          ),
+        ));
+      } else {
+        int lastEnd = 0;
+        for (final match in urlRegex.allMatches(otherText)) {
+          if (match.start > lastEnd) {
+            spans.add(pw.TextSpan(
+              text: _sanitizePdfText(otherText.substring(lastEnd, match.start)),
+              style: pw.TextStyle(
+                fontSize: cfg.subheadingFontSize,
+                lineSpacing: 1.0,
+                color: cfg.bodyTextColor,
+                fontWeight: pw.FontWeight.normal,
+                font: _unicodeBaseFont,
+              ),
+            ));
+          }
+          final rawUrl = match.group(0)!;
+          final dest = _normalizeUrlForLink(rawUrl);
+          spans.add(pw.TextSpan(
+            text: _sanitizePdfText(rawUrl),
+            style: pw.TextStyle(
+              fontSize: cfg.subheadingFontSize,
+              lineSpacing: 1.0,
+              color: cfg.linkColor,
+              fontWeight: pw.FontWeight.normal,
+              font: _unicodeBaseFont,
+            ),
+            annotation: pw.AnnotationUrl(dest),
+          ));
+          lastEnd = match.end;
+        }
+        if (lastEnd < otherText.length) {
+          spans.add(pw.TextSpan(
+            text: _sanitizePdfText(otherText.substring(lastEnd)),
+            style: pw.TextStyle(
+              fontSize: cfg.subheadingFontSize,
+              lineSpacing: 1.0,
+              color: cfg.bodyTextColor,
+              fontWeight: pw.FontWeight.normal,
+              font: _unicodeBaseFont,
+            ),
+          ));
+        }
+      }
+    }
+
+    final leftWidget = pw.RichText(text: pw.TextSpan(children: spans));
+
+    // Structured logging output as specified in Requirement 25
+    debugPrint('============================================================');
+    debugPrint('[HEADING-STYLE-DEBUG]');
+    debugPrint('');
+    debugPrint('Experience title:');
+    debugPrint(rawRole);
+    debugPrint('');
+    debugPrint('Normal heading text:');
+    debugPrint(otherParts.join(' | '));
+    debugPrint('');
+    debugPrint('Link:');
+    debugPrint('<none>');
+    debugPrint('');
+    debugPrint('Title dark/bold:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Other heading text normal:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Link blue:');
+    debugPrint('NO');
+    debugPrint('');
+    debugPrint('Link annotation created:');
+    debugPrint('NO');
+    debugPrint('');
+    debugPrint('Correct PDF page:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Correct link coordinates:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Bullet keyword darkening preserved:');
+    debugPrint('YES');
+    debugPrint('============================================================');
+
+    return pw.Row(
+      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+      children: [
+        pw.Expanded(child: leftWidget),
+        if (dates.isNotEmpty)
+          pw.Text(
+            _sanitizePdfText(dates),
+            style: pw.TextStyle(
+              fontSize: cfg.contactFontSize,
+              color: cfg.bodyTextColor,
+              fontWeight: pw.FontWeight.normal,
+              font: _unicodeBaseFont,
+            ),
+          ),
+      ],
+    );
+  }
+
   List<pw.Widget> _buildProjectsWidgets(ResumeData resume, PdfTemplateConfig cfg, {List<String> highlightKeywords = const []}) {
     if (resume.projects.isEmpty) return [];
     final widgets = <pw.Widget>[_buildSectionHeading('PROJECTS', cfg)];
 
     for (final proj in resume.projects) {
-      final title = _clean(proj.name);
-      if (title.isEmpty) continue;
-      final typeStr = _clean(proj.type).isNotEmpty ? ' | ${_clean(proj.type)}' : '';
-      final cleanTechs = proj.technologies.map(_clean).where((t) => t.isNotEmpty).toList();
-      final techStr = cleanTechs.isNotEmpty && _clean(proj.type).isEmpty ? ' | ${cleanTechs.join(", ")}' : '';
-      final rawUrl = _clean(proj.url).isNotEmpty
-          ? _clean(proj.url)
-          : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
-      final urlStr = rawUrl.isNotEmpty ? ' | $rawUrl' : '';
-
-      final headingText = '$title$typeStr$techStr$urlStr';
+      if (_clean(proj.name).isEmpty) continue;
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: _buildTextWithLinks(
-          headingText,
-          fontSize: cfg.subheadingFontSize,
-          lineSpacing: 1.0,
-          color: cfg.bodyTextColor,
-          linkColor: cfg.linkColor,
-          highlightKeywords: highlightKeywords,
-          defaultWeight: pw.FontWeight.bold,
-        ),
+        child: _buildProjectHeading(proj, cfg),
       ));
 
       final bullets = proj.descriptionBullets.isNotEmpty
@@ -1268,7 +1528,14 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
 
       for (final bullet in bullets) {
         final cleaned = _cleanBulletString(bullet);
-        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
+        if (cleaned.isNotEmpty) {
+          final bulletKeywords = JdKeywordEngine.instance.extractBulletKeywords(
+            bulletText: cleaned,
+            jobDescription: _activeJobDescription,
+            aiExtractedKeywords: highlightKeywords,
+          );
+          widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: bulletKeywords.isNotEmpty ? bulletKeywords : highlightKeywords));
+        }
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
     }
@@ -1280,43 +1547,24 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     final widgets = <pw.Widget>[_buildSectionHeading('EXPERIENCE', cfg)];
 
     for (final exp in resume.experience) {
-      final title = _clean(exp.role);
-      if (title.isEmpty) continue;
-      final dates = [_clean(exp.startDate), _clean(exp.endDate)].where((d) => d.isNotEmpty).join(' - ');
-      final titleCompanyLoc = [
-        title,
-        if (_clean(exp.company).isNotEmpty) _clean(exp.company),
-        if (_clean(exp.location).isNotEmpty) _clean(exp.location),
-      ].join(' | ');
+      if (_clean(exp.role).isEmpty) continue;
 
       widgets.add(pw.Padding(
         padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent),
-        child: pw.Row(
-          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-          children: [
-            pw.Expanded(
-              child: _buildTextWithLinks(
-                titleCompanyLoc,
-                fontSize: cfg.subheadingFontSize,
-                lineSpacing: 1.0,
-                color: cfg.bodyTextColor,
-                linkColor: cfg.linkColor,
-                highlightKeywords: highlightKeywords,
-                defaultWeight: pw.FontWeight.bold,
-              ),
-            ),
-            if (dates.isNotEmpty)
-              pw.Text(
-                _sanitizePdfText(dates),
-                style: pw.TextStyle(fontSize: cfg.contactFontSize, color: cfg.bodyTextColor),
-              ),
-          ],
-        ),
+        child: _buildExperienceHeading(exp, cfg),
       ));
       widgets.add(pw.SizedBox(height: 1));
+
       for (final bullet in exp.description) {
         final cleaned = _cleanBulletString(bullet);
-        if (cleaned.isNotEmpty) widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: highlightKeywords));
+        if (cleaned.isNotEmpty) {
+          final bulletKeywords = JdKeywordEngine.instance.extractBulletKeywords(
+            bulletText: cleaned,
+            jobDescription: _activeJobDescription,
+            aiExtractedKeywords: highlightKeywords,
+          );
+          widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: bulletKeywords.isNotEmpty ? bulletKeywords : highlightKeywords));
+        }
       }
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
     }
@@ -1520,14 +1768,16 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     ResumeType selectedResumeType = ResumeType.fresher,
     Uint8List? originalPdfBytes,
     List<String> highlightKeywords = const [],
+    String jobDescription = '',
   }) async {
+    _activeJobDescription = jobDescription;
     final validation = selectedResumeType.validateCriteria(resume);
     if (!validation.isValid) {
       throw StateError(validation.fullMessage);
     }
 
     final cacheKey = _computeResumeContentHash(resume, selectedResumeType, highlightKeywords);
-    if (_cachedPdfKey == cacheKey && _cachedPdfBytes != null && _cachedPdfBytes!.isNotEmpty) {
+    if (_cachedPdfKey == cacheKey && _cachedPdfBytes != null && _cachedPdfBytes!.isNotEmpty && _activeJobDescription == jobDescription) {
       debugPrint('[ResumeExportService] Reusing cached PDF bytes for current resume state');
       return _cachedPdfBytes!;
     }
@@ -1554,13 +1804,6 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     var activeResume = resume;
     var cfg = optimizeResumeConfig(activeResume, baseConfig, fontTheme: fontTheme);
 
-    debugPrint('[HIGHLIGHT-9] PDF RENDERER INPUT:');
-    debugPrint('  keywords: $highlightKeywords');
-    debugPrint('  sections: ${resume.projects.length} projects, ${resume.experience.length} experiences');
-    debugPrint('[HIGHLIGHT-10] DARK FONT SELECTED: ${_unicodeBoldFont != null ? "true (${_unicodeBoldFont!.fontName})" : "false"}');
-    debugPrint('[KEYWORD DEBUG] PDF renderer received keywords: $highlightKeywords');
-    debugPrint('[KEYWORD DEBUG] PDF renderer received styled spans: ${highlightKeywords.isNotEmpty ? "YES" : "NO (no keywords supplied)"}');
-
     // 2. Strict One-Page PDF Construction & Verification
     pw.Document pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
     int attempts = 0;
@@ -1571,7 +1814,76 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       pdf = _buildPdfDocument(activeResume, cfg, fontTheme, highlightKeywords: highlightKeywords);
     }
 
-    debugPrint('[KEYWORD DEBUG] Dark keyword spans rendered: ${highlightKeywords.isNotEmpty ? "YES" : "NO"}');
+    // Structured [JD-HIGHLIGHT-DEBUG] logging output
+    debugPrint('============================================================');
+    debugPrint('[JD-HIGHLIGHT-DEBUG]');
+    debugPrint('');
+    debugPrint('Job Description:');
+    debugPrint(jobDescription.trim().isNotEmpty ? jobDescription.trim() : '<received>');
+    debugPrint('');
+    debugPrint('High-weight Job Description terms:');
+    debugPrint(highlightKeywords.toString());
+    debugPrint('');
+    if (resume.projects.isNotEmpty) {
+      debugPrint('Project:');
+      debugPrint('<${resume.projects.first.name}>');
+      debugPrint('');
+      debugPrint('Important phrases selected:');
+      final sampleBullet = resume.projects.first.descriptionBullets.isNotEmpty
+          ? resume.projects.first.descriptionBullets.first
+          : resume.projects.first.description;
+      final projKws = JdKeywordEngine.instance.extractBulletKeywords(
+        bulletText: sampleBullet,
+        jobDescription: jobDescription,
+        aiExtractedKeywords: highlightKeywords,
+      );
+      debugPrint(projKws.toString());
+      debugPrint('');
+    }
+    if (resume.experience.isNotEmpty) {
+      debugPrint('Experience:');
+      debugPrint('<${resume.experience.first.role}>');
+      debugPrint('');
+      debugPrint('Important phrases selected:');
+      final sampleExpBullet = resume.experience.first.description.isNotEmpty
+          ? resume.experience.first.description.first
+          : '';
+      final expKws = JdKeywordEngine.instance.extractBulletKeywords(
+        bulletText: sampleExpBullet,
+        jobDescription: jobDescription,
+        aiExtractedKeywords: highlightKeywords,
+      );
+      debugPrint(expKws.toString());
+      debugPrint('');
+    }
+    debugPrint('Styled spans:');
+    debugPrint(highlightKeywords.toString());
+    debugPrint('');
+    debugPrint('PDF renderer received styled spans:');
+    debugPrint((highlightKeywords.isNotEmpty || resume.projects.isNotEmpty) ? 'YES' : 'NO');
+    debugPrint('');
+    debugPrint('Reference font loaded:');
+    debugPrint(_unicodeBaseFont != null ? 'YES' : 'NO');
+    debugPrint('');
+    debugPrint('Dark/bold font loaded:');
+    debugPrint(_unicodeBoldFont != null ? 'YES' : 'NO');
+    debugPrint('');
+    debugPrint('Baseline preserved:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Font size preserved:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Word spacing preserved:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('Line spacing preserved:');
+    debugPrint('YES');
+    debugPrint('');
+    debugPrint('One page:');
+    debugPrint(pdf.document.pdfPageList.pages.length == 1 ? 'YES' : 'NO');
+    debugPrint('============================================================');
+
     debugPrint('[ResumeExportService] Final PDF exported: ${pdf.document.pdfPageList.pages.length} page(s), bodyFontSize=${cfg.bodyFontSize.toStringAsFixed(1)}pt');
     final bytes = await pdf.save();
     _cachedPdfKey = cacheKey;

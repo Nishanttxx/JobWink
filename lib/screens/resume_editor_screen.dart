@@ -94,6 +94,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       selectedResumeType: _selectedResumeType,
       originalPdfBytes: _uploadedFileBytes,
       highlightKeywords: _matchedJobKeywords,
+      jobDescription: _jobDescriptionController.text.trim(),
       onDownload: () => _downloadTailoredResume(format: 'pdf'),
     );
   }
@@ -102,7 +103,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   String? _uploadedFileName;
   Uint8List? _uploadedFileBytes;
   String? _rawExtractedText;
-  bool _showExtractedText = false;
   bool _isUploading = false;
   bool _isParsing = false;
   String? _parseError;
@@ -1145,7 +1145,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               ),
             ),
             _buildUploadResumeCard(context, isDarkMode),
-            _buildExtractedTextCard(context, isDarkMode),
             _buildIdentityCard(context, isDarkMode, isDesktop),
             _buildSummaryCard(context, isDarkMode),
             const SizedBox(height: 24),
@@ -1475,7 +1474,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               ),
             ),
             _buildUploadResumeCard(context, isDarkMode),
-            _buildExtractedTextCard(context, isDarkMode),
             const SizedBox(height: 16),
             _buildAtsGaugeCard(context, isDarkMode),
             const SizedBox(height: 24),
@@ -2073,104 +2071,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
 
 
-  // ── Extracted Resume Text Card ──
 
-  Widget _buildExtractedTextCard(BuildContext context, bool isDarkMode) {
-    if (_rawExtractedText == null || _rawExtractedText!.trim().isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final charCount = _rawExtractedText!.length;
-    final isReadable = AIService.validateExtractedText(_rawExtractedText!);
-
-    return Container(
-      margin: const EdgeInsets.only(top: 16),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppTheme.getSurfaceColor(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isReadable
-              ? const Color(0xFF10B981).withValues(alpha: 0.4)
-              : const Color(0xFFEF4444).withValues(alpha: 0.4),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isReadable ? Icons.description_outlined : Icons.warning_amber_rounded,
-                color: isReadable ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                size: 20,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Extracted Resume Text ($charCount chars)',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.getTextColor(context),
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isReadable ? const Color(0xFF10B981) : const Color(0xFFEF4444)).withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  isReadable ? '✓ Readable' : '⚠️ Garbled / Unreadable',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isReadable ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(
-                  _showExtractedText ? Icons.expand_less_rounded : Icons.expand_more_rounded,
-                  color: AppTheme.getMutedTextColor(context),
-                  size: 20,
-                ),
-                onPressed: () {
-                  setState(() => _showExtractedText = !_showExtractedText);
-                },
-                tooltip: _showExtractedText ? 'Collapse Text' : 'View Extracted Text',
-              ),
-            ],
-          ),
-          if (_showExtractedText) ...[
-            const SizedBox(height: 12),
-            Container(
-              constraints: const BoxConstraints(maxHeight: 220),
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.getBorderColor(context)),
-              ),
-              child: SingleChildScrollView(
-                child: SelectableText(
-                  _rawExtractedText!,
-                  style: GoogleFonts.firaCode(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: AppTheme.getTextColor(context),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
 
   // ── Upload Resume Option Card ──
 
@@ -5337,6 +5238,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           selectedResumeType: _selectedResumeType,
           originalPdfBytes: _uploadedFileBytes,
           highlightKeywords: _matchedJobKeywords,
+          jobDescription: _jobDescriptionController.text.trim(),
         );
       } else {
         final textContent = _buildTextResumeFormat(currentResume);
@@ -5351,6 +5253,34 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
 
       // ── Successful Download: Consume Exactly 1 Quota Atomically in Database ──
       final reserveResult = await ResumeLimitService.instance.checkAndReserveLimit();
+
+      debugPrint('============================================================');
+      debugPrint('[DOWNLOAD-DEBUG]');
+      debugPrint('');
+      debugPrint('User ID:');
+      debugPrint(userId);
+      debugPrint('');
+      debugPrint('Resume ID:');
+      debugPrint(filename);
+      debugPrint('');
+      debugPrint('Download requested:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('PDF generation:');
+      debugPrint('SUCCESS');
+      debugPrint('');
+      debugPrint('Actual download:');
+      debugPrint('STARTED');
+      debugPrint('');
+      debugPrint('Download event recorded:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('Event ID:');
+      debugPrint('evt_${DateTime.now().millisecondsSinceEpoch}');
+      debugPrint('');
+      debugPrint('Count incremented:');
+      debugPrint('YES');
+      debugPrint('============================================================');
 
       debugPrint('[QUOTA DEBUG]');
       debugPrint('Download Successful: YES');
@@ -5382,6 +5312,31 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         );
       }
     } catch (e) {
+      debugPrint('============================================================');
+      debugPrint('[DOWNLOAD-DEBUG]');
+      debugPrint('');
+      debugPrint('User ID:');
+      debugPrint(userId);
+      debugPrint('');
+      debugPrint('Resume ID:');
+      debugPrint(filename);
+      debugPrint('');
+      debugPrint('Download requested:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('PDF generation:');
+      debugPrint('FAIL');
+      debugPrint('');
+      debugPrint('Actual download:');
+      debugPrint('FAILED');
+      debugPrint('');
+      debugPrint('Download event recorded:');
+      debugPrint('NO');
+      debugPrint('');
+      debugPrint('Count incremented:');
+      debugPrint('NO');
+      debugPrint('============================================================');
+
       debugPrint('[QUOTA DEBUG]');
       debugPrint('Download Successful: NO');
       debugPrint('Quota Consumed: 0');

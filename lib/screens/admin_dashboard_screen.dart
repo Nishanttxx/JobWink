@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../providers/auth_provider.dart';
 import '../services/resume_limit_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/theme_toggle_button.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -440,6 +441,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.home_rounded, color: Colors.white),
+            tooltip: 'Go to Home',
+            onPressed: () => Navigator.pushNamed(context, '/landing'),
+          ),
+          const SizedBox(width: 8),
+          const ThemeToggleButton(),
+          const SizedBox(width: 8),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppTheme.primaryOrange),
             tooltip: 'Refresh Data',
             onPressed: () {
@@ -447,6 +456,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               _loadUsers();
             },
           ),
+          const SizedBox(width: 12),
         ],
       ),
       body: SingleChildScrollView(

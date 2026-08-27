@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:web/web.dart' as web;
+import 'theme_web_helper.dart';
 
 class ThemeService {
   ThemeService._();
@@ -18,17 +18,16 @@ class ThemeService {
       final savedTheme = prefs.getString(_key);
       if (savedTheme == 'dark') {
         themeModeNotifier.value = ThemeMode.dark;
-        _syncWebDocument('dark');
+        setBrowserThemeAttribute('dark');
       } else if (savedTheme == 'light') {
         themeModeNotifier.value = ThemeMode.light;
-        _syncWebDocument('light');
+        setBrowserThemeAttribute('light');
       } else {
         // Fallback to system setting if no preference is saved
-        final brightness =
-            web.window.matchMedia('(prefers-color-scheme: dark)').matches;
+        final brightness = getBrowserIsDarkMode();
         final initialMode = brightness ? ThemeMode.dark : ThemeMode.light;
         themeModeNotifier.value = initialMode;
-        _syncWebDocument(brightness ? 'dark' : 'light');
+        setBrowserThemeAttribute(brightness ? 'dark' : 'light');
       }
     } catch (e) {
       debugPrint('ThemeService init error: $e');
@@ -40,7 +39,7 @@ class ThemeService {
         isDarkMode ? ThemeMode.light : ThemeMode.dark;
     themeModeNotifier.value = nextMode;
     final themeStr = nextMode == ThemeMode.dark ? 'dark' : 'light';
-    _syncWebDocument(themeStr);
+    setBrowserThemeAttribute(themeStr);
 
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -48,11 +47,5 @@ class ThemeService {
     } catch (e) {
       debugPrint('ThemeService save error: $e');
     }
-  }
-
-  void _syncWebDocument(String themeStr) {
-    try {
-      web.document.documentElement?.setAttribute('data-theme', themeStr);
-    } catch (_) {}
   }
 }

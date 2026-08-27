@@ -102,21 +102,12 @@ class ResumeLimitService {
   /// Atomically checks and reserves one unit of resume creation quota.
   ///
   /// Calls the Supabase PostgreSQL RPC `check_and_reserve_resume_limit`.
-  /// Admin (na6236786@gmail.com) has unlimited resume creations.
+  /// Admin (na6236786@gmail.com) has unlimited resume creations, but download counts are recorded.
   /// If the limit is reached for normal users, returns `allowed: false` with message.
   Future<ResumeLimitCheckResult> checkAndReserveLimit() async {
     final client = _client;
     final user = client?.auth.currentUser;
-
-    // 0. Admin Exemption: na6236786@gmail.com has no limit
-    if (user != null && isUserAdmin(user.email)) {
-      return const ResumeLimitCheckResult(
-        allowed: true,
-        dailyLimit: 999999,
-        usageCount: 0,
-        remaining: 999999,
-      );
-    }
+    final isAdmin = user != null && isUserAdmin(user.email);
 
     // Guest / Demo mode quota handling
     if (user == null || client == null) {
@@ -153,12 +144,12 @@ class ResumeLimitService {
       final response = await client.rpc('check_and_reserve_resume_limit');
 
       if (response != null && response is Map) {
-        final allowed = response['allowed'] == true;
-        final dailyLimit = (response['daily_limit'] as num? ?? 4).toInt();
+        final allowed = response['allowed'] == true || isAdmin;
+        final dailyLimit = isAdmin ? 999999 : (response['daily_limit'] as num? ?? 4).toInt();
         final usageCount = (response['usage_count'] as num? ?? 0).toInt();
-        final remaining = (response['remaining'] as num? ?? 0).toInt();
+        final remaining = isAdmin ? 999999 : (response['remaining'] as num? ?? 0).toInt();
 
-        if (!allowed) {
+        if (!allowed && !isAdmin) {
           return ResumeLimitCheckResult(
             allowed: false,
             dailyLimit: dailyLimit,
@@ -167,6 +158,18 @@ class ResumeLimitService {
             message: 'Daily resume limit reached. Please try again tomorrow.',
           );
         }
+
+        // Record user_activity event if table exists
+        try {
+          await client.from('user_activity').insert({
+            'user_id': user.id,
+            'activity_type': 'resume_download',
+            'metadata': {
+              'timestamp': DateTime.now().toIso8601String(),
+              'usage_count': usageCount,
+            },
+          });
+        } catch (_) {}
 
         return ResumeLimitCheckResult(
           allowed: true,
@@ -191,23 +194,36 @@ class ResumeLimitService {
           .maybeSingle();
 
       if (existing == null) {
+        final insertLimit = isAdmin ? 999999 : 4;
         await client.from('user_resume_limits').insert({
           'user_id': userId,
-          'daily_limit': 4,
+          'daily_limit': insertLimit,
           'usage_count': 1,
           'usage_date': todayStr,
         });
 
-        return const ResumeLimitCheckResult(
+        // Record user_activity
+        try {
+          await client.from('user_activity').insert({
+            'user_id': userId,
+            'activity_type': 'resume_download',
+            'metadata': {
+              'timestamp': DateTime.now().toIso8601String(),
+              'usage_count': 1,
+            },
+          });
+        } catch (_) {}
+
+        return ResumeLimitCheckResult(
           allowed: true,
-          dailyLimit: 4,
+          dailyLimit: insertLimit,
           usageCount: 1,
-          remaining: 3,
+          remaining: isAdmin ? 999999 : (insertLimit - 1),
         );
       } else {
         final rawDate = existing['usage_date']?.toString() ?? '';
         final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
-        final dailyLimit = (existing['daily_limit'] as num? ?? 4).toInt();
+        final dailyLimit = isAdmin ? 999999 : (existing['daily_limit'] as num? ?? 4).toInt();
         int currentUsage = (existing['usage_count'] as num? ?? existing['resumes_generated_today'] as num? ?? 0).toInt();
 
         // Calendar day reset: If stored date != todayStr, usage starts from 0
@@ -215,7 +231,7 @@ class ResumeLimitService {
           currentUsage = 0;
         }
 
-        if (currentUsage >= dailyLimit) {
+        if (!isAdmin && currentUsage >= dailyLimit) {
           if (recordDate != todayStr) {
             try {
               await client.from('user_resume_limits').update({
@@ -242,16 +258,35 @@ class ResumeLimitService {
           'updated_at': DateTime.now().toIso8601String(),
         }).eq('id', existing['id']);
 
+        // Record user_activity
+        try {
+          await client.from('user_activity').insert({
+            'user_id': userId,
+            'activity_type': 'resume_download',
+            'metadata': {
+              'timestamp': DateTime.now().toIso8601String(),
+              'usage_count': newUsage,
+            },
+          });
+        } catch (_) {}
+
         return ResumeLimitCheckResult(
           allowed: true,
           dailyLimit: dailyLimit,
           usageCount: newUsage,
-          remaining: (dailyLimit - newUsage).clamp(0, dailyLimit),
+          remaining: isAdmin ? 999999 : (dailyLimit - newUsage).clamp(0, dailyLimit),
         );
       }
     } catch (dbErr) {
       debugPrint('[ResumeLimitService] Database error: $dbErr');
-      // Safety fail-open or graceful error
+      if (isAdmin) {
+        return const ResumeLimitCheckResult(
+          allowed: true,
+          dailyLimit: 999999,
+          usageCount: 1,
+          remaining: 999999,
+        );
+      }
       return const ResumeLimitCheckResult(
         allowed: false,
         dailyLimit: 4,
@@ -282,21 +317,9 @@ class ResumeLimitService {
   Future<Map<String, dynamic>> getUserResumeUsage() async {
     final client = _client;
     final user = client?.auth.currentUser;
+    final isAdmin = user != null && isUserAdmin(user.email);
     const defaultLimit = 4;
     final todayStr = formatDateOnly(DateTime.now());
-
-    // Admin has unlimited creations
-    if (user != null && isUserAdmin(user.email)) {
-      return {
-        'daily_limit': 999999,
-        'usage_count': 0,
-        'resumes_generated_today': 0,
-        'remaining': 999999,
-        'allowed': true,
-        'is_unlimited': true,
-        'usage_date': todayStr,
-      };
-    }
 
     if (user == null || client == null) {
       final now = DateTime.now();
@@ -318,7 +341,14 @@ class ResumeLimitService {
     try {
       final res = await client.rpc('get_user_resume_usage');
       if (res != null && res is Map) {
-        return Map<String, dynamic>.from(res);
+        final map = Map<String, dynamic>.from(res);
+        if (isAdmin) {
+          map['daily_limit'] = 999999;
+          map['remaining'] = 999999;
+          map['allowed'] = true;
+          map['is_unlimited'] = true;
+        }
+        return map;
       }
     } catch (_) {}
 
@@ -330,7 +360,7 @@ class ResumeLimitService {
           .maybeSingle();
 
       if (existing != null) {
-        final dailyLimit = (existing['daily_limit'] as num? ?? defaultLimit).toInt();
+        final dailyLimit = isAdmin ? 999999 : (existing['daily_limit'] as num? ?? defaultLimit).toInt();
         final rawDate = existing['usage_date']?.toString() ?? '';
         final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
         final rawUsed = (existing['usage_count'] as num? ?? existing['resumes_generated_today'] as num? ?? 0).toInt();
@@ -353,19 +383,21 @@ class ResumeLimitService {
           'daily_limit': dailyLimit,
           'usage_count': used,
           'resumes_generated_today': used,
-          'remaining': (dailyLimit - used).clamp(0, dailyLimit),
-          'allowed': used < dailyLimit,
+          'remaining': isAdmin ? 999999 : (dailyLimit - used).clamp(0, dailyLimit),
+          'allowed': isAdmin || used < dailyLimit,
+          'is_unlimited': isAdmin,
           'usage_date': todayStr,
         };
       }
     } catch (_) {}
 
     return {
-      'daily_limit': defaultLimit,
+      'daily_limit': isAdmin ? 999999 : defaultLimit,
       'usage_count': 0,
       'resumes_generated_today': 0,
-      'remaining': defaultLimit,
+      'remaining': isAdmin ? 999999 : defaultLimit,
       'allowed': true,
+      'is_unlimited': isAdmin,
       'usage_date': todayStr,
     };
   }
@@ -416,7 +448,7 @@ class ResumeLimitService {
         if (date == todayStr) {
           if (used > 0) activeToday++;
           resumesToday += used;
-          if (used >= limit) atLimit++;
+          if (used >= limit && limit < 999999) atLimit++;
         }
       }
 

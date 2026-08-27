@@ -18,7 +18,7 @@ class JdKeywordEngine {
 
     // Databases & Cloud Infrastructure
     'postgresql', 'postgres', 'mysql', 'mongodb', 'redis', 'sqlite', 'oracle',
-    'dynamodb', 'elasticsearch', 'supabase', 'firebase', 'aws', 'amazon web services',
+    'dynamodb', 'elasticsearch', 'supabase', 'firebase', 'riverpod', 'aws', 'amazon web services',
     'azure', 'gcp', 'google cloud', 'google cloud platform', 'docker', 'dockerized',
     'kubernetes', 'k8s', 'terraform', 'graphql', 'rest api', 'rest apis', 'restful apis',
     'restful api', 'microservices', 'ci/cd', 'git', 'github', 'gitlab',
@@ -41,24 +41,44 @@ class JdKeywordEngine {
     'oops', 'object-oriented programming', 'state management', 'bloc', 'provider',
     'riverpod', 'redux', 'mvvm', 'clean architecture', 'web sockets', 'webhooks',
     'oauth', 'jwt', 'stripe', 'aws s3', 'aws lambda', 'cloud functions',
-    'pandas', 'numpy', 'matplotlib', 'seaborn', 'keras', 'huggingface',
+    'pandas', 'numpy', 'matplotlib', 'seaborn', 'keras', 'huggingface', 'pydantic',
     'full stack', 'frontend', 'backend', 'cybersecurity', 'scalable solutions',
     'scalable backend services', 'software engineering', 'software development',
   };
 
-  // Generic words that MUST NOT be highlighted / given high weight
+  // High-value domain, architecture, format, and impact phrases from the reference standard
+  static final Set<String> _domainImpactDict = {
+    'api orchestration', 'real-time transcription', 'real-time synchronization',
+    'reactive state management', 'global data caching', 'data caching',
+    'cloud backend', 'cloud', 'ai-driven data optimization', 'data optimization',
+    'automated analysis', 'intelligent systems', 'automation tools',
+    'collaborative technical design', 'predictive ml model', 'predictive model',
+    'quality classification', 'automated tax engine', 'cross-platform invoicing',
+    'gstr-1', 'csv/excel', 'cgst', 'sgst', 'igst', 'postman',
+  };
+
+  // Generic words and common action verbs that MUST NOT be highlighted / given high weight
   static final Set<String> _genericWordDict = {
     'the', 'and', 'with', 'for', 'you', 'that', 'this', 'have', 'from',
-    'will', 'your', 'team', 'work', 'role', 'job', 'looking', 'engineer',
+    'will', 'your', 'team', 'work', 'worked', 'working', 'role', 'job', 'looking', 'engineer',
     'developer', 'senior', 'junior', 'lead', 'manager', 'experience',
     'years', 'strong', 'ability', 'skills', 'good', 'must', 'requirements',
     'responsibilities', 'company', 'position', 'location', 'full', 'time',
-    'development', 'system', 'application', 'technology', 'technologies',
-    'building', 'solutions', 'tools', 'using', 'developed', 'communication',
+    'development', 'system', 'systems', 'application', 'applications', 'technology', 'technologies',
+    'building', 'solutions', 'tools', 'using', 'used', 'developed', 'developing', 'communication',
     'collaboration', 'written', 'verbal', 'problem', 'solving', 'environment',
     'hands-on', 'degree', 'computer', 'science', 'engineering', 'knowledge',
     'we', 'our', 'they', 'seeking', 'needed', 'wanted', 'about', 'join',
     'preferred', 'required', 'qualifications', 'plus', 'desired', 'candidate',
+    'engineered', 'architected', 'implemented', 'implementing',
+    'created', 'creating', 'utilized', 'utilizing', 'applied', 'applying',
+    'focused', 'focusing', 'demonstrating', 'demonstrated', 'maintaining', 'maintained',
+    'collaborated', 'collaborating', 'designed', 'designing', 'helped', 'helping',
+    'optimized', 'optimizing', 'boost', 'boosting', 'handle', 'handling',
+    'transform', 'transforming', 'calculate', 'calculating', 'automate', 'automating',
+    'automates', 'automated', 'integrated', 'integrating', 'reduces', 'reducing',
+    'increases', 'increasing', 'improves', 'improving', 'member', 'club', 'peer-led',
+    'emerging', 'practices', 'foundation', 'standards', 'industry-best', 'active',
   };
 
   /// Extracts keywords from a Job Description and categorizes their weightage:
@@ -295,34 +315,181 @@ class JdKeywordEngine {
     final sortedMatchedKeywords = allMatchedHighlightTerms.toList()
       ..sort((a, b) => b.length.compareTo(a.length));
 
-    // Structured [HIGHLIGHT] & [WEIGHT DEBUG] Logging
+    // Structured [JD-HIGHLIGHT] & [HIGHLIGHT] Logging
     debugPrint('============================================================');
-    debugPrint('[HIGHLIGHT-1] JOB DESCRIPTION:\n$jobDescription');
-    debugPrint('[HIGHLIGHT-2] AI KEYWORDS:\n${aiExtractedKeywords ?? []}');
-    debugPrint('[HIGHLIGHT-3] NORMALIZED KEYWORDS:\n${jdAnalysis.values.map((k) => '${k.keyword} (${k.priority.toUpperCase()})').toList()}');
-    debugPrint('[HIGHLIGHT-4] PROJECT TEXT:\n$projCorpus');
-    debugPrint('[HIGHLIGHT-5] EXPERIENCE TEXT:\n$expCorpus');
-    debugPrint('[HIGHLIGHT-6] PROJECT MATCHES:\n${projectMatches.toList()}');
-    debugPrint('[HIGHLIGHT-7] EXPERIENCE MATCHES:\n${experienceMatches.toList()}');
-    debugPrint('[WEIGHT DEBUG] Job Keywords:');
-    debugPrint(jdAnalysis.values.map((k) => '${k.keyword} (${k.priority.toUpperCase()})').toList().toString());
-    debugPrint('[WEIGHT DEBUG] HIGH WEIGHT:');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('Job Description received: ${jobDescription.trim().isNotEmpty ? "YES" : "NO"}');
+    debugPrint('');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('High-weight keywords:');
     debugPrint(highWeightKeywords.toString());
-    debugPrint('[WEIGHT DEBUG] MEDIUM WEIGHT:');
-    debugPrint(mediumWeightKeywords.toString());
-    debugPrint('[WEIGHT DEBUG] Project Matches:');
+    debugPrint('');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('Normalized keywords:');
+    debugPrint(jdAnalysis.values.map((k) => '${k.keyword} (${k.priority.toUpperCase()})').toList().toString());
+    debugPrint('');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('Project matches:');
     debugPrint(projectMatches.toList().toString());
-    debugPrint('[WEIGHT DEBUG] Experience Matches:');
+    debugPrint('');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('Experience matches:');
     debugPrint(experienceMatches.toList().toString());
-    debugPrint('[WEIGHT DEBUG] Highlighted Spans:');
+    debugPrint('');
+    debugPrint('[JD-HIGHLIGHT]');
+    debugPrint('Styled spans created:');
     debugPrint(sortedMatchedKeywords.toString());
     debugPrint('============================================================');
 
     return sortedMatchedKeywords;
   }
 
-  /// Verifies which keywords or semantic aliases are present in [targetText]
-  /// with strict word boundary enforcement.
+  /// Extracts the most important 1-4 technical and impact phrases for a single bullet or line
+  /// using the Two-Stage Scoring Formula:
+  /// final_score = (job_relevance * 0.60) + (contextual_importance * 0.40)
+  List<String> extractBulletKeywords({
+    required String bulletText,
+    String jobDescription = '',
+    List<String>? aiExtractedKeywords,
+    int maxKeywords = 4,
+  }) {
+    final cleanBullet = bulletText.trim();
+    if (cleanBullet.isEmpty) return const [];
+
+    final hasJd = jobDescription.trim().isNotEmpty;
+    final jdAnalysis = hasJd ? _analyzeAndScoreJdKeywords(jobDescription) : <String, JobKeyword>{};
+
+    final allKnownTerms = {
+      ..._coreTechnicalDict,
+      ..._domainImpactDict,
+      ..._secondaryTechnicalDict,
+    };
+
+    final candidatePhrases = <String, String>{};
+    final candidateScores = <String, double>{};
+    final lowerBullet = cleanBullet.toLowerCase();
+
+    // 1. Scan dictionary terms present in this bullet
+    for (final term in allKnownTerms) {
+      if (_containsTerm(lowerBullet, term)) {
+        candidatePhrases[term] = _formatCapitalization(term);
+      }
+    }
+
+    // 2. Scan capitalized multi-word phrases and technical acronyms
+    final phraseRegex = RegExp(r'\b[A-Z][A-Za-z0-9+#.\-]{1,25}(?:\s+[A-Z][A-Za-z0-9+#.\-]{1,25})*\b');
+    for (final match in phraseRegex.allMatches(cleanBullet)) {
+      final phrase = match.group(0)?.trim();
+      if (phrase == null || phrase.length < 2) continue;
+      final lower = phrase.toLowerCase();
+      if (_genericWordDict.contains(lower)) continue;
+      if (lower.split(' ').every((w) => _genericWordDict.contains(w))) continue;
+      if (!candidatePhrases.containsKey(lower)) {
+        candidatePhrases[lower] = phrase;
+      }
+    }
+
+    // 3. Include AI extracted keywords present in this bullet
+    if (aiExtractedKeywords != null) {
+      for (final kw in aiExtractedKeywords) {
+        final lower = kw.toLowerCase().trim();
+        if (lower.length >= 2 && !_genericWordDict.contains(lower) && _containsTerm(lowerBullet, lower)) {
+          if (!candidatePhrases.containsKey(lower)) {
+            candidatePhrases[lower] = _formatCapitalization(kw);
+          }
+        }
+      }
+    }
+
+    if (candidatePhrases.isEmpty) return const [];
+
+    // 4. Calculate Two-Stage Score for each candidate phrase
+    for (final entry in candidatePhrases.entries) {
+      final term = entry.key;
+      final original = entry.value;
+
+      // A. Job Relevance (0.0 to 1.0)
+      double jobRelevance = 0.50; // Baseline when no JD is active
+      if (hasJd) {
+        if (jdAnalysis.containsKey(term)) {
+          final priority = jdAnalysis[term]!.priority;
+          jobRelevance = priority == 'high' ? 1.0 : (priority == 'medium' ? 0.85 : 0.60);
+        } else if (_isSemanticMatchInJd(term, jobDescription)) {
+          jobRelevance = 0.90;
+        } else {
+          jobRelevance = 0.35;
+        }
+      }
+
+      // B. Contextual Importance within this bullet (0.0 to 1.0)
+      double contextualImportance = 0.50;
+      if (_coreTechnicalDict.contains(term)) {
+        contextualImportance = 0.95;
+      } else if (_domainImpactDict.contains(term)) {
+        contextualImportance = 0.90;
+      } else if (_secondaryTechnicalDict.contains(term)) {
+        contextualImportance = 0.85;
+      } else if (original.length >= 3 && original.toUpperCase() == original) {
+        // Acronyms like LLM, NLP, KNN, CGST, SGST, IGST, GSTR-1
+        contextualImportance = 0.90;
+      } else if (term.contains(' ') || term.contains('/') || term.contains('-')) {
+        contextualImportance = 0.70;
+      }
+
+      final finalScore = (jobRelevance * 0.60) + (contextualImportance * 0.40);
+      candidateScores[term] = finalScore;
+    }
+
+    // 5. Rank candidates by final_score descending, then length descending
+    final sortedTerms = candidatePhrases.keys.toList()
+      ..sort((a, b) {
+        final scoreComp = candidateScores[b]!.compareTo(candidateScores[a]!);
+        if (scoreComp != 0) return scoreComp;
+        return b.length.compareTo(a.length);
+      });
+
+    // 6. Select top non-overlapping phrases (up to maxKeywords)
+    final selectedPhrases = <String>[];
+    final selectedRanges = <(int, int)>[];
+
+    for (final term in sortedTerms) {
+      if (selectedPhrases.length >= maxKeywords) break;
+      if (candidateScores[term]! < 0.45) continue;
+
+      final formatted = candidatePhrases[term]!;
+      final escaped = RegExp.escape(term);
+      final pattern = RegExp('(?<=^|[^a-zA-Z0-9])$escaped(?=[^a-zA-Z0-9]|\$)', caseSensitive: false);
+
+      final matches = pattern.allMatches(cleanBullet);
+      if (matches.isEmpty) continue;
+
+      for (final m in matches) {
+        final start = m.start;
+        final end = m.end;
+
+        final overlaps = selectedRanges.any((r) => (start < r.$2 && end > r.$1));
+        if (!overlaps) {
+          selectedRanges.add((start, end));
+          if (!selectedPhrases.contains(formatted)) {
+            selectedPhrases.add(formatted);
+          }
+          break;
+        }
+      }
+    }
+
+    selectedPhrases.sort((a, b) => b.length.compareTo(a.length));
+    return selectedPhrases;
+  }
+
+  bool _isSemanticMatchInJd(String term, String jobDescription) {
+    final lowerJd = jobDescription.toLowerCase();
+    final aliases = _getSemanticAliases(term);
+    for (final a in aliases) {
+      if (_containsTerm(lowerJd, a)) return true;
+    }
+    return false;
+  }
   Set<String> _findMatchingAliasesInText(String term, String targetText) {
     if (targetText.trim().isEmpty) return const {};
 
@@ -496,6 +663,7 @@ class JdKeywordEngine {
       case 'dart': return 'Dart';
       case 'python': return 'Python';
       case 'docker': return 'Docker';
+      case 'gemini api': return 'Gemini API';
       case 'kubernetes': return 'Kubernetes';
       case 'machine learning': return 'Machine Learning';
       case 'ml': return 'ML';
@@ -508,6 +676,21 @@ class JdKeywordEngine {
       case 'data processing': return 'Data Processing';
       case 'model deployment': return 'Model Deployment';
       case 'prompt engineering': return 'Prompt Engineering';
+      case 'cgst': return 'CGST';
+      case 'sgst': return 'SGST';
+      case 'igst': return 'IGST';
+      case 'gstr-1': return 'GSTR-1';
+      case 'csv/excel': return 'CSV/Excel';
+      case 'knn': return 'KNN';
+      case 'gridsearchcv': return 'GridSearchCV';
+      case 'decision tree': return 'Decision Tree';
+      case 'decision trees': return 'Decision Tree';
+      case 'logistic regression': return 'Logistic Regression';
+      case 'pydantic': return 'Pydantic';
+      case 'supabase': return 'Supabase';
+      case 'riverpod': return 'Riverpod';
+      case 'react': return 'React';
+      case 'cloud': return 'Cloud';
       default:
         if (term.length <= 3) return term.toUpperCase();
         return term.split(' ').map((w) {

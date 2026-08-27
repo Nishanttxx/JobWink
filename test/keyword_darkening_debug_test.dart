@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jobwink/models/resume_data.dart';
 import 'package:jobwink/models/resume_type.dart';
 import 'package:jobwink/services/ai_service.dart';
+import 'package:jobwink/services/jd_keyword_engine.dart';
 import 'package:jobwink/services/resume_export_service.dart';
 
 void main() {
@@ -116,6 +117,43 @@ void main() {
 
       expect(pdfBytes, isNotNull);
       expect(pdfBytes.length, greaterThan(1000));
+    });
+
+    test('Step 20: Contextual Bullet Extraction matches exact reference phrases', () {
+      // Reference bullet 1: Gemini API, Flutter, Prompt Engineering, LLM
+      const bullet1 = 'Engineered a dynamic AI search engine utilizing the Gemini API and Flutter, implementing advanced Prompt Engineering to optimize the accuracy and reliability of LLM responses.';
+      final kws1 = JdKeywordEngine.instance.extractBulletKeywords(bulletText: bullet1);
+      expect(kws1, contains('Gemini API'));
+      expect(kws1, contains('Flutter'));
+      expect(kws1, contains('Prompt Engineering'));
+      expect(kws1, contains('LLM'));
+
+      // Reference bullet 2: Generative AI, React
+      const bullet2 = 'Developed an interactive querying interface to handle real-time user interactions, focusing on the seamless integration of Generative AI components into a high-performance React frontend.';
+      final kws2 = JdKeywordEngine.instance.extractBulletKeywords(bulletText: bullet2);
+      expect(kws2, contains('Generative AI'));
+      expect(kws2, contains('React'));
+
+      // Reference bullet 3: Logistic Regression, KNN, Decision Tree, GridSearchCV
+      const expBullet1 = 'Engineered a predictive ML model for quality classification using Logistic Regression, KNN, and Decision Tree, optimizing hyperparameters via GridSearchCV to boost accuracy.';
+      final expKws1 = JdKeywordEngine.instance.extractBulletKeywords(bulletText: expBullet1);
+      expect(expKws1, contains('Logistic Regression'));
+      expect(expKws1, contains('KNN'));
+      expect(expKws1, contains('Decision Tree'));
+      expect(expKws1, contains('GridSearchCV'));
+
+      // Reference bullet 4: Supabase, Cloud, Riverpod, real-time synchronization
+      const bullet4 = 'Integrated Supabase as a Cloud backend for real-time synchronization of business profiles and inventory, utilizing Riverpod for reactive state management and global data caching.';
+      final kws4 = JdKeywordEngine.instance.extractBulletKeywords(bulletText: bullet4);
+      expect(kws4, contains('Supabase'));
+      expect(kws4, contains('Riverpod'));
+      expect(kws4, anyOf(contains('Real-time Synchronization'), contains('Reactive State Management'), contains('Cloud')));
+    });
+
+    test('Step 21: Non-technical generic words are never darkened', () {
+      const genericText = 'Worked with team to develop application solution using advanced technologies and tools for good systems.';
+      final kws = JdKeywordEngine.instance.extractBulletKeywords(bulletText: genericText);
+      expect(kws, isEmpty);
     });
   });
 }

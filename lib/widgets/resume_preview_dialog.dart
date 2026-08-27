@@ -21,6 +21,7 @@ class ResumePreviewDialog extends StatefulWidget {
   final ValueNotifier<ResumeType>? resumeTypeNotifier;
   final Uint8List? originalPdfBytes;
   final List<String> highlightKeywords;
+  final String jobDescription;
   final VoidCallback onDownload;
 
   const ResumePreviewDialog({
@@ -31,6 +32,7 @@ class ResumePreviewDialog extends StatefulWidget {
     this.resumeTypeNotifier,
     this.originalPdfBytes,
     this.highlightKeywords = const [],
+    this.jobDescription = '',
     required this.onDownload,
   });
 
@@ -42,6 +44,7 @@ class ResumePreviewDialog extends StatefulWidget {
     ValueNotifier<ResumeType>? resumeTypeNotifier,
     Uint8List? originalPdfBytes,
     List<String> highlightKeywords = const [],
+    String jobDescription = '',
     required VoidCallback onDownload,
   }) {
     return showDialog(
@@ -55,6 +58,7 @@ class ResumePreviewDialog extends StatefulWidget {
         resumeTypeNotifier: resumeTypeNotifier,
         originalPdfBytes: originalPdfBytes,
         highlightKeywords: highlightKeywords,
+        jobDescription: jobDescription,
         onDownload: onDownload,
       ),
     );
@@ -388,6 +392,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                                   selectedResumeType: _currentResumeType,
                                   originalPdfBytes: widget.originalPdfBytes,
                                   highlightKeywords: widget.highlightKeywords,
+                                  jobDescription: widget.jobDescription,
                                 );
                               },
                           // Pure paper presentation: disable fake browser UI & toolbars

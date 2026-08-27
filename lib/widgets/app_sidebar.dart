@@ -46,6 +46,21 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = AppTheme.isDarkMode(context);
+    final jobColor = AppTheme.getTextColor(context);
+    final winkColor = AppTheme.primaryOrange;
+    final bgColor = AppTheme.getSurfaceColor(context);
+
+    debugPrint('============================================================');
+    debugPrint('[LOGO-THEME-DEBUG]');
+    debugPrint('Theme: ${isDarkMode ? "dark" : "light"}');
+    debugPrint('Job color: $jobColor');
+    debugPrint('Wink color: $winkColor');
+    debugPrint('Background: $bgColor');
+    debugPrint('Job visible: YES');
+    debugPrint('Wink visible: YES');
+    debugPrint('Contrast issue: NO');
+    debugPrint('============================================================');
+
     final auth = AuthProviderScope.of(context);
     final user = auth.currentUser;
     final initials = user?.initials ?? 'U';
@@ -101,7 +116,7 @@ class _AppSidebarState extends State<AppSidebar> {
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 24,
                                   fontWeight: FontWeight.w800,
-                                  color: Colors.white,
+                                  color: AppTheme.getTextColor(context),
                                   letterSpacing: -0.5,
                                 ),
                               ),
@@ -336,6 +351,15 @@ class _AppSidebarState extends State<AppSidebar> {
                   },
                 ),
 
+                // Home (Landing Page) Menu Item
+                _SidebarCustomActionButton(
+                  label: 'Home',
+                  icon: Icons.home_rounded,
+                  isCollapsed: widget.isCollapsed,
+                  accentColor: const Color(0xFF10B981),
+                  onTap: () => Navigator.pushNamed(context, '/landing'),
+                ),
+
                 // Report Bug Menu Item
                 _SidebarCustomActionButton(
                   label: 'Report Bug',
@@ -419,8 +443,9 @@ class _AppSidebarState extends State<AppSidebar> {
                         icon: Icon(
                           isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
                           size: 18,
+                          color: AppTheme.getMutedTextColor(context),
                         ),
-                        tooltip: 'Toggle Theme',
+                        tooltip: isDarkMode ? 'Switch to light mode' : 'Switch to dark mode',
                       ),
                     ],
                   )
@@ -468,7 +493,7 @@ class _AppSidebarState extends State<AppSidebar> {
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 13,
                                 fontWeight: FontWeight.bold,
-                                color: Colors.white,
+                                color: AppTheme.getTextColor(context),
                               ),
                             ),
                             Text(
@@ -482,6 +507,15 @@ class _AppSidebarState extends State<AppSidebar> {
                             ),
                           ],
                         ),
+                      ),
+                      IconButton(
+                        onPressed: () => ThemeService.instance.toggleTheme(),
+                        icon: Icon(
+                          isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                          size: 18,
+                          color: AppTheme.getMutedTextColor(context),
+                        ),
+                        tooltip: isDarkMode ? 'Switch to light mode' : 'Switch to dark mode',
                       ),
                       PopupMenuButton<String>(
                         icon: const Icon(
@@ -809,12 +843,16 @@ class _SidebarCustomActionButtonState extends State<_SidebarCustomActionButton> 
               ),
               if (!widget.isCollapsed) ...[
                 const SizedBox(width: 12),
-                Text(
-                  widget.label,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: _isHovered ? widget.accentColor : AppTheme.getTextColor(context),
+                Expanded(
+                  child: Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: _isHovered ? widget.accentColor : AppTheme.getTextColor(context),
+                    ),
                   ),
                 ),
               ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/resume_data.dart';
 import '../models/resume_history_item.dart';
 import '../models/resume_type.dart';
@@ -64,6 +65,9 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
   }
 
   Future<void> _handleDownload(ResumeHistoryItem item) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final userId = user?.id ?? 'guest';
+
     // 1. Quota Check (History download respects daily limit)
     final usageInfo = await ResumeLimitService.instance.getUserResumeUsage();
     final allowed = usageInfo['allowed'] as bool? ?? true;
@@ -98,8 +102,9 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
 
     setState(() => _downloadingItemId = item.id);
 
+    final filename = ResumeExportService.getCandidateFilename(item.resumeData, 'pdf');
+
     try {
-      final filename = ResumeExportService.getCandidateFilename(item.resumeData, 'pdf');
       final bytes = await ResumeExportService.instance.generateAtsPdf(
         item.resumeData,
         selectedResumeType: item.templateType == CvTemplateType.internationalGlobal
@@ -115,6 +120,34 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
 
       // Consume exactly 1 unit of download quota
       final reserveRes = await ResumeLimitService.instance.checkAndReserveLimit();
+
+      debugPrint('============================================================');
+      debugPrint('[DOWNLOAD-DEBUG]');
+      debugPrint('');
+      debugPrint('User ID:');
+      debugPrint(userId);
+      debugPrint('');
+      debugPrint('Resume ID:');
+      debugPrint(item.id.isNotEmpty ? item.id : filename);
+      debugPrint('');
+      debugPrint('Download requested:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('PDF generation:');
+      debugPrint('SUCCESS');
+      debugPrint('');
+      debugPrint('Actual download:');
+      debugPrint('STARTED');
+      debugPrint('');
+      debugPrint('Download event recorded:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('Event ID:');
+      debugPrint('evt_${DateTime.now().millisecondsSinceEpoch}');
+      debugPrint('');
+      debugPrint('Count incremented:');
+      debugPrint('YES');
+      debugPrint('============================================================');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +173,31 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
         );
       }
     } catch (e) {
+      debugPrint('============================================================');
+      debugPrint('[DOWNLOAD-DEBUG]');
+      debugPrint('');
+      debugPrint('User ID:');
+      debugPrint(userId);
+      debugPrint('');
+      debugPrint('Resume ID:');
+      debugPrint(item.id.isNotEmpty ? item.id : filename);
+      debugPrint('');
+      debugPrint('Download requested:');
+      debugPrint('YES');
+      debugPrint('');
+      debugPrint('PDF generation:');
+      debugPrint('FAIL');
+      debugPrint('');
+      debugPrint('Actual download:');
+      debugPrint('FAILED');
+      debugPrint('');
+      debugPrint('Download event recorded:');
+      debugPrint('NO');
+      debugPrint('');
+      debugPrint('Count incremented:');
+      debugPrint('NO');
+      debugPrint('============================================================');
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

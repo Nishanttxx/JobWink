@@ -74,6 +74,12 @@ class AppRouteTransitions {
         );
         break;
 
+      // ── Landing / Home ──────────────────────────────────────────────────
+      case '/landing':
+      case '/home':
+        targetScreen = const LandingPage();
+        break;
+
       // ── Root / Landing (Dynamic Gate) ────────────────────────────────────
       case '/':
       default:

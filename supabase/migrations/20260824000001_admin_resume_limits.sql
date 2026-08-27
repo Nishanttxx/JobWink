@@ -130,28 +130,16 @@ BEGIN
     RAISE EXCEPTION 'Authentication required.' USING ERRCODE = 'P0001';
   END IF;
 
-  -- Admin account (na6236786@gmail.com) has unlimited resume creations
-  IF is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid()) THEN
-    RETURN json_build_object(
-      'allowed', true,
-      'daily_limit', 999999,
-      'usage_count', 0,
-      'remaining', 999999,
-      'usage_date', v_today,
-      'is_admin', true
-    );
-  END IF;
-
   -- Lock row for update to eliminate race conditions
   SELECT * INTO v_limit_record
   FROM public.user_resume_limits
   WHERE user_id = v_user_id
   FOR UPDATE;
 
-  -- Auto-create record with default limit 4 if missing
+  -- Auto-create record with default limit (999999 for admin, 4 for normal users) if missing
   IF NOT FOUND THEN
     INSERT INTO public.user_resume_limits (user_id, daily_limit, usage_count, usage_date)
-    VALUES (v_user_id, 4, 0, v_today)
+    VALUES (v_user_id, CASE WHEN is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid()) THEN 999999 ELSE 4 END, 0, v_today)
     ON CONFLICT (user_id) DO NOTHING;
 
     SELECT * INTO v_limit_record
@@ -160,7 +148,11 @@ BEGIN
     FOR UPDATE;
   END IF;
 
-  v_limit := COALESCE(v_limit_record.daily_limit, 4);
+  IF is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid()) THEN
+    v_limit := 999999;
+  ELSE
+    v_limit := COALESCE(v_limit_record.daily_limit, 4);
+  END IF;
 
   -- Daily Reset Logic: if recorded date is not current date, reset usage count to 0
   IF v_limit_record.usage_date != v_today THEN
@@ -169,8 +161,8 @@ BEGIN
     v_used := COALESCE(v_limit_record.usage_count, 0);
   END IF;
 
-  -- Quota Limit Check
-  IF v_used >= v_limit THEN
+  -- Quota Limit Check (Admin is exempt from daily limit blocking)
+  IF v_limit < 999999 AND v_used >= v_limit THEN
     UPDATE public.user_resume_limits
     SET usage_count = v_used,
         usage_date = v_today,
@@ -192,6 +184,7 @@ BEGIN
 
     UPDATE public.user_resume_limits
     SET usage_count = v_used,
+        daily_limit = CASE WHEN is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid()) THEN 999999 ELSE v_limit_record.daily_limit END,
         usage_date = v_today,
         updated_at = NOW()
     WHERE user_id = v_user_id;
@@ -201,7 +194,8 @@ BEGIN
       'daily_limit', v_limit,
       'usage_count', v_used,
       'remaining', GREATEST(0, v_limit - v_used),
-      'usage_date', v_today
+      'usage_date', v_today,
+      'is_admin', (v_limit >= 999999)
     );
   END IF;
 END;
@@ -276,6 +270,7 @@ DECLARE
   v_limit_record public.user_resume_limits%ROWTYPE;
   v_today DATE := CURRENT_DATE;
   v_used INT := 0;
+  v_is_admin BOOLEAN := false;
 BEGIN
   IF p_user_id IS NOT NULL AND is_admin_caller() THEN
     v_user_id := p_user_id;
@@ -283,19 +278,7 @@ BEGIN
     v_user_id := auth.uid();
   END IF;
 
-  -- Admin has unlimited creations
-  IF is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid()) THEN
-    RETURN json_build_object(
-      'user_id', v_user_id,
-      'daily_limit', 999999,
-      'usage_count', 0,
-      'resumes_generated_today', 0,
-      'remaining', 999999,
-      'allowed', true,
-      'usage_date', v_today,
-      'is_unlimited', true
-    );
-  END IF;
+  v_is_admin := is_admin_caller() AND (p_user_id IS NULL OR p_user_id = auth.uid());
 
   IF v_user_id IS NULL THEN
     RETURN json_build_object(
@@ -312,7 +295,7 @@ BEGIN
 
   IF NOT FOUND THEN
     INSERT INTO public.user_resume_limits (user_id, daily_limit, usage_count, usage_date)
-    VALUES (v_user_id, 4, 0, v_today)
+    VALUES (v_user_id, CASE WHEN v_is_admin THEN 999999 ELSE 4 END, 0, v_today)
     ON CONFLICT (user_id) DO NOTHING;
 
     SELECT * INTO v_limit_record
@@ -333,11 +316,12 @@ BEGIN
 
   RETURN json_build_object(
     'user_id', v_user_id,
-    'daily_limit', COALESCE(v_limit_record.daily_limit, 4),
+    'daily_limit', CASE WHEN v_is_admin THEN 999999 ELSE COALESCE(v_limit_record.daily_limit, 4) END,
     'usage_count', v_used,
     'resumes_generated_today', v_used,
-    'remaining', GREATEST(0, COALESCE(v_limit_record.daily_limit, 4) - v_used),
-    'allowed', (v_used < COALESCE(v_limit_record.daily_limit, 4)),
+    'remaining', CASE WHEN v_is_admin THEN 999999 ELSE GREATEST(0, COALESCE(v_limit_record.daily_limit, 4) - v_used) END,
+    'allowed', (v_is_admin OR v_used < COALESCE(v_limit_record.daily_limit, 4)),
+    'is_unlimited', v_is_admin,
     'usage_date', v_today
   );
 END;
@@ -380,10 +364,10 @@ BEGIN
   FROM public.user_resume_limits
   WHERE usage_date = v_today;
 
-  -- 4. Users at or above limit today
+  -- 4. Users at or above limit today (excluding admin with 999999 limit)
   SELECT COUNT(*) INTO v_at_limit
   FROM public.user_resume_limits
-  WHERE usage_date = v_today AND usage_count >= daily_limit;
+  WHERE usage_date = v_today AND usage_count >= daily_limit AND daily_limit < 999999;
 
   RETURN json_build_object(
     'totalUsers', v_total_users,
