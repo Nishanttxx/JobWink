@@ -81,14 +81,34 @@ flutter clean
 flutter pub get
 flutter analyze
 
-# Build production web bundle
+# Build production web bundle with environment variables
+BUILD_ARGS=()
+
 if [ -f ".env" ]; then
-    echo "Building with .env definitions..."
-    flutter build web --release --dart-define-from-file=.env
-else
-    echo "Building without .env file..."
-    flutter build web --release
+    echo "Found .env file; including in build..."
+    BUILD_ARGS+=("--dart-define-from-file=.env")
 fi
+
+if [ -n "$SUPABASE_URL" ]; then
+    echo "Injecting SUPABASE_URL from environment: $SUPABASE_URL"
+    BUILD_ARGS+=("--dart-define=SUPABASE_URL=$SUPABASE_URL")
+fi
+
+if [ -n "$SUPABASE_ANON_KEY" ]; then
+    echo "Injecting SUPABASE_ANON_KEY from environment (length: ${#SUPABASE_ANON_KEY})"
+    BUILD_ARGS+=("--dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY")
+fi
+
+if [ -n "$ADMIN_EMAIL" ]; then
+    BUILD_ARGS+=("--dart-define=ADMIN_EMAIL=$ADMIN_EMAIL")
+fi
+
+if [ -n "$BACKEND_URL" ]; then
+    BUILD_ARGS+=("--dart-define=BACKEND_URL=$BACKEND_URL")
+fi
+
+echo "Executing: flutter build web --release ${BUILD_ARGS[*]}"
+flutter build web --release "${BUILD_ARGS[@]}"
 
 echo "============================================================"
 echo "BUILD SUCCEEDED — Artifacts available in build/web"
