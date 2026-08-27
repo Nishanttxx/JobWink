@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: jobwink-frontend
+    runtime: static
+    buildCommand: chmod +x build.sh && ./build.sh
+    staticPublishPath: build/web
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

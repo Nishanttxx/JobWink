@@ -1,0 +1,49 @@
+name: Deploy Flutter Web
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter & Dart SDK Versions
+        run: |
+          echo "Flutter executable path:"
+          which flutter
+          echo "Dart executable path:"
+          which dart
+          echo "Flutter version details:"
+          flutter --version
+          echo "Dart version details:"
+          dart --version
+
+      - name: Clean & Resolve Dependencies
+        run: |
+          flutter clean
+          flutter pub get
+          flutter analyze
+
+      - name: Build Web Release
+        run: |
+          flutter build web --release --dart-define-from-file=.env
+
+      - name: Upload Web Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: build/web
