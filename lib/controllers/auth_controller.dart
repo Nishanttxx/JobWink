@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/backend_config.dart';
 import '../models/app_user.dart';
 import '../repositories/auth_repository.dart';
 import '../repositories/auth_result.dart';
@@ -94,7 +95,9 @@ class AuthController extends ChangeNotifier {
       _status == AuthStatus.emailVerificationPending;
   bool get isAdmin =>
       _currentUser != null &&
-      _currentUser!.email.trim().toLowerCase() == 'na6236786@gmail.com';
+      BackendConfig.adminEmail.isNotEmpty &&
+      _currentUser!.email.trim().toLowerCase() ==
+          BackendConfig.adminEmail.trim().toLowerCase();
 
 
   // ── Initialisation ────────────────────────────────────────────────────────

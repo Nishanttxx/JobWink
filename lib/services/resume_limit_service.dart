@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/backend_config.dart';
 
 /// Result object for resume creation quota check.
 class ResumeLimitCheckResult {
@@ -84,11 +85,11 @@ class ResumeLimitService {
   DateTime _guestUsageDate = DateTime.now();
 
   /// Checks if the authenticated user is the designated admin account.
-  static const String targetAdminEmail = 'na6236786@gmail.com';
+  static String get targetAdminEmail => BackendConfig.adminEmail;
 
   bool isUserAdmin(String? email) {
-    if (email == null) return false;
-    return email.trim().toLowerCase() == targetAdminEmail;
+    if (email == null || targetAdminEmail.isEmpty) return false;
+    return email.trim().toLowerCase() == targetAdminEmail.trim().toLowerCase();
   }
 
   /// Formats date to strict ISO format YYYY-MM-DD
@@ -102,7 +103,7 @@ class ResumeLimitService {
   /// Atomically checks and reserves one unit of resume creation quota.
   ///
   /// Calls the Supabase PostgreSQL RPC `check_and_reserve_resume_limit`.
-  /// Admin (na6236786@gmail.com) has unlimited resume creations, but download counts are recorded.
+  /// Admin user has unlimited resume creations, but download counts are recorded.
   /// If the limit is reached for normal users, returns `allowed: false` with message.
   Future<ResumeLimitCheckResult> checkAndReserveLimit() async {
     final client = _client;

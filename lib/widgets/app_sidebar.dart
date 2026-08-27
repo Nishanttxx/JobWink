@@ -378,7 +378,7 @@ class _AppSidebarState extends State<AppSidebar> {
                   onTap: () => Navigator.pushNamed(context, '/profile'),
                 ),
 
-                // Admin Dashboard Menu Item (Exposed STRICTLY to na6236786@gmail.com)
+                // Admin Dashboard Menu Item (Exposed STRICTLY to admin account)
                 if (auth.isAdmin)
                   _SidebarCustomActionButton(
                     label: 'Admin Dashboard',

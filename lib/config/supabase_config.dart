@@ -1,5 +1,10 @@
 class SupabaseConfig {
-  static const String url = 'https://YOUR_SUPABASE_REF.supabase.co';
-  static const String anonKey =
-      'REDACTED_SUPABASE_ANON_KEY';
+  static const String url = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: '',
+  );
+  static const String anonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: '',
+  );
 }

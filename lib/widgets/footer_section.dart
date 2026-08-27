@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../animations/gsap_timeline.dart';
+import '../config/backend_config.dart';
 import '../theme/app_theme.dart';
 import 'report_bug_modal.dart';
 
@@ -191,7 +192,9 @@ class _FooterSectionState extends State<FooterSection> {
             ),
             const SizedBox(width: 6),
             Text(
-              'na6236786@gmail.com',
+              BackendConfig.adminEmail.isNotEmpty
+                  ? BackendConfig.adminEmail
+                  : 'contact@jobwink.app',
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,

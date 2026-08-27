@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../config/backend_config.dart';
 import '../providers/auth_provider.dart';
 import '../services/resume_limit_service.dart';
 import '../theme/app_theme.dart';
@@ -388,7 +389,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Admin privileges are strictly restricted to na6236786@gmail.com. Normal users cannot access this dashboard.',
+                  'Admin privileges are strictly restricted to the designated admin account. Normal users cannot access this dashboard.',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 14,
@@ -706,7 +707,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       displayName,
                       style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
                     ),
-                    if (user.email == 'na6236786@gmail.com') ...[
+                    if (BackendConfig.adminEmail.isNotEmpty && user.email == BackendConfig.adminEmail) ...[
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
