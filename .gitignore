@@ -38,6 +38,8 @@ node_modules/
 .pub/
 /build/
 /coverage/
+flutter_sdk/
+flutter/
 
 # Symbolication related
 app.*.symbols
