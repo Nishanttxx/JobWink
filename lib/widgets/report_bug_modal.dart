@@ -107,7 +107,7 @@ class _ReportBugModalState extends State<ReportBugModal> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['png', 'jpg', 'jpeg', 'webp'],
         withData: true,

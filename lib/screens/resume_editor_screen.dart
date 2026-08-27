@@ -631,7 +631,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       return;
     }
 
-    final pickerResult = await FilePicker.platform.pickFiles(
+    final pickerResult = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'docx', 'doc', 'jpg', 'jpeg', 'png', 'txt'],
       withData: true,
