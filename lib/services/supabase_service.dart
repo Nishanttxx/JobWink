@@ -219,8 +219,8 @@ class SupabaseService {
     if (fullName != null || avatarUrl != null) {
       try {
         final metaData = <String, dynamic>{
-          'full_name': ?fullName,
-          'avatar_url': ?avatarUrl,
+          if (fullName != null) 'full_name': fullName,
+          if (avatarUrl != null) 'avatar_url': avatarUrl,
         };
         await c.auth.updateUser(UserAttributes(data: metaData));
       } catch (_) {}

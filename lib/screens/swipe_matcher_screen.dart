@@ -336,7 +336,7 @@ class _SwipeMatcherScreenState extends State<SwipeMatcherScreen> with SingleTick
                 Expanded(
                   child: ListView.separated(
                     itemCount: _savedJobs.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (ctx, idx) {
                       final job = _savedJobs[idx];
                       return Container(

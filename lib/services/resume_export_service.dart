@@ -311,9 +311,9 @@ class ResumeExportService {
         boldItalic: _unicodeBoldItalicFont ?? _unicodeBoldFont ?? _unicodeBaseFont!,
         fontFallback: [
           _unicodeBaseFont!,
-          ?_unicodeBoldFont,
-          ?_unicodeItalicFont,
-          ?_unicodeBoldItalicFont,
+          if (_unicodeBoldFont != null) _unicodeBoldFont!,
+          if (_unicodeItalicFont != null) _unicodeItalicFont!,
+          if (_unicodeBoldItalicFont != null) _unicodeBoldItalicFont!,
         ],
       );
     }

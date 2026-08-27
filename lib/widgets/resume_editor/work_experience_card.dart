@@ -120,7 +120,7 @@ class WorkExperienceCard extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: experiences.length,
-              separatorBuilder: (_, _) => const SizedBox(height: 16),
+              separatorBuilder: (_, __) => const SizedBox(height: 16),
               itemBuilder: (context, index) {
                 final exp = experiences[index];
                 return _buildExperienceItem(context, exp, index);
