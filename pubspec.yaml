@@ -41,9 +41,9 @@ dependencies:
   web: ^1.0.0
 
 
-  file_picker: ^11.0.3
+  file_picker: ^12.1.1
   google_generative_ai: ^0.4.6
-  dart_openai: ^6.1.1
+  dart_openai: ^8.0.0
   http: ^1.6.0
   archive: ^4.0.9
   url_launcher: ^6.3.1
