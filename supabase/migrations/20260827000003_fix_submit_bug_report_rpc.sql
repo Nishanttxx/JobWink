@@ -1,4 +1,4 @@
-﻿-- ============================================================================
+-- ============================================================================
 -- SUPABASE MIGRATION: Fix submit_bug_report() — accept p_user_id parameter
 -- Migration File: supabase/migrations/20260827000003_fix_submit_bug_report_rpc.sql
 -- ============================================================================
@@ -8,6 +8,8 @@
 -- ============================================================================
 
 DROP FUNCTION IF EXISTS public.submit_bug_report(TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.submit_bug_report(TEXT, TEXT, TEXT, UUID, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT, TEXT) CASCADE;
+DROP FUNCTION IF EXISTS public.submit_bug_report CASCADE;
 
 CREATE OR REPLACE FUNCTION public.submit_bug_report(
     p_user_email TEXT,
@@ -69,7 +71,7 @@ BEGIN
     END IF;
 
     -- Insert into bug_reports table
-    -- bug_reports.user_email stores the REPORTER''s email (not the admin email)
+    -- bug_reports.user_email stores the REPORTER's email (not the admin email)
     INSERT INTO public.bug_reports (
         user_id,
         user_email,
@@ -109,3 +111,4 @@ $$;
 REVOKE ALL ON FUNCTION public.submit_bug_report(TEXT,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.submit_bug_report(TEXT,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.submit_bug_report(TEXT,TEXT,TEXT,UUID,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT,TEXT) TO anon;
+
