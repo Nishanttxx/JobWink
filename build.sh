@@ -13,15 +13,23 @@ echo "============================================================"
 FLUTTER_VERSION="3.47.2"
 FLUTTER_DIR="$PWD/flutter_sdk"
 
-# Check if compatible Flutter SDK exists or needs installation
-if [ ! -d "$FLUTTER_DIR" ]; then
-    echo "Installing Flutter $FLUTTER_VERSION..."
-    git clone https://github.com/flutter/flutter.git --depth 1 -b $FLUTTER_VERSION "$FLUTTER_DIR"
-else
-    echo "Using existing Flutter directory: $FLUTTER_DIR"
+# Check if compatible Flutter SDK exists or needs installation / cache invalidation
+if [ -d "$FLUTTER_DIR" ]; then
+    CURRENT_VER=$("$FLUTTER_DIR/bin/flutter" --version 2>&1 | head -n 1 || true)
+    if [[ "$CURRENT_VER" != *"$FLUTTER_VERSION"* ]]; then
+        echo "Detected outdated cached Flutter SDK ($CURRENT_VER). Removing cache..."
+        rm -rf "$FLUTTER_DIR"
+    else
+        echo "Using cached Flutter $FLUTTER_VERSION directory: $FLUTTER_DIR"
+    fi
 fi
 
-# Ensure newly installed Flutter SDK takes precedence in PATH
+if [ ! -d "$FLUTTER_DIR" ]; then
+    echo "Cloning and installing Flutter $FLUTTER_VERSION (Dart >= 3.8.0)..."
+    git clone https://github.com/flutter/flutter.git --depth 1 -b "$FLUTTER_VERSION" "$FLUTTER_DIR"
+fi
+
+# Ensure newly installed Flutter SDK takes absolute precedence in PATH
 export PATH="$FLUTTER_DIR/bin:$PATH"
 
 echo "============================================================"
