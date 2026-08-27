@@ -7,7 +7,25 @@ set -e
 # ==============================================================================
 
 echo "============================================================"
-echo "JOBWINK — DEPLOYMENT BUILD INITIALIZATION"
+echo "INITIAL CLOUDFLARE BUILD ENVIRONMENT INSPECTION"
+echo "============================================================"
+echo "Working directory:"
+pwd
+echo "Current Git commit:"
+git rev-parse HEAD
+echo "Locating pubspec.yaml:"
+find . -name pubspec.yaml -print
+echo "Pre-install which flutter:"
+which flutter || true
+echo "Pre-install which dart:"
+which dart || true
+echo "Pre-install flutter --version:"
+flutter --version || true
+echo "Pre-install dart --version:"
+dart --version || true
+
+echo "============================================================"
+echo "INSTALLING FLUTTER 3.47.2 (DART 3.13.2 >= 3.8.0)"
 echo "============================================================"
 
 FLUTTER_VERSION="3.47.2"
@@ -47,6 +65,13 @@ flutter --version
 
 echo "Dart version details:"
 dart --version
+
+# Fail-safe check: Stop immediately if Dart 3.1.0 is still resolved
+DART_INFO=$(dart --version 2>&1)
+if [[ "$DART_INFO" == *"version: 3.1.0"* ]]; then
+    echo "ERROR: Build environment is still executing legacy Dart 3.1.0! Aborting before pub get."
+    exit 1
+fi
 
 echo "============================================================"
 echo "RESOLVING DEPENDENCIES & BUILDING WEB APPLICATION"
