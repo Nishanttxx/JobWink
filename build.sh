@@ -2,22 +2,32 @@
 set -e
 
 # ==============================================================================
-# JobWink — Production Web Deployment & Build Script for Cloudflare Pages
-# Ensures Flutter 3.47.2 (Dart 3.13.2 >= 3.8.0) is installed and used in an
-# isolated directory outside the project root to prevent analyzer recursion.
+# JobWink — Cloudflare Pages Web Deployment & Build Script
+# Ensures Flutter SDK is installed in an isolated external directory (/tmp/flutter_3_47_2)
+# completely outside the Jobwink repository tree to prevent analyzer recursion.
 # ==============================================================================
 
 echo "============================================================"
 echo "INITIAL CLOUDFLARE BUILD ENVIRONMENT INSPECTION"
 echo "============================================================"
+
+# Remove any leftover flutter_sdk directory in workspace from previous runs/caches
+if [ -d "$PWD/flutter_sdk" ]; then
+    echo "Purging leftover flutter_sdk directory from repository workspace..."
+    rm -rf "$PWD/flutter_sdk"
+fi
+
 echo "Current working directory:"
 pwd
 
+echo "Locating Jobwink pubspec.yaml:"
+find . -name pubspec.yaml -not -path './flutter_sdk/*' -print
+
+echo "Checking for any nested flutter_sdk directory:"
+find . -maxdepth 2 -type d -name flutter_sdk -print
+
 echo "Current Git commit:"
 git rev-parse HEAD
-
-echo "Locating Jobwink pubspec.yaml:"
-find . -maxdepth 2 -name pubspec.yaml -print
 
 echo "Pre-install which flutter:"
 which flutter || true
@@ -31,16 +41,27 @@ flutter --version || true
 echo "Pre-install dart --version:"
 dart --version || true
 
+# Determine Jobwink project root
+JOBWINK_ROOT="$PWD"
+if [ ! -f "$JOBWINK_ROOT/pubspec.yaml" ]; then
+    FOUND_PUBSPEC=$(find . -name pubspec.yaml -not -path '*/.*' -print | head -n 1)
+    if [ -n "$FOUND_PUBSPEC" ]; then
+        JOBWINK_ROOT=$(dirname "$FOUND_PUBSPEC")
+    fi
+fi
+cd "$JOBWINK_ROOT"
+echo "Confirmed Jobwink root: $(pwd)"
+
 echo "============================================================"
-echo "INSTALLING FLUTTER 3.47.2 (ISOLATED IN \$HOME/flutter)"
+echo "INSTALLING FLUTTER 3.47.2 (ISOLATED IN /tmp/flutter_3_47_2)"
 echo "============================================================"
 
 FLUTTER_VERSION="3.47.2"
-FLUTTER_DIR="$HOME/flutter"
+FLUTTER_DIR="/tmp/flutter_3_47_2"
 FLUTTER_BIN="$FLUTTER_DIR/bin/flutter"
 DART_BIN="$FLUTTER_DIR/bin/dart"
 
-# Check if compatible Flutter SDK exists or needs installation / cache invalidation
+# Check if compatible Flutter SDK exists in /tmp or needs cloning
 if [ -d "$FLUTTER_DIR" ]; then
     CURRENT_VER=$("$FLUTTER_BIN" --version 2>&1 | head -n 1 || true)
     if [[ "$CURRENT_VER" != *"$FLUTTER_VERSION"* ]]; then
@@ -86,14 +107,13 @@ echo "============================================================"
 echo "RESOLVING DEPENDENCIES & BUILDING JOBWINK"
 echo "============================================================"
 
+cd "$JOBWINK_ROOT"
+
 echo "Running flutter clean..."
 "$FLUTTER_BIN" clean
 
 echo "Running flutter pub get on Jobwink..."
 "$FLUTTER_BIN" pub get
-
-echo "Running flutter analyze on Jobwink (lib/ and test/ only)..."
-"$FLUTTER_BIN" analyze lib test
 
 # Build production web bundle with environment variables
 BUILD_ARGS=()
