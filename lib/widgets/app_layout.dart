@@ -141,12 +141,14 @@ class _AppLayoutState extends State<AppLayout> {
                     children: [
                       // Mobile Drawer Toggle Button & Brand Indicator
                       if (!isDesktop) ...[
-                        IconButton(
-                          icon: Icon(Icons.menu_rounded, color: AppTheme.getTextColor(context)),
-                          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-                          tooltip: 'Open Menu',
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                        Builder(
+                          builder: (scaffoldContext) => IconButton(
+                            icon: Icon(Icons.menu_rounded, color: AppTheme.getTextColor(context)),
+                            onPressed: () => Scaffold.of(scaffoldContext).openDrawer(),
+                            tooltip: 'Open Menu',
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                          ),
                         ),
                         const SizedBox(width: 4),
                         GestureDetector(

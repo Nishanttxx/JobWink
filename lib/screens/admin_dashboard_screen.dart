@@ -435,11 +435,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF8B5CF6), size: 22),
+            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF8B5CF6), size: 20),
             const SizedBox(width: 8),
-            Flexible(
+            Expanded(
               child: Text(
                 isMobile ? 'Admin Dashboard' : 'JobWink Admin Dashboard',
                 maxLines: 1,
@@ -447,7 +446,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 style: GoogleFonts.plusJakartaSans(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  fontSize: isMobile ? 16 : 18,
+                  fontSize: isMobile ? 15 : 18,
                 ),
               ),
             ),
