@@ -19,7 +19,7 @@ class SupabaseService {
     if (SupabaseConfig.url.isEmpty ||
         SupabaseConfig.anonKey.isEmpty ||
         SupabaseConfig.anonKey.length < 20) {
-      debugPrint('Supabase initialization skipped: No valid API key configured.');
+      debugPrint('[SUPABASE] Initialization skipped: No valid API key or SUPABASE_URL configured.');
       return;
     }
 
@@ -32,10 +32,11 @@ class SupabaseService {
         ),
       );
       _isInitialized = true;
+      debugPrint('[SUPABASE] Initialized successfully with: ${SupabaseConfig.url}');
     } on AuthException catch (e) {
-      debugPrint('Supabase AuthException caught: ${e.message}');
+      debugPrint('[SUPABASE] AuthException caught: ${e.message}');
     } catch (e) {
-      debugPrint('Supabase initialization note: $e');
+      debugPrint('[SUPABASE] Initialization note: $e');
     }
   }
 
@@ -120,24 +121,45 @@ class SupabaseService {
 
   /// Sign In with a social OAuth provider (Google, GitHub, …).
   Future<bool> signInWithOAuth(OAuthProvider provider) async {
+    final providerTitle = provider == OAuthProvider.google
+        ? 'Google'
+        : (provider == OAuthProvider.github ? 'GitHub' : provider.name);
+    debugPrint('[OAUTH DEBUG] $providerTitle login clicked');
+    debugPrint('[OAUTH DEBUG] Starting Supabase OAuth');
+
     final c = client;
     if (c == null) {
-      debugPrint('[OAUTH-DEBUG] Provider: ${provider.name}');
-      debugPrint('[OAUTH-DEBUG] Login initiated: NO (Supabase not initialized)');
+      debugPrint('[OAUTH DEBUG] Redirect URL: null (Supabase not initialized)');
+      debugPrint('[OAUTH DEBUG] signInWithOAuth returned: false');
+      debugPrint(
+          '[OAUTH DEBUG] error: Supabase is not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY build settings.');
       return false;
     }
-    final redirectTo = kIsWeb ? Uri.base.origin : null;
-    debugPrint('[OAUTH-DEBUG] Provider: ${provider.name}');
-    debugPrint('[OAUTH-DEBUG] Login initiated: YES');
-    debugPrint('[OAUTH-DEBUG] Redirect URL: $redirectTo');
-    final success = await c.auth.signInWithOAuth(
-      provider,
-      redirectTo: redirectTo,
-      queryParams: provider == OAuthProvider.google
-          ? {'access_type': 'offline', 'prompt': 'consent'}
-          : null,
-    );
-    return success;
+
+    final redirectTo = kIsWeb ? '${Uri.base.origin}/' : null;
+    debugPrint('[OAUTH DEBUG] Redirect URL: $redirectTo');
+
+    try {
+      final success = await c.auth.signInWithOAuth(
+        provider,
+        redirectTo: redirectTo,
+        authScreenLaunchMode: LaunchMode.platformDefault,
+        queryParams: provider == OAuthProvider.google
+            ? {'access_type': 'offline', 'prompt': 'consent'}
+            : null,
+      );
+      debugPrint('[OAUTH DEBUG] signInWithOAuth returned: $success');
+      debugPrint('[OAUTH DEBUG] error: none');
+      return success;
+    } on AuthException catch (e) {
+      debugPrint('[OAUTH DEBUG] signInWithOAuth returned: false');
+      debugPrint('[OAUTH DEBUG] error: ${e.message} (code: ${e.statusCode})');
+      rethrow;
+    } catch (e) {
+      debugPrint('[OAUTH DEBUG] signInWithOAuth returned: false');
+      debugPrint('[OAUTH DEBUG] error: $e');
+      rethrow;
+    }
   }
 
   // ---------------------------------------------------------------------------
