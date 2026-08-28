@@ -86,6 +86,8 @@ END $$;
 
 
 -- 3. ATOMIC RPC FUNCTION: CHECK AND RESERVE RESUME GENERATION (RACE-CONDITION PROOF)
+DROP FUNCTION IF EXISTS public.check_and_reserve_resume_limit(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.check_and_reserve_resume_limit() CASCADE;
 CREATE OR REPLACE FUNCTION public.check_and_reserve_resume_limit(p_user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -165,6 +167,8 @@ $$;
 
 
 -- 4. ATOMIC RPC FUNCTION: REFUND RESUME GENERATION (ON AI API FAILURE)
+DROP FUNCTION IF EXISTS public.refund_resume_limit(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.refund_resume_limit() CASCADE;
 CREATE OR REPLACE FUNCTION public.refund_resume_limit(p_user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -205,6 +209,8 @@ $$;
 
 
 -- 5. RPC FUNCTION: GET USER RESUME USAGE (WITH DAY RESET)
+DROP FUNCTION IF EXISTS public.get_user_resume_usage(UUID) CASCADE;
+DROP FUNCTION IF EXISTS public.get_user_resume_usage() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_user_resume_usage(p_user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -254,6 +260,7 @@ $$;
 
 
 -- 6. ADMIN RPC FUNCTION: UPDATE USER DAILY LIMIT
+DROP FUNCTION IF EXISTS public.update_user_resume_limit(UUID, INT) CASCADE;
 CREATE OR REPLACE FUNCTION public.update_user_resume_limit(p_user_id UUID, p_new_limit INT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -292,6 +299,7 @@ $$;
 
 
 -- 7. ADMIN RPC FUNCTION: RESET TODAY'S USER USAGE
+DROP FUNCTION IF EXISTS public.reset_user_resume_usage(UUID) CASCADE;
 CREATE OR REPLACE FUNCTION public.reset_user_resume_usage(p_user_id UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -327,6 +335,7 @@ $$;
 
 
 -- 8. ADMIN RPC FUNCTION: GET DASHBOARD STATS
+DROP FUNCTION IF EXISTS public.get_admin_dashboard_stats() CASCADE;
 CREATE OR REPLACE FUNCTION public.get_admin_dashboard_stats()
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -369,3 +378,4 @@ BEGIN
   );
 END;
 $$;
+
