@@ -29,7 +29,7 @@ class GsapScrollTrigger extends StatefulWidget {
     this.visibilityThreshold = 0.12,
     this.onEnter,
     this.onLeave,
-    this.triggerOnce = false,
+    this.triggerOnce = true,
   });
 
   @override
@@ -176,6 +176,9 @@ class _GsapStaggeredRevealState extends State<GsapStaggeredReveal>
         animation: _controller,
         child: widget.child,
         builder: (context, child) {
+          if (_controller.isCompleted) {
+            return child!;
+          }
           return Opacity(
             opacity: _opacity.value.clamp(0.0, 1.0),
             child: Transform.translate(

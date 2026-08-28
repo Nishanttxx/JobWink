@@ -118,12 +118,12 @@ class _LenisSmoothScrollState extends State<LenisSmoothScroll>
         return; // Fall back to native instant scrolling
       }
 
-      // Check mobile / touch device
-      final isMobile = !kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.iOS ||
-              defaultTargetPlatform == TargetPlatform.android);
-      if (isMobile && !widget.enableOnMobile) {
-        return; // Use native touch physics on mobile
+      // Check mobile / touch device or viewport
+      final isMobileDevice = defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.android;
+      final screenWidth = MediaQuery.of(context).size.width;
+      if ((isMobileDevice || screenWidth < 768) && !widget.enableOnMobile) {
+        return; // Use native silky-smooth touch physics on mobile
       }
 
       if (!widget.controller.hasClients) return;

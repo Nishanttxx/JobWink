@@ -104,48 +104,88 @@ class _ApplicationTrackerScreenState extends State<ApplicationTrackerScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Page Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Application Pipeline Tracker 📊',
-                            style: AppTheme.getDisplayFont(
-                              fontSize: isDesktop ? 28 : 22,
-                              fontWeight: FontWeight.w800,
-                              color: AppTheme.getTextColor(context),
-                            ),
+                  if (!isDesktop)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Application Pipeline Tracker 📊',
+                          style: AppTheme.getDisplayFont(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.getTextColor(context),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Kanban board to track job applications from saved matches to offers.',
-                            style: AppTheme.getBodyFont(
-                              fontSize: 14,
-                              color: AppTheme.getMutedTextColor(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha:0.12),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha:0.3)),
                         ),
-                        child: Text(
-                          '${_applications.length} Active Applications',
-                          style: GoogleFonts.plusJakartaSans(
+                        const SizedBox(height: 4),
+                        Text(
+                          'Kanban board to track job applications from saved matches to offers.',
+                          style: AppTheme.getBodyFont(
                             fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF10B981),
+                            color: AppTheme.getMutedTextColor(context),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            '${_applications.length} Active Applications',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF10B981),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Application Pipeline Tracker 📊',
+                              style: AppTheme.getDisplayFont(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.getTextColor(context),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Kanban board to track job applications from saved matches to offers.',
+                              style: AppTheme.getBodyFont(
+                                fontSize: 14,
+                                color: AppTheme.getMutedTextColor(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
+                          ),
+                          child: Text(
+                            '${_applications.length} Active Applications',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF10B981),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 28),
 
                   // Kanban Columns Layout

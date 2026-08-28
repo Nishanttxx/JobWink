@@ -191,14 +191,17 @@ class _FooterSectionState extends State<FooterSection> {
               size: 16,
             ),
             const SizedBox(width: 6),
-            Text(
-              BackendConfig.adminEmail.isNotEmpty
-                  ? BackendConfig.adminEmail
-                  : 'contact@jobwink.app',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.primaryOrange,
+            Flexible(
+              child: Text(
+                BackendConfig.adminEmail.isNotEmpty
+                    ? BackendConfig.adminEmail
+                    : 'contact@jobwink.app',
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primaryOrange,
+                ),
               ),
             ),
           ],

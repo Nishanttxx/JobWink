@@ -1009,6 +1009,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         ],
       ),
       child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
         scrollDirection: Axis.horizontal,
         child: Row(
           children: steps.asMap().entries.map((entry) {
@@ -1561,75 +1562,147 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ),
               ),
             ],
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _openFullPreviewDialog,
-                    icon: Icon(
-                      Icons.visibility_rounded,
-                      size: 20,
-                      color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
-                    ),
-                    label: Text(
-                      'Preview Resume',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+            if (!isDesktop)
+              Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _openFullPreviewDialog,
+                      icon: Icon(
+                        Icons.visibility_rounded,
+                        size: 20,
                         color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
                       ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      side: BorderSide(
-                        color: exportValidation.isValid
-                            ? AppTheme.primaryOrange
-                            : const Color(0xFF8B949E).withValues(alpha: 0.5),
-                        width: 1.5,
+                      label: Text(
+                        'Preview Resume',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                        ),
                       ),
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: exportValidation.isValid
+                              ? AppTheme.primaryOrange
+                              : const Color(0xFF8B949E).withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: (exportValidation.isValid && !_isDownloadingResume)
-                        ? () => _showExportModal(context)
-                        : null,
-                    icon: _isDownloadingResume
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.download_rounded, size: 20),
-                    label: Text(
-                      _isDownloadingResume
-                          ? 'Generating Resume...'
-                          : 'Download Tailored Resume (PDF / DOCX) →',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: (exportValidation.isValid && !_isDownloadingResume)
+                          ? () => _showExportModal(context)
+                          : null,
+                      icon: _isDownloadingResume
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(
+                        _isDownloadingResume
+                            ? 'Generating Resume...'
+                            : 'Download Tailored Resume →',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: exportValidation.isValid ? 2 : 0,
                       ),
                     ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      elevation: exportValidation.isValid ? 2 : 0,
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _openFullPreviewDialog,
+                      icon: Icon(
+                        Icons.visibility_rounded,
+                        size: 20,
+                        color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                      ),
+                      label: Text(
+                        'Preview Resume',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: exportValidation.isValid
+                              ? AppTheme.primaryOrange
+                              : const Color(0xFF8B949E).withValues(alpha: 0.5),
+                          width: 1.5,
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton.icon(
+                      onPressed: (exportValidation.isValid && !_isDownloadingResume)
+                          ? () => _showExportModal(context)
+                          : null,
+                      icon: _isDownloadingResume
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : const Icon(Icons.download_rounded, size: 20),
+                      label: Text(
+                        _isDownloadingResume
+                            ? 'Generating Resume...'
+                            : 'Download Tailored Resume (PDF / DOCX) →',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        elevation: exportValidation.isValid ? 2 : 0,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             const SizedBox(height: 24),
             _buildSubPageNavigationFooter(
               prevTitle: '← Back: Target Job',

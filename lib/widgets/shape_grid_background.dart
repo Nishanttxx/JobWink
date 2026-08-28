@@ -75,23 +75,15 @@ class _ShapeGridBackgroundState extends State<ShapeGridBackground>
   }
 
   void _onNotifierPositionChanged() {
-    if (mounted) {
-      setState(() {
-        _localMousePosition = widget.mousePositionNotifier?.value;
-      });
-    }
+    _localMousePosition = widget.mousePositionNotifier?.value;
   }
 
   void _onHover(PointerEvent event) {
-    setState(() {
-      _localMousePosition = event.localPosition;
-    });
+    _localMousePosition = event.localPosition;
   }
 
   void _onHoverExit(PointerEvent event) {
-    setState(() {
-      _localMousePosition = null;
-    });
+    _localMousePosition = null;
   }
 
   void _updateCellOpacities() {
@@ -201,23 +193,25 @@ class _ShapeGridBackgroundState extends State<ShapeGridBackground>
       onHover: _onHover,
       onExit: _onHoverExit,
       opaque: false,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, child) {
-          return CustomPaint(
-            painter: _ShapeGridPainter(
-              animationValue: _controller.value,
-              speed: widget.speed,
-              squareSize: widget.squareSize,
-              direction: widget.direction,
-              shape: widget.shape,
-              borderColor: defaultBorderColor,
-              hoverFillColor: defaultHoverFillColor,
-              cellOpacities: Map.unmodifiable(_cellOpacities),
-            ),
-            size: Size.infinite,
-          );
-        },
+      child: RepaintBoundary(
+        child: AnimatedBuilder(
+          animation: _controller,
+          builder: (context, child) {
+            return CustomPaint(
+              painter: _ShapeGridPainter(
+                animationValue: _controller.value,
+                speed: widget.speed,
+                squareSize: widget.squareSize,
+                direction: widget.direction,
+                shape: widget.shape,
+                borderColor: defaultBorderColor,
+                hoverFillColor: defaultHoverFillColor,
+                cellOpacities: Map.unmodifiable(_cellOpacities),
+              ),
+              size: Size.infinite,
+            );
+          },
+        ),
       ),
     );
   }
@@ -278,37 +272,59 @@ class _ShapeGridPainter extends CustomPainter {
     final double startX = -offsetX;
     final double startY = -offsetY;
 
-    for (int r = 0; r < rows; r++) {
-      for (int c = 0; c < cols; c++) {
+    // 1. Draw Cell Hover Highlight Fill if any active
+    if (cellOpacities.isNotEmpty) {
+      for (final entry in cellOpacities.entries) {
+        final alpha = entry.value;
+        if (alpha <= 0.005) continue;
+        final coords = entry.key.split(',');
+        if (coords.length != 2) continue;
+        final c = int.tryParse(coords[0]);
+        final r = int.tryParse(coords[1]);
+        if (c == null || r == null) continue;
         final double x = startX + (c * squareSize);
         final double y = startY + (r * squareSize);
         final Rect cellRect = Rect.fromLTWH(x, y, squareSize, squareSize);
-        final String cellKey = '$c,$r';
-        final double alpha = cellOpacities[cellKey] ?? 0.0;
 
-        // Draw Cell Hover Highlight Fill if opacity > 0
-        if (alpha > 0.005) {
-          final Paint fillPaint = Paint()
-            ..color = hoverFillColor.withValues(
-              alpha: (hoverFillColor.a * alpha).clamp(0.0, 1.0),
-            )
-            ..style = PaintingStyle.fill;
+        final Paint fillPaint = Paint()
+          ..color = hoverFillColor.withValues(
+            alpha: (hoverFillColor.a * alpha).clamp(0.0, 1.0),
+          )
+          ..style = PaintingStyle.fill;
 
-          if (shape == ShapeGridShape.square) {
-            canvas.drawRect(cellRect.deflate(0.5), fillPaint);
-          } else {
-            canvas.drawCircle(
-              Offset(x + squareSize / 2, y + squareSize / 2),
-              (squareSize / 2 - 1) * alpha,
-              fillPaint,
-            );
-          }
-        }
-
-        // Draw Cell Grid Border
         if (shape == ShapeGridShape.square) {
-          canvas.drawRect(cellRect, borderPaint);
+          canvas.drawRect(cellRect.deflate(0.5), fillPaint);
         } else {
+          canvas.drawCircle(
+            Offset(x + squareSize / 2, y + squareSize / 2),
+            (squareSize / 2 - 1) * alpha,
+            fillPaint,
+          );
+        }
+      }
+    }
+
+    // 2. Draw Grid Lines efficiently
+    if (shape == ShapeGridShape.square) {
+      final double endX = startX + (cols * squareSize);
+      final double endY = startY + (rows * squareSize);
+
+      // Horizontal grid lines
+      for (int r = 0; r <= rows; r++) {
+        final double y = startY + (r * squareSize);
+        canvas.drawLine(Offset(startX, y), Offset(endX, y), borderPaint);
+      }
+
+      // Vertical grid lines
+      for (int c = 0; c <= cols; c++) {
+        final double x = startX + (c * squareSize);
+        canvas.drawLine(Offset(x, startY), Offset(x, endY), borderPaint);
+      }
+    } else {
+      for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+          final double x = startX + (c * squareSize);
+          final double y = startY + (r * squareSize);
           canvas.drawCircle(
             Offset(x + squareSize / 2, y + squareSize / 2),
             squareSize / 2,

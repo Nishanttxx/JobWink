@@ -39,6 +39,7 @@ class _HeroSectionState extends State<HeroSection> {
         color: Colors.transparent,
         child: Stack(
           alignment: Alignment.topCenter,
+          clipBehavior: Clip.hardEdge,
           children: [
 
             // Background Radial Glow Effect
@@ -394,8 +395,11 @@ class _HeroSectionState extends State<HeroSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
             children: [
               Text(
                 'ALEXANDER WRIGHT',
@@ -479,8 +483,11 @@ class _HeroSectionState extends State<HeroSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 6,
             children: [
               Text(
                 'Job Match & ATS Rating',

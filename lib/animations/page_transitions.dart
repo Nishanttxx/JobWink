@@ -101,15 +101,15 @@ class AppRouteTransitions {
     return PageRouteBuilder(
       settings: settings,
       pageBuilder: (context, animation, secondaryAnimation) => targetScreen,
-      transitionDuration: const Duration(milliseconds: 380),
+      transitionDuration: const Duration(milliseconds: 220),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curve = CurvedAnimation(
           parent: animation,
-          curve: Curves.fastOutSlowIn,
+          curve: Curves.easeOutCubic,
         );
         return SlideTransition(
           position: Tween<Offset>(
-            begin: const Offset(1.0, 0.0),
+            begin: const Offset(0.04, 0.0),
             end: Offset.zero,
           ).animate(curve),
           child: FadeTransition(opacity: curve, child: child),

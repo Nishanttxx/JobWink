@@ -226,9 +226,17 @@ class _InfiniteLogoMarqueeState extends State<InfiniteLogoMarquee>
   late AnimationController _animController;
   bool _isHovered = false;
 
+  late final List<String> _repeatedLogos;
+
   @override
   void initState() {
     super.initState();
+    _repeatedLogos = [
+      ...widget.logos,
+      ...widget.logos,
+      ...widget.logos,
+      ...widget.logos,
+    ];
     _scrollController = ScrollController();
     _animController = AnimationController(
       vsync: this,
@@ -267,40 +275,34 @@ class _InfiniteLogoMarqueeState extends State<InfiniteLogoMarquee>
 
   @override
   Widget build(BuildContext context) {
-    // Repeat logo set 4 times to ensure seamless infinite looping on any screen size
-    final repeatedLogos = [
-      ...widget.logos,
-      ...widget.logos,
-      ...widget.logos,
-      ...widget.logos,
-    ];
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: ShaderMask(
-        shaderCallback: (Rect bounds) {
-          return const LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [
-              Colors.transparent,
-              Colors.black,
-              Colors.black,
-              Colors.transparent,
-            ],
-            stops: [0.0, 0.08, 0.92, 1.0],
-          ).createShader(bounds);
-        },
-        blendMode: BlendMode.dstIn,
-        child: SingleChildScrollView(
-          controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          physics: const NeverScrollableScrollPhysics(),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: repeatedLogos.map((logo) => widget.itemBuilder(logo)).toList(),
+    return RepaintBoundary(
+      child: MouseRegion(
+        onEnter: (_) => _isHovered = true,
+        onExit: (_) => _isHovered = false,
+        child: ShaderMask(
+          shaderCallback: (Rect bounds) {
+            return const LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Colors.transparent,
+                Colors.black,
+                Colors.black,
+                Colors.transparent,
+              ],
+              stops: [0.0, 0.08, 0.92, 1.0],
+            ).createShader(bounds);
+          },
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            physics: const NeverScrollableScrollPhysics(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: _repeatedLogos.map((logo) => widget.itemBuilder(logo)).toList(),
+            ),
           ),
         ),
       ),

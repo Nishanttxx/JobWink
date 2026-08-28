@@ -134,32 +134,33 @@ class _ProductPreviewSectionState extends State<ProductPreviewSection> {
                                     _dot(const Color(0xFF27C93F)),
                                   ],
                                 ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 14, vertical: 5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withAlpha(20),
-                                    borderRadius: BorderRadius.circular(16),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.lock_outline_rounded,
-                                        size: 13,
-                                        color: Colors.white70,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'jobwink.com/studio/resume-builder',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 12,
+                                if (screenWidth >= 600)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withAlpha(20),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.lock_outline_rounded,
+                                          size: 13,
                                           color: Colors.white70,
-                                          fontWeight: FontWeight.w500,
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          'jobwink.com/studio/resume-builder',
+                                          style: GoogleFonts.plusJakartaSans(
+                                            fontSize: 12,
+                                            color: Colors.white70,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
                                 Row(
                                   children: [
                                     Container(
@@ -424,10 +425,14 @@ class _ProductPreviewSectionState extends State<ProductPreviewSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   CircleAvatar(
                     radius: 16,

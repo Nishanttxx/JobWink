@@ -604,25 +604,31 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
           const SizedBox(height: 12),
 
           // Row 2: Metadata / Date Details
-          Row(
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 6,
+            runSpacing: 4,
             children: [
-              Icon(
-                Icons.access_time_rounded,
-                size: 14,
-                color: AppTheme.getMutedTextColor(context),
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'Last updated: ${item.formattedUpdatedDate}',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 12,
-                  color: AppTheme.getMutedTextColor(context),
-                ),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.access_time_rounded,
+                    size: 14,
+                    color: AppTheme.getMutedTextColor(context),
+                  ),
+                  const SizedBox(width: 5),
+                  Text(
+                    'Last updated: ${item.formattedUpdatedDate}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: AppTheme.getMutedTextColor(context),
+                    ),
+                  ),
+                ],
               ),
               if (item.resumeData.experience.isNotEmpty || item.resumeData.skills.isNotEmpty) ...[
-                const SizedBox(width: 12),
                 Text('•', style: TextStyle(color: AppTheme.getMutedTextColor(context))),
-                const SizedBox(width: 12),
                 Text(
                   '${item.resumeData.experience.length} exp, ${item.resumeData.skills.length} skills',
                   style: GoogleFonts.plusJakartaSans(

@@ -23,9 +23,12 @@ import 'widgets/product_preview_section.dart';
 import 'widgets/shape_grid_background.dart';
 import 'widgets/steps_section.dart';
 import 'screens/main_dashboard_wrapper.dart';
+import 'package:visibility_detector/visibility_detector.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  VisibilityDetectorController.instance.updateInterval =
+      const Duration(milliseconds: 100);
 
   // Catch asynchronous platform & background auth exceptions gracefully
   FlutterError.onError = (FlutterErrorDetails details) {
@@ -256,22 +259,25 @@ class _LandingPageState extends State<LandingPage> {
           _mousePositionNotifier.value = null;
         },
         child: Stack(
+          clipBehavior: Clip.hardEdge,
           children: [
             // 1. Continuous Full-Page Animated Geometric ShapeGrid Canvas
             Positioned.fill(
               child: IgnorePointer(
-                child: ShapeGridBackground(
-                  speed: 0.35,
-                  squareSize: 50.0,
-                  direction: ShapeGridDirection.diagonal,
-                  shape: ShapeGridShape.square,
-                  hoverTrailAmount: 8,
-                  mousePositionNotifier: _mousePositionNotifier,
-                  borderColor: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
-                  hoverFillColor: AppTheme.primaryOrange
-                      .withValues(alpha: isDark ? 0.22 : 0.15),
+                child: RepaintBoundary(
+                  child: ShapeGridBackground(
+                    speed: 0.35,
+                    squareSize: 50.0,
+                    direction: ShapeGridDirection.diagonal,
+                    shape: ShapeGridShape.square,
+                    hoverTrailAmount: 8,
+                    mousePositionNotifier: _mousePositionNotifier,
+                    borderColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    hoverFillColor: AppTheme.primaryOrange
+                        .withValues(alpha: isDark ? 0.22 : 0.15),
+                  ),
                 ),
               ),
             ),
@@ -280,17 +286,19 @@ class _LandingPageState extends State<LandingPage> {
             Positioned(
               top: -100,
               left: screenWidth / 2 - 350,
-              child: Container(
-                width: 700,
-                height: 450,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      AppTheme.primaryOrange.withAlpha(isDark ? 45 : 25),
-                      Colors.transparent,
-                    ],
-                    stops: const [0.0, 0.8],
+              child: RepaintBoundary(
+                child: Container(
+                  width: 700,
+                  height: 450,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppTheme.primaryOrange.withAlpha(isDark ? 45 : 25),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.8],
+                    ),
                   ),
                 ),
               ),
@@ -302,8 +310,10 @@ class _LandingPageState extends State<LandingPage> {
               child: Column(
                 children: [
                   // Sticky Navigation Bar
-                  HeaderNav(
-                    onNavClick: _scrollToSection,
+                  RepaintBoundary(
+                    child: HeaderNav(
+                      onNavClick: _scrollToSection,
+                    ),
                   ),
                   // Main Body with Lenis Smooth Scrolling
                   Expanded(
@@ -315,67 +325,83 @@ class _LandingPageState extends State<LandingPage> {
                         child: Column(
                           children: [
                             // 1. Hero Section
-                            Container(
-                              key: _heroKey,
-                              child: HeroSection(
-                                onStartFreeTap: () {
-                                  if (SupabaseService.instance.currentUser ==
-                                      null) {
-                                    debugPrint('[AUTH] Demo mode enabled');
-                                    DemoService.instance.enterDemoMode();
-                                  }
-                                  Navigator.pushNamed(context, '/dashboard');
-                                },
-                                onSeeHowItWorksTap: () =>
-                                    _scrollToSection('steps'),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _heroKey,
+                                child: HeroSection(
+                                  onStartFreeTap: () {
+                                    if (SupabaseService.instance.currentUser ==
+                                        null) {
+                                      debugPrint('[AUTH] Demo mode enabled');
+                                      DemoService.instance.enterDemoMode();
+                                    }
+                                    Navigator.pushNamed(context, '/dashboard');
+                                  },
+                                  onSeeHowItWorksTap: () =>
+                                      _scrollToSection('steps'),
+                                ),
                               ),
                             ),
 
                             // 2. Trust Banner / Logo Cloud
-                            const LogoCloud(),
+                            const RepaintBoundary(
+                              child: LogoCloud(),
+                            ),
 
                             // 3. Product & ATS Showcase Preview Section
-                            Container(
-                              key: _previewKey,
-                              child: ProductPreviewSection(
-                                onTryPreview: () => _scrollToSection('cta'),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _previewKey,
+                                child: ProductPreviewSection(
+                                  onTryPreview: () => _scrollToSection('cta'),
+                                ),
                               ),
                             ),
 
                             // 4. Core Features Section
-                            Container(
-                              key: _featuresKey,
-                              child: FeaturesSection(
-                                onFeatureTap: (key) => _scrollToSection('cta'),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _featuresKey,
+                                child: FeaturesSection(
+                                  onFeatureTap: (key) => _scrollToSection('cta'),
+                                ),
                               ),
                             ),
 
                             // 5. How It Works - 4 Step Section
-                            Container(
-                              key: _stepsKey,
-                              child: StepsSection(
-                                onGetStartedTap: () =>
-                                    _scrollToSection('cta'),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _stepsKey,
+                                child: StepsSection(
+                                  onGetStartedTap: () =>
+                                      _scrollToSection('cta'),
+                                ),
                               ),
                             ),
 
                             // 6. AI Intelligence & GitHub Import Showcase Section
-                            Container(
-                              key: _aiKey,
-                              child: AiIntelligenceSection(
-                                onTryTailoring: () => _scrollToSection('cta'),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _aiKey,
+                                child: AiIntelligenceSection(
+                                  onTryTailoring: () => _scrollToSection('cta'),
+                                ),
                               ),
                             ),
 
                             // 7. Final Call to Action & Sign-up Form Section
-                            Container(
-                              key: _ctaKey,
-                              child: const CtaFormSection(),
+                            RepaintBoundary(
+                              child: Container(
+                                key: _ctaKey,
+                                child: const CtaFormSection(),
+                              ),
                             ),
 
                             // 8. Footer Section
-                            FooterSection(
-                              onNavClick: _scrollToSection,
+                            RepaintBoundary(
+                              child: FooterSection(
+                                onNavClick: _scrollToSection,
+                              ),
                             ),
                           ],
                         ),

@@ -212,7 +212,10 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 4,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               Text(
                                 'Resume Preview',
@@ -222,7 +225,6 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                                   color: AppTheme.getTextColor(context),
                                 ),
                               ),
-                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                                 decoration: BoxDecoration(
@@ -519,23 +521,25 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                 ),
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        'A4 Standard (210 × 297 mm)',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.getMutedTextColor(context),
+                    if (!isMobile) ...[
+                      Expanded(
+                        child: Text(
+                          'A4 Standard (210 × 297 mm)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.getMutedTextColor(context),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(width: 8),
+                      const SizedBox(width: 8),
+                    ],
                     OutlinedButton(
                       onPressed: () => Navigator.of(context).pop(),
                       style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         side: BorderSide(color: AppTheme.getBorderColor(context)),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -549,30 +553,33 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: (hasResume && validation.isValid)
-                          ? () {
-                              Navigator.of(context).pop();
-                              widget.onDownload();
-                            }
-                          : null,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: Text(
-                        'Download Resume',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
+                    const SizedBox(width: 10),
+                    Expanded(
+                      flex: isMobile ? 1 : 0,
+                      child: ElevatedButton.icon(
+                        onPressed: (hasResume && validation.isValid)
+                            ? () {
+                                Navigator.of(context).pop();
+                                widget.onDownload();
+                              }
+                            : null,
+                        icon: const Icon(Icons.download_rounded, size: 18),
+                        label: Text(
+                          isMobile ? 'Download' : 'Download Resume',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppTheme.primaryOrange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryOrange,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          elevation: 2,
                         ),
-                        elevation: 2,
                       ),
                     ),
                   ],

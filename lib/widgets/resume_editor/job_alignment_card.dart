@@ -117,7 +117,7 @@ class JobAlignmentCard extends StatelessWidget {
             ),
             decoration: _inputDecoration(
               context,
-              'Machine Learning and Artificial Intelligence Engineer',
+              'e.g. Senior Software Engineer',
             ),
           ),
           const SizedBox(height: 12),
@@ -173,12 +173,14 @@ class JobAlignmentCard extends StatelessWidget {
               children: [
                 const Icon(Icons.info_outline_rounded, size: 12, color: Colors.amber),
                 const SizedBox(width: 4),
-                Text(
-                  'Job Description is required to tailor your resume and identify relevant keywords.',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.amber,
+                Expanded(
+                  child: Text(
+                    'Job Description is required to tailor your resume and identify relevant keywords.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.amber,
+                    ),
                   ),
                 ),
               ],

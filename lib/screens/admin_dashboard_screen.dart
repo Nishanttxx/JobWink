@@ -477,7 +477,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                final isWide = constraints.maxWidth >= 800;
+                final width = constraints.maxWidth;
                 final cards = [
                   _buildStatCard('Total Users', _isLoadingStats ? '...' : '$_totalUsers', Icons.people_outline, const Color(0xFF3B82F6)),
                   _buildStatCard('Active Users Today', _isLoadingStats ? '...' : '$_activeUsersToday', Icons.bolt, const Color(0xFF10B981)),
@@ -485,15 +485,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   _buildStatCard('Users At Limit', _isLoadingStats ? '...' : '$_usersAtLimit', Icons.lock_clock, const Color(0xFFEF4444)),
                 ];
 
-                if (isWide) {
+                if (width >= 900) {
                   return Row(
                     children: cards.map((c) => Expanded(child: Padding(padding: const EdgeInsets.only(right: 12), child: c))).toList(),
                   );
-                } else {
+                } else if (width >= 560) {
                   return Wrap(
                     spacing: 12,
                     runSpacing: 12,
-                    children: cards.map((c) => SizedBox(width: (constraints.maxWidth - 12) / 2, child: c)).toList(),
+                    children: cards.map((c) => SizedBox(width: (width - 12) / 2, child: c)).toList(),
+                  );
+                } else {
+                  return Column(
+                    children: cards.map((c) => Padding(padding: const EdgeInsets.only(bottom: 12), child: SizedBox(width: double.infinity, child: c))).toList(),
                   );
                 }
               },
@@ -501,10 +505,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             const SizedBox(height: 32),
 
             // ── 2. Users Table Header & Search ──
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final isMobile = constraints.maxWidth < 650;
+                final titleCol = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -521,9 +525,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       style: GoogleFonts.plusJakartaSans(fontSize: 13, color: const Color(0xFF8B949E)),
                     ),
                   ],
-                ),
-                SizedBox(
-                  width: 280,
+                );
+
+                final searchBox = SizedBox(
+                  width: isMobile ? double.infinity : 280,
                   child: TextField(
                     controller: _searchController,
                     onChanged: (val) {
@@ -553,8 +558,27 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     ),
                   ),
-                ),
-              ],
+                );
+
+                if (isMobile) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      titleCol,
+                      const SizedBox(height: 12),
+                      searchBox,
+                    ],
+                  );
+                } else {
+                  return Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      titleCol,
+                      searchBox,
+                    ],
+                  );
+                }
+              },
             ),
             const SizedBox(height: 16),
 
@@ -682,114 +706,163 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ? '${user.createdAt!.year}-${user.createdAt!.month.toString().padLeft(2, '0')}-${user.createdAt!.day.toString().padLeft(2, '0')}'
         : '';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Color(0xFF21262D))),
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.2),
-            child: Text(
-              displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
-              style: GoogleFonts.plusJakartaSans(color: AppTheme.primaryOrange, fontWeight: FontWeight.bold),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 600;
+
+        final avatar = CircleAvatar(
+          backgroundColor: AppTheme.primaryOrange.withValues(alpha: 0.2),
+          child: Text(
+            displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U',
+            style: GoogleFonts.plusJakartaSans(color: AppTheme.primaryOrange, fontWeight: FontWeight.bold),
           ),
-          const SizedBox(width: 14),
-          Expanded(
+        );
+
+        final userDetails = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    displayName,
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (BackendConfig.adminEmail.isNotEmpty && user.email == BackendConfig.adminEmail) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(color: const Color(0xFF8B5CF6)),
+                    ),
+                    child: Text(
+                      'ADMIN',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFFC4B5FD),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              user.email,
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            if (createdDateStr.isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                'Registered: $createdDateStr',
+                style: GoogleFonts.plusJakartaSans(color: const Color(0xFF6E7681), fontSize: 11),
+              ),
+            ],
+          ],
+        );
+
+        final quotaBadge = Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isAtLimit
+                ? const Color(0xFFEF4444).withValues(alpha: 0.15)
+                : const Color(0xFF10B981).withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: isAtLimit ? const Color(0xFFEF4444) : const Color(0xFF10B981)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: isMobile ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+            children: [
+              Text(
+                '${user.usageCount} / ${user.dailyLimit} Used',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  color: isAtLimit ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                ),
+              ),
+              Text(
+                '${user.remaining} remaining today',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 10,
+                  color: isAtLimit ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
+                ),
+              ),
+            ],
+          ),
+        );
+
+        final actionButtons = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              onPressed: () => _showEditLimitModal(user),
+              tooltip: 'Change Daily Limit',
+              icon: const Icon(Icons.tune_rounded, color: AppTheme.primaryOrange, size: 20),
+            ),
+            IconButton(
+              onPressed: () => _resetUserUsage(user.userId, user.email),
+              tooltip: 'Reset Today\'s Usage',
+              icon: const Icon(Icons.restore_rounded, color: Color(0xFF8B949E), size: 20),
+            ),
+          ],
+        );
+
+        if (isMobile) {
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: Color(0xFF21262D))),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Text(
-                      displayName,
-                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                    ),
-                    if (BackendConfig.adminEmail.isNotEmpty && user.email == BackendConfig.adminEmail) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF8B5CF6).withValues(alpha: 0.2),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: const Color(0xFF8B5CF6)),
-                        ),
-                        child: Text(
-                          'ADMIN',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 9,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFFC4B5FD),
-                          ),
-                        ),
-                      ),
-                    ],
+                    avatar,
+                    const SizedBox(width: 12),
+                    Expanded(child: userDetails),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  user.email,
-                  style: GoogleFonts.plusJakartaSans(color: const Color(0xFF8B949E), fontSize: 12),
-                ),
-                if (createdDateStr.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'Registered: $createdDateStr',
-                    style: GoogleFonts.plusJakartaSans(color: const Color(0xFF6E7681), fontSize: 11),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: BoxDecoration(
-              color: isAtLimit
-                  ? const Color(0xFFEF4444).withValues(alpha: 0.15)
-                  : const Color(0xFF10B981).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isAtLimit ? const Color(0xFFEF4444) : const Color(0xFF10B981)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${user.usageCount} / ${user.dailyLimit} Used',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: isAtLimit ? const Color(0xFFEF4444) : const Color(0xFF10B981),
-                  ),
-                ),
-                Text(
-                  '${user.remaining} remaining today',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10,
-                    color: isAtLimit ? const Color(0xFFFCA5A5) : const Color(0xFF6EE7B7),
-                  ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    quotaBadge,
+                    actionButtons,
+                  ],
                 ),
               ],
             ),
+          );
+        }
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: Color(0xFF21262D))),
           ),
-          const SizedBox(width: 14),
-          Row(
+          child: Row(
             children: [
-              IconButton(
-                onPressed: () => _showEditLimitModal(user),
-                tooltip: 'Change Daily Limit',
-                icon: const Icon(Icons.tune_rounded, color: AppTheme.primaryOrange, size: 20),
-              ),
-              IconButton(
-                onPressed: () => _resetUserUsage(user.userId, user.email),
-                tooltip: 'Reset Today\'s Usage',
-                icon: const Icon(Icons.restore_rounded, color: Color(0xFF8B949E), size: 20),
-              ),
+              avatar,
+              const SizedBox(width: 14),
+              Expanded(child: userDetails),
+              quotaBadge,
+              const SizedBox(width: 14),
+              actionButtons,
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

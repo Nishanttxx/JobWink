@@ -198,7 +198,7 @@ class _SkillsKeywordsCardState extends State<SkillsKeywordsCard> {
                   decoration: InputDecoration(
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    hintText: 'Search and filter (React, Beautiful Soup, Data Science...)',
+                    hintText: 'Search or add skills...',
                     hintStyle: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
                       color: AppTheme.getMutedTextColor(context).withValues(alpha: 0.6),

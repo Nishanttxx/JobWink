@@ -324,10 +324,14 @@ class _AiIntelligenceSectionState extends State<AiIntelligenceSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
                     Icons.auto_awesome,
@@ -335,12 +339,14 @@ class _AiIntelligenceSectionState extends State<AiIntelligenceSection> {
                     size: 18,
                   ),
                   const SizedBox(width: 8),
-                  Text(
-                    _features[_activeTab]['title'] as String,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      color: AppTheme.getTextColor(context),
+                  Flexible(
+                    child: Text(
+                      _features[_activeTab]['title'] as String,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.getTextColor(context),
+                      ),
                     ),
                   ),
                 ],
@@ -436,12 +442,15 @@ class _AiIntelligenceSectionState extends State<AiIntelligenceSection> {
           children: [
             const Icon(Icons.link_rounded, color: AppTheme.primaryOrange, size: 16),
             const SizedBox(width: 6),
-            Text(
-              'https://github.com/Nishanttxx/Jobwink',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.getTextColor(context),
+            Expanded(
+              child: Text(
+                'https://github.com/Nishanttxx/Jobwink',
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.getTextColor(context),
+                ),
               ),
             ),
           ],
@@ -602,12 +611,14 @@ class _AiIntelligenceSectionState extends State<AiIntelligenceSection> {
           const Icon(Icons.check_circle_rounded,
               size: 14, color: AppTheme.primaryOrange),
           const SizedBox(width: 8),
-          Text(
-            text,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.getTextColor(context),
+          Flexible(
+            child: Text(
+              text,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.getTextColor(context),
+              ),
             ),
           ),
         ],

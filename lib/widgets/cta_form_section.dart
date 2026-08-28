@@ -448,9 +448,10 @@ class _CtaFormSectionState extends State<CtaFormSection> {
 
   Widget _buildSignUpCard(BuildContext context) {
     final isDark = AppTheme.isDarkMode(context);
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Container(
-      padding: const EdgeInsets.all(28),
+      padding: EdgeInsets.all(screenWidth < 600 ? 20 : 28),
       decoration: BoxDecoration(
         color: AppTheme.getSurfaceColor(context),
         borderRadius: BorderRadius.circular(24),
@@ -743,7 +744,7 @@ class _CtaFormSectionState extends State<CtaFormSection> {
                       ? null
                       : () => _handleOAuth(OAuthProvider.google),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                     side: BorderSide(color: AppTheme.getBorderColor(context)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -774,7 +775,7 @@ class _CtaFormSectionState extends State<CtaFormSection> {
                       ? null
                       : () => _handleOAuth(OAuthProvider.github),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
                     side: BorderSide(color: AppTheme.getBorderColor(context)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),

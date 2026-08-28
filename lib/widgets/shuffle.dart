@@ -59,6 +59,18 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
   static const String _scrambleChars =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*()';
 
+  final Map<String, double> _charWidthCache = {};
+
+  double _measureCharWidth(String char, TextStyle style) {
+    return _charWidthCache.putIfAbsent(char, () {
+      final textPainter = TextPainter(
+        text: TextSpan(text: char, style: style),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      return textPainter.width;
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -73,7 +85,10 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text != widget.text ||
         oldWidget.duration != widget.duration ||
-        oldWidget.stagger != widget.stagger) {
+        oldWidget.stagger != widget.stagger ||
+        oldWidget.style != widget.style ||
+        oldWidget.fontSize != widget.fontSize) {
+      _charWidthCache.clear();
       _controller.duration = _calculateTotalDuration();
       if (_hasTriggered) {
         _controller.forward(from: 0.0);
@@ -217,12 +232,7 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
                 displayChar = char;
               }
 
-              // Measure exact character width to prevent layout jitter
-              final textPainter = TextPainter(
-                text: TextSpan(text: char, style: baseStyle),
-                textDirection: TextDirection.ltr,
-              )..layout();
-              final charWidth = textPainter.width;
+              final charWidth = _measureCharWidth(char, baseStyle);
 
               wordCharWidgets.add(
                 SizedBox(

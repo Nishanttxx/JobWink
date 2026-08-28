@@ -226,7 +226,10 @@ Key Requirements:
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -251,7 +254,6 @@ Key Requirements:
                 ],
               ),
             ),
-            const SizedBox(width: 12),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -449,54 +451,42 @@ Key Requirements:
             ),
             const SizedBox(height: 14),
 
-            if (_showFeaturesPanel) _buildFeaturesReviewPanel(context, isDarkMode),
+            if (_showFeaturesPanel)
+              _buildFeaturesReviewPanel(context, isDarkMode),
+
             const SizedBox(height: 24),
 
-            // Action submit button
+            // Submit Button
             SizedBox(
               width: double.infinity,
               height: 52,
-              child: ElevatedButton(
-                onPressed: _isPredicting ? null : _runPrediction,
+              child: ElevatedButton.icon(
+                onPressed: (_isLoadingFeatures || _isPredicting) ? null : _runPrediction,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primaryOrange,
                   foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.radiusLg)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+                  ),
+                  elevation: 2,
                 ),
-                child: _isPredicting
-                    ? Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
-                          ),
-                          const SizedBox(width: 12),
-                          Text(
-                            'Evaluating ML Pipelines...',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                icon: _isPredicting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
                       )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(Icons.bolt_rounded, size: 22),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Predict Match Probability',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
+                    : const Icon(Icons.auto_awesome_rounded, size: 20),
+                label: Text(
+                  _isPredicting ? 'Evaluating ML Match Probability...' : 'Predict Match Probability →',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
@@ -530,8 +520,11 @@ Key Requirements:
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(isMobile ? 12 : 16),
       decoration: BoxDecoration(
         color: isDarkMode ? const Color(0xFF1F222B) : const Color(0xFFF8F5EE),
         borderRadius: BorderRadius.circular(AppTheme.radiusLg),
@@ -539,44 +532,59 @@ Key Requirements:
       ),
       child: Column(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField('Extracted Job Role', _roleController),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildTextField('Experience (Years)', _expYearsController, isNumeric: true),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
+          if (isMobile) ...[
+            _buildTextField('Extracted Job Role', _roleController),
+            const SizedBox(height: 10),
+            _buildTextField('Experience (Years)', _expYearsController, isNumeric: true),
+          ] else
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTextField('Extracted Job Role', _roleController),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildTextField('Experience (Years)', _expYearsController, isNumeric: true),
+                ),
+              ],
+            ),
+          const SizedBox(height: 10),
           // Multi-line skills field to avoid clipping
           _buildTextField('Skills (Comma separated)', _skillsController, maxLines: 3),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField('Certifications', _certsController),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildTextField('Education Degree', _eduController),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildTextField('Salary Expectation (\$)', _salaryController, isNumeric: true),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildTextField('Projects Count', _projCountController, isNumeric: true),
-              ),
-            ],
-          ),
+          const SizedBox(height: 10),
+          if (isMobile) ...[
+            _buildTextField('Certifications', _certsController),
+            const SizedBox(height: 10),
+            _buildTextField('Education Degree', _eduController),
+            const SizedBox(height: 10),
+            _buildTextField('Salary Expectation (\$)', _salaryController, isNumeric: true),
+            const SizedBox(height: 10),
+            _buildTextField('Projects Count', _projCountController, isNumeric: true),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTextField('Certifications', _certsController),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildTextField('Education Degree', _eduController),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTextField('Salary Expectation (\$)', _salaryController, isNumeric: true),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildTextField('Projects Count', _projCountController, isNumeric: true),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -46,20 +46,6 @@ class _AppSidebarState extends State<AppSidebar> {
   @override
   Widget build(BuildContext context) {
     final isDarkMode = AppTheme.isDarkMode(context);
-    final jobColor = AppTheme.getTextColor(context);
-    final winkColor = AppTheme.primaryOrange;
-    final bgColor = AppTheme.getSurfaceColor(context);
-
-    debugPrint('============================================================');
-    debugPrint('[LOGO-THEME-DEBUG]');
-    debugPrint('Theme: ${isDarkMode ? "dark" : "light"}');
-    debugPrint('Job color: $jobColor');
-    debugPrint('Wink color: $winkColor');
-    debugPrint('Background: $bgColor');
-    debugPrint('Job visible: YES');
-    debugPrint('Wink visible: YES');
-    debugPrint('Contrast issue: NO');
-    debugPrint('============================================================');
 
     final auth = AuthProviderScope.of(context);
     final user = auth.currentUser;

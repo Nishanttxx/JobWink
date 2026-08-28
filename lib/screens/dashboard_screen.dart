@@ -242,12 +242,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final cardWidth = width >= 1024
+            ? (width - 48) / 4
+            : (width >= 600 ? (width - 16) / 2 : width);
+
         return Wrap(
           spacing: 16,
           runSpacing: 16,
           children: actions.map((act) {
-            final cardWidth = isDesktop ? (constraints.maxWidth - 48) / 4 : (constraints.maxWidth);
-
             return GestureDetector(
               onTap: () => Navigator.pushNamed(context, act['route'] as String),
               child: Container(
