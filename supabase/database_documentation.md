@@ -11,7 +11,7 @@ The schema defines **10 core tables**, complete with UUID primary keys, foreign 
 - **DBMS**: PostgreSQL 15+ (Supabase Managed)
 - **Extensions**:
   - `uuid-ossp`: UUID primary key utilities.
-  - `pgvector`: 768-dimensional vector embeddings search (`IVFFlat` cosine distance).
+  - `vector`: 768-dimensional vector embeddings search (`IVFFlat` cosine distance).
   - `pg_trgm`: Trigram matching for high-performance fuzzy text searching.
 
 ---
