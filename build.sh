@@ -120,6 +120,33 @@ echo "Running flutter clean..."
 echo "Running flutter pub get on Jobwink..."
 "$FLUTTER_BIN" pub get
 
+echo "============================================================"
+echo "CHECKING PRODUCTION BUILD-TIME ENVIRONMENT VARIABLES"
+echo "============================================================"
+echo "SUPABASE_URL is configured: ${SUPABASE_URL:+YES}"
+echo "SUPABASE_ANON_KEY is configured: ${SUPABASE_ANON_KEY:+YES}"
+echo "BACKEND_URL is configured: ${BACKEND_URL:+YES}"
+echo "ADMIN_EMAIL is configured: ${ADMIN_EMAIL:+YES}"
+echo "GEMINI_API_KEY is configured: ${GEMINI_API_KEY:+YES}"
+echo "OPENAI_API_KEY is configured: ${OPENAI_API_KEY:+YES}"
+echo "GROQ_API_KEY is configured: ${GROQ_API_KEY:+YES}"
+echo "XAI_API_KEY is configured: ${XAI_API_KEY:+YES}"
+echo "MISTRAL_API_KEY is configured: ${MISTRAL_API_KEY:+YES}"
+echo "CEREBRAS_API_KEY is configured: ${CEREBRAS_API_KEY:+YES}"
+echo "NVIDIA_API_KEY is configured: ${NVIDIA_API_KEY:+YES}"
+echo "============================================================"
+
+# Verification check if essential public variables are missing in production
+if [ -z "$SUPABASE_URL" ] && [ ! -f ".env" ]; then
+    echo "WARNING: SUPABASE_URL is not set in Cloudflare environment variables!"
+    echo "Please add SUPABASE_URL in Cloudflare Pages -> Settings -> Environment variables."
+fi
+
+if [ -z "$SUPABASE_ANON_KEY" ] && [ ! -f ".env" ]; then
+    echo "WARNING: SUPABASE_ANON_KEY is not set in Cloudflare environment variables!"
+    echo "Please add SUPABASE_ANON_KEY in Cloudflare Pages -> Settings -> Environment variables."
+fi
+
 # Build production web bundle with environment variables
 BUILD_ARGS=()
 
@@ -132,12 +159,12 @@ fi
 
 # Public client-side configuration variables
 if [ -n "$SUPABASE_URL" ]; then
-    echo "Injecting SUPABASE_URL from environment: $SUPABASE_URL"
+    echo "Injecting SUPABASE_URL into Flutter build arguments"
     BUILD_ARGS+=("--dart-define=SUPABASE_URL=$SUPABASE_URL")
 fi
 
 if [ -n "$SUPABASE_ANON_KEY" ]; then
-    echo "Injecting SUPABASE_ANON_KEY from environment (length: ${#SUPABASE_ANON_KEY})"
+    echo "Injecting SUPABASE_ANON_KEY into Flutter build arguments"
     BUILD_ARGS+=("--dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY")
 fi
 
