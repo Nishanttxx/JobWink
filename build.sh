@@ -120,97 +120,105 @@ echo "Running flutter clean..."
 echo "Running flutter pub get on Jobwink..."
 "$FLUTTER_BIN" pub get
 
+# Automatically load local .env variables if present (for local testing/builds)
+if [ -f "$JOBWINK_ROOT/.env" ]; then
+    echo "Local .env file detected; loading environment variables..."
+    while IFS='=' read -r key val || [ -n "$key" ]; do
+        # Trim leading/trailing whitespace
+        key=$(echo "$key" | xargs)
+        # Skip comments and empty lines
+        if [[ -n "$key" && ! "$key" =~ ^# ]]; then
+            # Remove any surrounding quotes from value
+            val=$(echo "$val" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+            # Only set if not already present in environment
+            if [ -z "${!key}" ]; then
+                export "$key"="$val"
+            fi
+        fi
+    done < "$JOBWINK_ROOT/.env"
+fi
+
 echo "============================================================"
 echo "CHECKING PRODUCTION BUILD-TIME ENVIRONMENT VARIABLES"
 echo "============================================================"
-echo "SUPABASE_URL is configured: ${SUPABASE_URL:+YES}"
-echo "SUPABASE_ANON_KEY is configured: ${SUPABASE_ANON_KEY:+YES}"
-echo "BACKEND_URL is configured: ${BACKEND_URL:+YES}"
-echo "ADMIN_EMAIL is configured: ${ADMIN_EMAIL:+YES}"
-echo "GEMINI_API_KEY is configured: ${GEMINI_API_KEY:+YES}"
-echo "OPENAI_API_KEY is configured: ${OPENAI_API_KEY:+YES}"
-echo "GROQ_API_KEY is configured: ${GROQ_API_KEY:+YES}"
-echo "XAI_API_KEY is configured: ${XAI_API_KEY:+YES}"
-echo "MISTRAL_API_KEY is configured: ${MISTRAL_API_KEY:+YES}"
-echo "CEREBRAS_API_KEY is configured: ${CEREBRAS_API_KEY:+YES}"
-echo "NVIDIA_API_KEY is configured: ${NVIDIA_API_KEY:+YES}"
+echo "SUPABASE_URL_PRESENT: ${SUPABASE_URL:+YES}"
+echo "SUPABASE_ANON_KEY_PRESENT: ${SUPABASE_ANON_KEY:+YES}"
+echo "BACKEND_URL_PRESENT: ${BACKEND_URL:+YES}"
+echo "ADMIN_EMAIL_PRESENT: ${ADMIN_EMAIL:+YES}"
+echo "GEMINI_API_KEY_PRESENT: ${GEMINI_API_KEY:+YES}"
+echo "OPENAI_API_KEY_PRESENT: ${OPENAI_API_KEY:+YES}"
+echo "GROQ_API_KEY_PRESENT: ${GROQ_API_KEY:+YES}"
+echo "XAI_API_KEY_PRESENT: ${XAI_API_KEY:+YES}"
+echo "MISTRAL_API_KEY_PRESENT: ${MISTRAL_API_KEY:+YES}"
+echo "CEREBRAS_API_KEY_PRESENT: ${CEREBRAS_API_KEY:+YES}"
+echo "NVIDIA_API_KEY_PRESENT: ${NVIDIA_API_KEY:+YES}"
 echo "============================================================"
 
-# Verification check if essential public variables are missing in production
-if [ -z "$SUPABASE_URL" ] && [ ! -f ".env" ]; then
-    echo "WARNING: SUPABASE_URL is not set in Cloudflare environment variables!"
-    echo "Please add SUPABASE_URL in Cloudflare Pages -> Settings -> Environment variables."
+# Verification check: Fail fast if essential Supabase credentials are missing
+if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
+    echo ""
+    echo "FATAL BUILD ERROR: Supabase production configuration is missing!"
+    echo "SUPABASE_URL_PRESENT: ${SUPABASE_URL:+YES:-NO}"
+    echo "SUPABASE_ANON_KEY_PRESENT: ${SUPABASE_ANON_KEY:+YES:-NO}"
+    echo ""
+    echo "Action required:"
+    echo "1. Go to Cloudflare Pages Dashboard -> Jobwink -> Settings -> Environment variables."
+    echo "2. Add SUPABASE_URL and SUPABASE_ANON_KEY under the Production environment."
+    echo "3. Save and trigger a new deployment."
+    echo ""
+    exit 1
 fi
 
-if [ -z "$SUPABASE_ANON_KEY" ] && [ ! -f ".env" ]; then
-    echo "WARNING: SUPABASE_ANON_KEY is not set in Cloudflare environment variables!"
-    echo "Please add SUPABASE_ANON_KEY in Cloudflare Pages -> Settings -> Environment variables."
-fi
+# Build a temporary JSON file for --dart-define-from-file to safely pass all config
+DEFINES_JSON="$JOBWINK_ROOT/dart_defines.json"
+trap 'rm -f "$DEFINES_JSON"' EXIT INT TERM
 
-# Build production web bundle with environment variables
-BUILD_ARGS=()
+# Create valid JSON from environment variables
+python3 -c "
+import os, json
+keys = [
+    'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'BACKEND_URL', 'ADMIN_EMAIL',
+    'GEMINI_API_KEY', 'GCP_PROJECT_NUMBER', 'OPENAI_API_KEY',
+    'GROQ_API_KEY', 'XAI_API_KEY', 'MISTRAL_API_KEY',
+    'CEREBRAS_API_KEY', 'NVIDIA_API_KEY'
+]
+data = {k: os.environ[k] for k in keys if k in os.environ and os.environ[k]}
+with open('$DEFINES_JSON', 'w', encoding='utf-8') as f:
+    json.dump(data, f, indent=2)
+" 2>/dev/null || node -e "
+const fs = require('fs');
+const keys = [
+    'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'BACKEND_URL', 'ADMIN_EMAIL',
+    'GEMINI_API_KEY', 'GCP_PROJECT_NUMBER', 'OPENAI_API_KEY',
+    'GROQ_API_KEY', 'XAI_API_KEY', 'MISTRAL_API_KEY',
+    'CEREBRAS_API_KEY', 'NVIDIA_API_KEY'
+];
+const data = {};
+for (const k of keys) {
+    if (process.env[k]) data[k] = process.env[k];
+}
+fs.writeFileSync('$DEFINES_JSON', JSON.stringify(data, null, 2));
+" 2>/dev/null || {
+    echo "{" > "$DEFINES_JSON"
+    first=1
+    for var in SUPABASE_URL SUPABASE_ANON_KEY BACKEND_URL ADMIN_EMAIL GEMINI_API_KEY GCP_PROJECT_NUMBER OPENAI_API_KEY GROQ_API_KEY XAI_API_KEY MISTRAL_API_KEY CEREBRAS_API_KEY NVIDIA_API_KEY; do
+        val="${!var}"
+        if [ -n "$val" ]; then
+            if [ $first -eq 0 ]; then echo "," >> "$DEFINES_JSON"; fi
+            escaped_val=$(printf '%s' "$val" | sed 's/\\/\\\\/g; s/"/\\"/g')
+            printf '  "%s": "%s"' "$var" "$escaped_val" >> "$DEFINES_JSON"
+            first=0
+        fi
+    done
+    echo "" >> "$DEFINES_JSON"
+    echo "}" >> "$DEFINES_JSON"
+}
 
-if [ -f ".env" ]; then
-    echo "Found local .env file; including in build via --dart-define-from-file=.env"
-    BUILD_ARGS+=("--dart-define-from-file=.env")
-else
-    echo "No .env file found on disk (normal for CI/Cloudflare). Reading public config from environment variables..."
-fi
-
-# Public client-side configuration variables
-if [ -n "$SUPABASE_URL" ]; then
-    echo "Injecting SUPABASE_URL into Flutter build arguments"
-    BUILD_ARGS+=("--dart-define=SUPABASE_URL=$SUPABASE_URL")
-fi
-
-if [ -n "$SUPABASE_ANON_KEY" ]; then
-    echo "Injecting SUPABASE_ANON_KEY into Flutter build arguments"
-    BUILD_ARGS+=("--dart-define=SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY")
-fi
-
-if [ -n "$ADMIN_EMAIL" ]; then
-    BUILD_ARGS+=("--dart-define=ADMIN_EMAIL=$ADMIN_EMAIL")
-fi
-
-if [ -n "$BACKEND_URL" ]; then
-    BUILD_ARGS+=("--dart-define=BACKEND_URL=$BACKEND_URL")
-fi
-
-if [ -n "$GEMINI_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=GEMINI_API_KEY=$GEMINI_API_KEY")
-fi
-
-if [ -n "$GCP_PROJECT_NUMBER" ]; then
-    BUILD_ARGS+=("--dart-define=GCP_PROJECT_NUMBER=$GCP_PROJECT_NUMBER")
-fi
-
-if [ -n "$OPENAI_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=OPENAI_API_KEY=$OPENAI_API_KEY")
-fi
-
-if [ -n "$GROQ_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=GROQ_API_KEY=$GROQ_API_KEY")
-fi
-
-if [ -n "$XAI_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=XAI_API_KEY=$XAI_API_KEY")
-fi
-
-if [ -n "$MISTRAL_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=MISTRAL_API_KEY=$MISTRAL_API_KEY")
-fi
-
-if [ -n "$CEREBRAS_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=CEREBRAS_API_KEY=$CEREBRAS_API_KEY")
-fi
-
-if [ -n "$NVIDIA_API_KEY" ]; then
-    BUILD_ARGS+=("--dart-define=NVIDIA_API_KEY=$NVIDIA_API_KEY")
-fi
-
-echo "Building web release: $FLUTTER_BIN build web --release ${BUILD_ARGS[*]}"
-"$FLUTTER_BIN" build web --release "${BUILD_ARGS[@]}"
+echo "Successfully generated compile-time Dart configuration definition."
+echo "Executing: $FLUTTER_BIN build web --release --dart-define-from-file=dart_defines.json"
+"$FLUTTER_BIN" build web --release --dart-define-from-file="$DEFINES_JSON"
 
 echo "============================================================"
 echo "BUILD SUCCEEDED — Artifacts available in build/web"
 echo "============================================================"
+

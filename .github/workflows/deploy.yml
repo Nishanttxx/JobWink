@@ -39,8 +39,23 @@ jobs:
           flutter analyze
 
       - name: Build Web Release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || vars.GEMINI_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || vars.OPENAI_API_KEY }}
+          BACKEND_URL: ${{ secrets.BACKEND_URL || vars.BACKEND_URL }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL || vars.ADMIN_EMAIL }}
         run: |
-          flutter build web --release
+          python3 -c "
+          import os, json
+          keys = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'BACKEND_URL', 'ADMIN_EMAIL']
+          data = {k: os.environ[k] for k in keys if k in os.environ and os.environ[k]}
+          with open('dart_defines.json', 'w') as f:
+              json.dump(data, f, indent=2)
+          "
+          flutter build web --release --dart-define-from-file=dart_defines.json
+          rm -f dart_defines.json
 
       - name: Upload Web Build Artifact
         uses: actions/upload-artifact@v4
