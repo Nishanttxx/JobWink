@@ -40,23 +40,26 @@ jobs:
 
       - name: Build Web Release
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          BACKEND_URL: ${{ secrets.BACKEND_URL }}
-          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
-
+          SECRETS_JSON: ${{ toJson(secrets) }}
         run: |
           python3 -c "
           import os, json
+          try:
+              secrets = json.loads(os.environ.get('SECRETS_JSON', '{}'))
+          except Exception:
+              secrets = {}
           keys = ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'BACKEND_URL', 'ADMIN_EMAIL']
-          data = {k: os.environ[k] for k in keys if k in os.environ and os.environ[k]}
+          data = {}
+          for k in keys:
+              val = secrets.get(k) or os.environ.get(k)
+              if val:
+                  data[k] = val
           with open('dart_defines.json', 'w') as f:
               json.dump(data, f, indent=2)
           "
           flutter build web --release --dart-define-from-file=dart_defines.json
           rm -f dart_defines.json
+
 
       - name: Upload Web Build Artifact
         uses: actions/upload-artifact@v4
