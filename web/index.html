@@ -36,6 +36,62 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
+  <!-- Modern JavaScript Polyfills for PDF.js & Web Rendering Compatibility -->
+  <script>
+    if (typeof Map !== 'undefined') {
+      if (!Map.prototype.getOrInsertComputed) {
+        Map.prototype.getOrInsertComputed = function (key, callback) {
+          if (this.has(key)) {
+            return this.get(key);
+          }
+          var value = callback(key);
+          this.set(key, value);
+          return value;
+        };
+      }
+      if (!Map.prototype.getOrInsert) {
+        Map.prototype.getOrInsert = function (key, defaultValue) {
+          if (this.has(key)) {
+            return this.get(key);
+          }
+          this.set(key, defaultValue);
+          return defaultValue;
+        };
+      }
+    }
+    if (typeof WeakMap !== 'undefined') {
+      if (!WeakMap.prototype.getOrInsertComputed) {
+        WeakMap.prototype.getOrInsertComputed = function (key, callback) {
+          if (this.has(key)) {
+            return this.get(key);
+          }
+          var value = callback(key);
+          this.set(key, value);
+          return value;
+        };
+      }
+      if (!WeakMap.prototype.getOrInsert) {
+        WeakMap.prototype.getOrInsert = function (key, defaultValue) {
+          if (this.has(key)) {
+            return this.get(key);
+          }
+          this.set(key, defaultValue);
+          return defaultValue;
+        };
+      }
+    }
+    if (typeof Promise !== 'undefined' && !Promise.withResolvers) {
+      Promise.withResolvers = function () {
+        var resolve, reject;
+        var promise = new Promise(function (res, rej) {
+          resolve = res;
+          reject = rej;
+        });
+        return { promise: promise, resolve: resolve, reject: reject };
+      };
+    }
+  </script>
+
   <!-- Three.js & Vanta.js Fog Animated Background Engine -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vanta@0.5.24/dist/vanta.fog.min.js"></script>

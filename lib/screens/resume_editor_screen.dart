@@ -3015,6 +3015,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          scrollable: true,
           backgroundColor: AppTheme.getSurfaceColor(ctx),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
@@ -3025,12 +3026,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               color: AppTheme.getTextColor(ctx),
             ),
           ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                   _buildFormField(
                     context: ctx,
                     label: 'Job Title / Role',
@@ -3100,7 +3100,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -3184,6 +3183,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          scrollable: true,
           backgroundColor: AppTheme.getSurfaceColor(ctx),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
@@ -3315,6 +3315,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
+              scrollable: true,
               backgroundColor: AppTheme.getSurfaceColor(ctx),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
@@ -3334,13 +3335,12 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   ),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 520,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       _buildFormField(
                         context: ctx,
                         label: 'Project Name *',
@@ -3522,7 +3522,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ],
                   ),
                 ),
-              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -3608,6 +3607,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          scrollable: true,
           backgroundColor: AppTheme.getSurfaceColor(ctx),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
@@ -3626,10 +3626,9 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           ),
           content: SizedBox(
             width: 580,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                   Text(
                     'Review the AI-enhanced bullet points below. You can apply the changes or keep your original text.',
                     style: GoogleFonts.plusJakartaSans(
@@ -3732,7 +3731,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -3784,6 +3782,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return AlertDialog(
+              scrollable: true,
               backgroundColor: AppTheme.getSurfaceColor(ctx),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Row(
@@ -3800,13 +3799,12 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   ),
                 ],
               ),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 520,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       Row(
                         children: [
                           ChoiceChip(
@@ -4051,7 +4049,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ],
                   ),
                 ),
-              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -4160,6 +4157,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
+          scrollable: true,
           backgroundColor: AppTheme.getSurfaceColor(ctx),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Text(
@@ -4170,12 +4168,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               color: AppTheme.getTextColor(ctx),
             ),
           ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 480,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                   _buildFormField(
                     context: ctx,
                     label: 'Degree',
@@ -4234,7 +4231,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -4429,6 +4425,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         return StatefulBuilder(
           builder: (dialogCtx, setModalState) {
             return AlertDialog(
+              scrollable: true,
               backgroundColor: AppTheme.getSurfaceColor(dialogCtx),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               title: Text(
@@ -4439,13 +4436,12 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   color: AppTheme.getTextColor(dialogCtx),
                 ),
               ),
-              content: SingleChildScrollView(
-                child: SizedBox(
-                  width: 480,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+              content: SizedBox(
+                width: 480,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                       _buildFormField(
                         context: dialogCtx,
                         label: 'Certification / Activity Title',
@@ -4592,7 +4588,6 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ],
                   ),
                 ),
-              ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(dialogCtx),

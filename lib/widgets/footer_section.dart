@@ -35,15 +35,21 @@ class _FooterSectionState extends State<FooterSection> {
             GsapStaggeredReveal(
               index: 0,
               isTriggered: _isTriggered,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  'Jobwink',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 160,
-                    fontWeight: FontWeight.w900,
-                    color: Colors.white.withAlpha(240),
-                    letterSpacing: -4,
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(horizontal: isMobile ? 16 : 32),
+                alignment: Alignment.center,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.center,
+                  child: Text(
+                    'Jobwink',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: isMobile ? 90 : 160,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white.withAlpha(240),
+                      letterSpacing: isMobile ? -2 : -4,
+                    ),
                   ),
                 ),
               ),
