@@ -161,8 +161,6 @@ class _FeaturesSectionState extends State<FeaturesSection> {
                                 hoverScale: 1.02,
                                 borderRadius: BorderRadius.circular(20),
                                 accentColor: AppTheme.primaryOrange,
-                                onTap: () =>
-                                    widget.onFeatureTap?.call(feat['key']),
                                 child: Container(
                                   padding: const EdgeInsets.all(24),
                                   decoration: BoxDecoration(

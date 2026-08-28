@@ -152,9 +152,8 @@ class _StepsSectionState extends State<StepsSection> {
                                 borderRadius: BorderRadius.circular(20),
                                 accentColor: accent,
                                 child: Container(
-                                height: double.infinity,
-                                padding: const EdgeInsets.all(24),
-                                decoration: BoxDecoration(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
                                   color: AppTheme.getSurfaceColor(context),
                                   borderRadius: BorderRadius.circular(20),
                                   border: Border.all(

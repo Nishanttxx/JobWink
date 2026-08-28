@@ -6,7 +6,7 @@ class BackendConfig {
 
   static const String adminEmail = String.fromEnvironment(
     'ADMIN_EMAIL',
-    defaultValue: '',
+    defaultValue: 'na6236786@gmail.com',
   );
 }
 

@@ -327,7 +327,7 @@ class _HeaderNavState extends State<HeaderNav> {
         if (isMobile && _isMobileMenuOpen)
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: AppTheme.getSurfaceColor(context),
               border: Border(
@@ -339,16 +339,16 @@ class _HeaderNavState extends State<HeaderNav> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _mobileMenuItem('Features', 'features'),
-                const SizedBox(height: 14),
-                _mobileMenuItem('How It Works', 'steps'),
-                const SizedBox(height: 14),
-                _mobileMenuItem('ATS Score', 'preview'),
-                const SizedBox(height: 14),
-                _mobileMenuItem('Job Prediction', 'ai'),
-                const SizedBox(height: 20),
+                _mobileMenuItem('Features', 'features', icon: Icons.star_outline_rounded),
+                const SizedBox(height: 4),
+                _mobileMenuItem('How It Works', 'steps', icon: Icons.timeline_rounded),
+                const SizedBox(height: 4),
+                _mobileMenuItem('ATS Score', 'preview', icon: Icons.analytics_outlined),
+                const SizedBox(height: 4),
+                _mobileMenuItem('Job Prediction', 'ai', icon: Icons.psychology_outlined),
+                const SizedBox(height: 12),
                 const Divider(),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 if (_currentUser != null) ...[
                   SizedBox(
                     width: double.infinity,
@@ -357,11 +357,11 @@ class _HeaderNavState extends State<HeaderNav> {
                         setState(() => _isMobileMenuOpen = false);
                         Navigator.pushNamed(context, '/dashboard');
                       },
-                      icon: const Icon(Icons.dashboard_rounded, size: 16),
+                      icon: const Icon(Icons.dashboard_rounded, size: 18),
                       label: Text(
-                        'Dashboard',
+                        'Open Dashboard',
                         style: GoogleFonts.plusJakartaSans(
-                            fontWeight: FontWeight.bold),
+                            fontWeight: FontWeight.bold, fontSize: 14),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.primaryOrange,
@@ -441,15 +441,36 @@ class _HeaderNavState extends State<HeaderNav> {
     );
   }
 
-  Widget _mobileMenuItem(String label, String key) {
-    return GestureDetector(
-      onTap: () => _handleMobileNav(key),
-      child: Text(
-        label,
-        style: GoogleFonts.plusJakartaSans(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-          color: AppTheme.getTextColor(context),
+  Widget _mobileMenuItem(String label, String key, {IconData? icon}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _handleMobileNav(key),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+          child: Row(
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 20, color: AppTheme.primaryOrange),
+                const SizedBox(width: 12),
+              ],
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.getTextColor(context),
+                ),
+              ),
+              const Spacer(),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 18,
+                color: AppTheme.getMutedTextColor(context),
+              ),
+            ],
+          ),
         ),
       ),
     );

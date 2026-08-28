@@ -362,9 +362,7 @@ class _LandingPageState extends State<LandingPage> {
                             RepaintBoundary(
                               child: Container(
                                 key: _featuresKey,
-                                child: FeaturesSection(
-                                  onFeatureTap: (key) => _scrollToSection('cta'),
-                                ),
+                                child: const FeaturesSection(),
                               ),
                             ),
 
