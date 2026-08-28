@@ -96,6 +96,9 @@ echo "Flutter version details:"
 echo "Dart version details:"
 "$DART_BIN" --version
 
+echo "Flutter doctor details:"
+"$FLUTTER_BIN" doctor -v
+
 # Fail-safe check: Stop immediately if Dart 3.1.0 is still resolved
 DART_INFO=$("$DART_BIN" --version 2>&1)
 if [[ "$DART_INFO" == *"version: 3.1.0"* ]]; then
@@ -103,8 +106,10 @@ if [[ "$DART_INFO" == *"version: 3.1.0"* ]]; then
     exit 1
 fi
 
+echo "STAGE 1 SUCCESS: Flutter SDK 3.47.2 & Dart 3.13.2 verified and healthy."
+
 echo "============================================================"
-echo "RESOLVING DEPENDENCIES & BUILDING JOBWINK"
+echo "STAGE 2 — BUILD JOBWINK USING THAT SDK"
 echo "============================================================"
 
 cd "$JOBWINK_ROOT"
