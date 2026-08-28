@@ -309,33 +309,51 @@ ALTER TABLE public.cover_letters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_activity ENABLE ROW LEVEL SECURITY;
 
 -- 1. Profiles Policies
+DROP POLICY IF EXISTS "Users can view own profile" ON public.profiles;
 CREATE POLICY "Users can view own profile" ON public.profiles FOR SELECT USING (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+CREATE POLICY "Users can insert own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
 CREATE POLICY "Users can update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
 
 -- 2. Resumes Policies
+DROP POLICY IF EXISTS "Users can manage own resumes" ON public.resumes;
 CREATE POLICY "Users can manage own resumes" ON public.resumes FOR ALL USING (auth.uid() = user_id);
 
 -- 3. Resume Versions Policies
+DROP POLICY IF EXISTS "Users can manage own resume versions" ON public.resume_versions;
 CREATE POLICY "Users can manage own resume versions" ON public.resume_versions FOR ALL USING (auth.uid() = user_id);
 
 -- 4. Reference Resumes Policies
+DROP POLICY IF EXISTS "Users can manage own reference resumes" ON public.reference_resumes;
 CREATE POLICY "Users can manage own reference resumes" ON public.reference_resumes FOR ALL USING (auth.uid() = user_id);
 
 -- 5. ATS Analysis Policies
+DROP POLICY IF EXISTS "Users can manage own ATS analysis" ON public.ats_analysis;
 CREATE POLICY "Users can manage own ATS analysis" ON public.ats_analysis FOR ALL USING (auth.uid() = user_id);
 
 -- 6. Keyword Analysis Policies
+DROP POLICY IF EXISTS "Users can manage own keyword analysis" ON public.keyword_analysis;
 CREATE POLICY "Users can manage own keyword analysis" ON public.keyword_analysis FOR ALL USING (auth.uid() = user_id);
 
 -- 7. Jobs Policies
+DROP POLICY IF EXISTS "Authenticated users can view active jobs" ON public.jobs;
 CREATE POLICY "Authenticated users can view active jobs" ON public.jobs FOR SELECT USING (auth.role() = 'authenticated' AND is_active = TRUE);
 
 -- 8. Job Matches Policies
+DROP POLICY IF EXISTS "Users can manage own job matches" ON public.job_matches;
 CREATE POLICY "Users can manage own job matches" ON public.job_matches FOR ALL USING (auth.uid() = user_id);
 
 -- 9. Cover Letters Policies
+DROP POLICY IF EXISTS "Users can manage own cover letters" ON public.cover_letters;
 CREATE POLICY "Users can manage own cover letters" ON public.cover_letters FOR ALL USING (auth.uid() = user_id);
 
 -- 10. User Activity Policies
+DROP POLICY IF EXISTS "Users can view own activity logs" ON public.user_activity;
 CREATE POLICY "Users can view own activity logs" ON public.user_activity FOR SELECT USING (auth.uid() = user_id);
+
+DROP POLICY IF EXISTS "Users can insert own activity logs" ON public.user_activity;
 CREATE POLICY "Users can insert own activity logs" ON public.user_activity FOR INSERT WITH CHECK (auth.uid() = user_id);
+
