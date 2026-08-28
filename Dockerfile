@@ -16,7 +16,7 @@ RUN flutter pub get
 COPY . .
 
 # Build production web bundle
-RUN flutter build web --release --dart-define-from-file=.env
+RUN flutter build web --release
 
 # Production static web server
 FROM nginx:alpine

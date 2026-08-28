@@ -124,10 +124,13 @@ echo "Running flutter pub get on Jobwink..."
 BUILD_ARGS=()
 
 if [ -f ".env" ]; then
-    echo "Found .env file; including in build..."
+    echo "Found local .env file; including in build via --dart-define-from-file=.env"
     BUILD_ARGS+=("--dart-define-from-file=.env")
+else
+    echo "No .env file found on disk (normal for CI/Cloudflare). Reading public config from environment variables..."
 fi
 
+# Public client-side configuration variables
 if [ -n "$SUPABASE_URL" ]; then
     echo "Injecting SUPABASE_URL from environment: $SUPABASE_URL"
     BUILD_ARGS+=("--dart-define=SUPABASE_URL=$SUPABASE_URL")
@@ -144,6 +147,38 @@ fi
 
 if [ -n "$BACKEND_URL" ]; then
     BUILD_ARGS+=("--dart-define=BACKEND_URL=$BACKEND_URL")
+fi
+
+if [ -n "$GEMINI_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=GEMINI_API_KEY=$GEMINI_API_KEY")
+fi
+
+if [ -n "$GCP_PROJECT_NUMBER" ]; then
+    BUILD_ARGS+=("--dart-define=GCP_PROJECT_NUMBER=$GCP_PROJECT_NUMBER")
+fi
+
+if [ -n "$OPENAI_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=OPENAI_API_KEY=$OPENAI_API_KEY")
+fi
+
+if [ -n "$GROQ_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=GROQ_API_KEY=$GROQ_API_KEY")
+fi
+
+if [ -n "$XAI_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=XAI_API_KEY=$XAI_API_KEY")
+fi
+
+if [ -n "$MISTRAL_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=MISTRAL_API_KEY=$MISTRAL_API_KEY")
+fi
+
+if [ -n "$CEREBRAS_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=CEREBRAS_API_KEY=$CEREBRAS_API_KEY")
+fi
+
+if [ -n "$NVIDIA_API_KEY" ]; then
+    BUILD_ARGS+=("--dart-define=NVIDIA_API_KEY=$NVIDIA_API_KEY")
 fi
 
 echo "Building web release: $FLUTTER_BIN build web --release ${BUILD_ARGS[*]}"
