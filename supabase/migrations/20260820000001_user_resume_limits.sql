@@ -37,9 +37,18 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
 BEGIN
-  INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
-  VALUES (NEW.id, 4, 0, CURRENT_DATE)
-  ON CONFLICT (user_id) DO NOTHING;
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'user_resume_limits' AND column_name = 'usage_count'
+  ) THEN
+    INSERT INTO public.user_resume_limits (user_id, daily_limit, usage_count, usage_date)
+    VALUES (NEW.id, 4, 0, CURRENT_DATE)
+    ON CONFLICT (user_id) DO NOTHING;
+  ELSE
+    INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
+    VALUES (NEW.id, 4, 0, CURRENT_DATE)
+    ON CONFLICT (user_id) DO NOTHING;
+  END IF;
   RETURN NEW;
 END;
 $$;
@@ -54,12 +63,26 @@ CREATE TRIGGER on_auth_user_created_resume_limit
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'auth' AND table_name = 'users') THEN
-    INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
-    SELECT id, 4, 0, CURRENT_DATE
-    FROM auth.users
-    ON CONFLICT (user_id) DO NOTHING;
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'user_resume_limits' AND column_name = 'usage_count'
+    ) THEN
+      INSERT INTO public.user_resume_limits (user_id, daily_limit, usage_count, usage_date)
+      SELECT id, 4, 0, CURRENT_DATE
+      FROM auth.users
+      ON CONFLICT (user_id) DO NOTHING;
+    ELSIF EXISTS (
+      SELECT 1 FROM information_schema.columns 
+      WHERE table_schema = 'public' AND table_name = 'user_resume_limits' AND column_name = 'resumes_generated_today'
+    ) THEN
+      INSERT INTO public.user_resume_limits (user_id, daily_limit, resumes_generated_today, usage_date)
+      SELECT id, 4, 0, CURRENT_DATE
+      FROM auth.users
+      ON CONFLICT (user_id) DO NOTHING;
+    END IF;
   END IF;
 END $$;
+
 
 
 -- 3. ATOMIC RPC FUNCTION: CHECK AND RESERVE RESUME GENERATION (RACE-CONDITION PROOF)
