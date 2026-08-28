@@ -1,4 +1,23 @@
 {
   "python.terminal.useEnvFile": true,
-  "python.envFile": "${jobwink}/.env"
+  "python.envFile": "${jobwink}/.env",
+  "github-actions.workflows.customContexts": {
+    "secrets": [
+      "SUPABASE_URL",
+      "SUPABASE_ANON_KEY",
+      "GEMINI_API_KEY",
+      "OPENAI_API_KEY",
+      "BACKEND_URL",
+      "ADMIN_EMAIL"
+    ]
+  },
+  "github-actions.workflows.customSecrets": [
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY",
+    "GEMINI_API_KEY",
+    "OPENAI_API_KEY",
+    "BACKEND_URL",
+    "ADMIN_EMAIL"
+  ]
 }
+
