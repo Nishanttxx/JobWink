@@ -41,7 +41,32 @@ class AppSidebar extends StatefulWidget {
 }
 
 class _AppSidebarState extends State<AppSidebar> {
-  static const List<_SidebarItemData> _navItems = [];
+  static const List<_SidebarItemData> _navItems = [
+    _SidebarItemData(
+      label: 'Home',
+      route: '/landing',
+      icon: Icons.home_rounded,
+      index: -1,
+    ),
+    _SidebarItemData(
+      label: 'Resume Tailoring',
+      route: '/cv-studio',
+      icon: Icons.tune_rounded,
+      index: 2,
+    ),
+    _SidebarItemData(
+      label: 'Swipe Matcher',
+      route: '/matcher',
+      icon: Icons.swipe_rounded,
+      index: 1,
+    ),
+    _SidebarItemData(
+      label: 'Job Prediction',
+      route: '/job-prediction',
+      icon: Icons.analytics_rounded,
+      index: 3,
+    ),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -175,7 +200,9 @@ class _AppSidebarState extends State<AppSidebar> {
                       isActive: isActive,
                       isCollapsed: widget.isCollapsed,
                       onTap: () {
-                        if (widget.onTabSelected != null) {
+                        if (item.route == '/landing') {
+                          Navigator.pushNamed(context, '/landing');
+                        } else if (widget.onTabSelected != null && item.index >= 0) {
                           widget.onTabSelected!(item.index, item.route);
                         } else {
                           Navigator.pushReplacementNamed(context, item.route);
@@ -752,16 +779,20 @@ class _SidebarNavItemButtonState extends State<_SidebarNavItemButton> {
               ),
               if (!widget.isCollapsed) ...[
                 const SizedBox(width: 12),
-                Text(
-                  widget.item.label,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: widget.isActive ? FontWeight.bold : FontWeight.w500,
-                    color: widget.isActive
-                        ? AppTheme.primaryOrange
-                        : _isHovered
-                            ? AppTheme.getTextColor(context)
-                            : AppTheme.getMutedTextColor(context),
+                Expanded(
+                  child: Text(
+                    widget.item.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: widget.isActive ? FontWeight.bold : FontWeight.w500,
+                      color: widget.isActive
+                          ? AppTheme.primaryOrange
+                          : _isHovered
+                              ? AppTheme.getTextColor(context)
+                              : AppTheme.getMutedTextColor(context),
+                    ),
                   ),
                 ),
               ],

@@ -421,34 +421,49 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final endIndex = (startIndex + _pageSize).clamp(0, total);
     final pagedUsers = _filteredUsers.isEmpty ? <AdminUserQuotaInfo>[] : _filteredUsers.sublist(startIndex, endIndex);
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 600;
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
       appBar: AppBar(
         backgroundColor: const Color(0xFF161B22),
         elevation: 0,
+        titleSpacing: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF8B5CF6)),
-            const SizedBox(width: 10),
-            Text(
-              'JobWink Admin Dashboard',
-              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold),
+            const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF8B5CF6), size: 22),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                isMobile ? 'Admin Dashboard' : 'JobWink Admin Dashboard',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: isMobile ? 16 : 18,
+                ),
+              ),
             ),
           ],
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.home_rounded, color: Colors.white),
-            tooltip: 'Go to Home',
-            onPressed: () => Navigator.pushNamed(context, '/landing'),
-          ),
-          const SizedBox(width: 8),
+          if (!isMobile) ...[
+            IconButton(
+              icon: const Icon(Icons.home_rounded, color: Colors.white),
+              tooltip: 'Go to Home',
+              onPressed: () => Navigator.pushNamed(context, '/landing'),
+            ),
+            const SizedBox(width: 4),
+          ],
           const ThemeToggleButton(),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppTheme.primaryOrange),
             tooltip: 'Refresh Data',
@@ -457,7 +472,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               _loadUsers();
             },
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(

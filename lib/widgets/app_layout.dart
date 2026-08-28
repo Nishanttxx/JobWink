@@ -43,10 +43,10 @@ class _AppLayoutState extends State<AppLayout> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   void _handleTabSelected(int index, String route) {
-    if (index == widget.activeIndex) return;
     if (_scaffoldKey.currentState?.isDrawerOpen == true) {
       Navigator.pop(context);
     }
+    if (index == widget.activeIndex) return;
     Navigator.pushReplacementNamed(context, route);
   }
 
