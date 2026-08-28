@@ -41,11 +41,13 @@ ON CONFLICT (id) DO UPDATE SET
     allowed_mime_types = EXCLUDED.allowed_mime_types;
 
 -- -----------------------------------------------------------------------------
--- 2. ENABLE ROW LEVEL SECURITY ON STORAGE.OBJECTS
+-- 2. STORAGE ROW LEVEL SECURITY
 -- -----------------------------------------------------------------------------
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Note: Row Level Security is enabled by default on storage.objects by Supabase.
+-- Attempting to run ALTER TABLE storage.objects causes permission error (owned by supabase_storage_admin).
 
 -- Clean up any prior existing storage policies for these buckets
+
 DROP POLICY IF EXISTS "Users can insert own raw resumes" ON storage.objects;
 DROP POLICY IF EXISTS "Users can view own raw resumes" ON storage.objects;
 DROP POLICY IF EXISTS "Users can update own raw resumes" ON storage.objects;
