@@ -35,5 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_job_predictions_stale ON public.job_predictions(r
 -- Row Level Security (RLS)
 ALTER TABLE public.job_predictions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users can manage own job predictions" ON public.job_predictions;
 CREATE POLICY "Users can manage own job predictions" ON public.job_predictions
     FOR ALL USING (auth.uid() = user_id OR user_id IS NULL);
+
