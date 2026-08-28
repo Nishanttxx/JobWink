@@ -126,23 +126,47 @@ CREATE TABLE IF NOT EXISTS public.reference_resumes (
 -- 3.5 ATS ANALYSIS TABLE
 CREATE TABLE IF NOT EXISTS public.ats_analysis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    resume_id UUID REFERENCES public.resumes(id) ON DELETE CASCADE,
-    score NUMERIC(5,2) NOT NULL,
-    breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
-    suggestions TEXT[] DEFAULT ARRAY[]::TEXT[],
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    resume_version_id UUID REFERENCES public.resume_versions(id) ON DELETE CASCADE,
+    job_id UUID,
+    ats_score INT NOT NULL DEFAULT 0 CHECK (ats_score BETWEEN 0 AND 100),
+    formatting_score INT DEFAULT 0 CHECK (formatting_score BETWEEN 0 AND 100),
+    content_score INT DEFAULT 0 CHECK (content_score BETWEEN 0 AND 100),
+    relevance_score INT DEFAULT 0 CHECK (relevance_score BETWEEN 0 AND 100),
+    feedback JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS resume_version_id UUID;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS job_id UUID;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS ats_score INT DEFAULT 0;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS formatting_score INT DEFAULT 0;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS content_score INT DEFAULT 0;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS relevance_score INT DEFAULT 0;
+ALTER TABLE public.ats_analysis ADD COLUMN IF NOT EXISTS feedback JSONB DEFAULT '{}'::jsonb;
 
 -- 3.6 KEYWORD ANALYSIS TABLE
 CREATE TABLE IF NOT EXISTS public.keyword_analysis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-    resume_id UUID REFERENCES public.resumes(id) ON DELETE CASCADE,
-    missing_keywords TEXT[] DEFAULT ARRAY[]::TEXT[],
-    matching_keywords TEXT[] DEFAULT ARRAY[]::TEXT[],
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    resume_version_id UUID REFERENCES public.resume_versions(id) ON DELETE CASCADE,
+    job_id UUID,
+    extracted_skills TEXT[] DEFAULT '{}',
+    missing_skills TEXT[] DEFAULT '{}',
+    matching_skills TEXT[] DEFAULT '{}',
+    frequency_map JSONB DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS resume_version_id UUID;
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS job_id UUID;
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS extracted_skills TEXT[] DEFAULT '{}';
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS missing_skills TEXT[] DEFAULT '{}';
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS matching_skills TEXT[] DEFAULT '{}';
+ALTER TABLE public.keyword_analysis ADD COLUMN IF NOT EXISTS frequency_map JSONB DEFAULT '{}'::jsonb;
+
 
 -- 3.7 JOBS TABLE
 CREATE TABLE IF NOT EXISTS public.jobs (
@@ -337,8 +361,11 @@ CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON public.resumes(user_id);
 CREATE INDEX IF NOT EXISTS idx_resume_versions_resume_id ON public.resume_versions(resume_id);
 CREATE INDEX IF NOT EXISTS idx_resume_versions_user_id ON public.resume_versions(user_id);
 CREATE INDEX IF NOT EXISTS idx_reference_resumes_user_id ON public.reference_resumes(user_id);
-CREATE INDEX IF NOT EXISTS idx_ats_analysis_user_resume ON public.ats_analysis(user_id, resume_id);
-CREATE INDEX IF NOT EXISTS idx_keyword_analysis_user_resume ON public.keyword_analysis(user_id, resume_id);
+CREATE INDEX IF NOT EXISTS idx_ats_analysis_user ON public.ats_analysis(user_id);
+CREATE INDEX IF NOT EXISTS idx_ats_analysis_version ON public.ats_analysis(resume_version_id);
+CREATE INDEX IF NOT EXISTS idx_keyword_analysis_user ON public.keyword_analysis(user_id);
+CREATE INDEX IF NOT EXISTS idx_keyword_analysis_version ON public.keyword_analysis(resume_version_id);
+
 CREATE INDEX IF NOT EXISTS idx_jobs_is_active ON public.jobs(is_active);
 CREATE INDEX IF NOT EXISTS idx_job_matches_user_status ON public.job_matches(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_job_matches_job ON public.job_matches(job_id);
