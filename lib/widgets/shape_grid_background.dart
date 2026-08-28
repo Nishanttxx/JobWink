@@ -87,6 +87,11 @@ class _ShapeGridBackgroundState extends State<ShapeGridBackground>
   }
 
   void _updateCellOpacities() {
+    // Fast path: If there is no active hover and no lingering trail opacities, skip expensive map iterations
+    if (_localMousePosition == null && _currentHoverKey == null && _trailKeys.isEmpty && _cellOpacities.isEmpty) {
+      return;
+    }
+
     final double animVal = _controller.value;
     final double squareSize = widget.squareSize;
     final double totalOffset = animVal * squareSize * 10.0 * (widget.speed * 0.4);
@@ -304,22 +309,27 @@ class _ShapeGridPainter extends CustomPainter {
       }
     }
 
-    // 2. Draw Grid Lines efficiently
+    // 2. Draw Grid Lines efficiently using batched Path
     if (shape == ShapeGridShape.square) {
       final double endX = startX + (cols * squareSize);
       final double endY = startY + (rows * squareSize);
+      final Path gridPath = Path();
 
       // Horizontal grid lines
       for (int r = 0; r <= rows; r++) {
         final double y = startY + (r * squareSize);
-        canvas.drawLine(Offset(startX, y), Offset(endX, y), borderPaint);
+        gridPath.moveTo(startX, y);
+        gridPath.lineTo(endX, y);
       }
 
       // Vertical grid lines
       for (int c = 0; c <= cols; c++) {
         final double x = startX + (c * squareSize);
-        canvas.drawLine(Offset(x, startY), Offset(x, endY), borderPaint);
+        gridPath.moveTo(x, startY);
+        gridPath.lineTo(x, endY);
       }
+
+      canvas.drawPath(gridPath, borderPaint);
     } else {
       for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
@@ -337,6 +347,7 @@ class _ShapeGridPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ShapeGridPainter oldDelegate) {
-    return true;
+    return oldDelegate.animationValue != animationValue ||
+        oldDelegate.cellOpacities != cellOpacities;
   }
 }

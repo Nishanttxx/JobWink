@@ -149,39 +149,41 @@ class _MaskedHeadingState extends State<MaskedHeading>
 
     final isDark = AppTheme.isDarkMode(context);
 
-    return AnimatedBuilder(
-      animation: _animController,
-      builder: (context, child) {
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final double maxWidth = constraints.maxWidth > 0
-                ? constraints.maxWidth
-                : double.infinity;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double maxWidth = constraints.maxWidth > 0
+            ? constraints.maxWidth
+            : double.infinity;
 
-            final TextPainter measurementPainter = TextPainter(
-              text: TextSpan(text: widget.text, style: textStyle),
-              textAlign: widget.textAlign,
-              textDirection: TextDirection.ltr,
-            );
-            measurementPainter.layout(maxWidth: maxWidth);
+        final TextPainter measurementPainter = TextPainter(
+          text: TextSpan(text: widget.text, style: textStyle),
+          textAlign: widget.textAlign,
+          textDirection: TextDirection.ltr,
+        );
+        measurementPainter.layout(maxWidth: maxWidth);
 
-            final double textHeight = measurementPainter.height;
+        final double textHeight = measurementPainter.height;
 
-            return SizedBox(
-              width: maxWidth,
-              height: textHeight,
-              child: CustomPaint(
-                painter: _MaskedHeadingPainter(
-                  text: widget.text,
-                  textStyle: textStyle,
-                  textAlign: widget.textAlign,
-                  loadedImage: _loadedImage,
-                  animValue: _animController.value,
-                  isDark: isDark,
-                ),
-              ),
-            );
-          },
+        return SizedBox(
+          width: maxWidth,
+          height: textHeight,
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: _animController,
+              builder: (context, child) {
+                return CustomPaint(
+                  painter: _MaskedHeadingPainter(
+                    text: widget.text,
+                    textStyle: textStyle,
+                    textAlign: widget.textAlign,
+                    loadedImage: _loadedImage,
+                    animValue: _animController.value,
+                    isDark: isDark,
+                  ),
+                );
+              },
+            ),
+          ),
         );
       },
     );

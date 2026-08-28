@@ -13,7 +13,7 @@ class SpotlightCardGroup extends StatefulWidget {
   });
 
   static SpotlightCardGroupState? of(BuildContext context) {
-    return context.findAncestorStateOfType<SpotlightCardGroupState>();
+    return context.dependOnInheritedWidgetOfExactType<_SpotlightGroupScope>()?.state;
   }
 
   @override
