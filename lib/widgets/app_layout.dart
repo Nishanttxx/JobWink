@@ -127,7 +127,7 @@ class _AppLayoutState extends State<AppLayout> {
                 // Global Top Navbar (Identical across all routes)
                 Container(
                   height: 64,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: EdgeInsets.symmetric(horizontal: isDesktop ? 20 : 12),
                   decoration: BoxDecoration(
                     color: AppTheme.getSurfaceColor(context),
                     border: Border(
@@ -142,46 +142,84 @@ class _AppLayoutState extends State<AppLayout> {
                       // Mobile Drawer Toggle Button & Brand Indicator
                       if (!isDesktop) ...[
                         IconButton(
-                          icon: Icon(Icons.menu, color: AppTheme.getTextColor(context)),
+                          icon: Icon(Icons.menu_rounded, color: AppTheme.getTextColor(context)),
                           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                           tooltip: 'Open Menu',
-                        ),
-                        Text(
-                          'JobWink',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.primaryOrange,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF94A3B8),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: AppTheme.getTextColor(context),
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.home_rounded, color: AppTheme.getTextColor(context), size: 20),
-                          tooltip: 'Go to Home',
-                          onPressed: () => Navigator.pushNamed(context, '/landing'),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
                         ),
                         const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => Navigator.pushReplacementNamed(context, '/dashboard'),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 30,
+                                height: 30,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primaryOrange,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Icon(
+                                  Icons.description_rounded,
+                                  color: Colors.white,
+                                  size: 17,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              RichText(
+                                text: TextSpan(
+                                  children: [
+                                    TextSpan(
+                                      text: 'Job',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.getTextColor(context),
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: 'Wink',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppTheme.primaryOrange,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (screenWidth >= 480) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            width: 4,
+                            height: 4,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF94A3B8),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              widget.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.getMutedTextColor(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const Spacer(),
                         const ThemeToggleButton(),
                       ],
 

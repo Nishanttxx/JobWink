@@ -122,8 +122,8 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Mobile navbar has Home tooltip icon and ThemeToggleButton
-      expect(find.byTooltip('Go to Home'), findsOneWidget);
+      // Mobile navbar has Open Menu (hamburger) and ThemeToggleButton
+      expect(find.byTooltip('Open Menu'), findsOneWidget);
       expect(find.byType(ThemeToggleButton), findsOneWidget);
 
       // Open drawer

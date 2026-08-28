@@ -982,6 +982,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   }
 
   Widget _buildStepperNavigation(BuildContext context, bool isDarkMode) {
+    final screenWidth = MediaQuery.of(context).size.width;
+
     final steps = [
       {'step': '1', 'title': 'Profile', 'subtitle': 'Identity & Summary', 'tab': 0},
       {'step': '2', 'title': 'Education', 'subtitle': 'Degrees & Academics', 'tab': 1},
@@ -993,6 +995,189 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       {'step': '8', 'title': 'Export', 'subtitle': 'Download & Preview', 'tab': 8},
     ];
 
+    // On mobile screens (< 768px), render a high-clarity responsive mobile stepper
+    if (screenWidth < 768) {
+      final currentStepIndex = steps.indexWhere((s) => (s['tab'] as int) == _activeSubTab).clamp(0, steps.length - 1);
+      final currentStep = steps[currentStepIndex];
+
+      return Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.getSurfaceColor(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.getBorderColor(context)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDarkMode ? 0.2 : 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Active Step Header with Prev / Next Navigation
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primaryOrange.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Step ${currentStepIndex + 1}/${steps.length}',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryOrange,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        currentStep['title'] as String,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.getTextColor(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        currentStep['subtitle'] as String,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.getMutedTextColor(context),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (currentStepIndex > 0)
+                  IconButton(
+                    icon: const Icon(Icons.chevron_left_rounded),
+                    iconSize: 22,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    color: AppTheme.getTextColor(context),
+                    tooltip: 'Previous Step',
+                    onPressed: () {
+                      final prevStep = steps[currentStepIndex - 1];
+                      handleSubSectionSelected(prevStep['tab'] as int);
+                    },
+                  ),
+                if (currentStepIndex < steps.length - 1)
+                  IconButton(
+                    icon: const Icon(Icons.chevron_right_rounded),
+                    iconSize: 22,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    color: AppTheme.primaryOrange,
+                    tooltip: 'Next Step',
+                    onPressed: () {
+                      final nextStep = steps[currentStepIndex + 1];
+                      handleSubSectionSelected(nextStep['tab'] as int);
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+
+            // Progress Bar
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: (currentStepIndex + 1) / steps.length,
+                backgroundColor: isDarkMode ? const Color(0xFF212836) : const Color(0xFFE2E8F0),
+                valueColor: const AlwaysStoppedAnimation<Color>(AppTheme.primaryOrange),
+                minHeight: 4,
+              ),
+            ),
+            const SizedBox(height: 10),
+
+            // Contained, touch-friendly scrollable step pills
+            SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: steps.map((step) {
+                  final targetTab = step['tab'] as int;
+                  final isActive = _activeSubTab == targetTab;
+                  final isCompleted = _activeSubTab > targetTab;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: InkWell(
+                      onTap: () => handleSubSectionSelected(targetTab),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: isActive
+                              ? AppTheme.primaryOrange
+                              : (isCompleted
+                                  ? AppTheme.primaryOrange.withValues(alpha: 0.15)
+                                  : (isDarkMode ? const Color(0xFF1A2234) : const Color(0xFFF1F5F9))),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: isActive
+                                ? AppTheme.primaryOrange
+                                : (isCompleted
+                                    ? AppTheme.primaryOrange.withValues(alpha: 0.45)
+                                    : Colors.transparent),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (isCompleted)
+                              const Icon(Icons.check_rounded, size: 12, color: AppTheme.primaryOrange)
+                            else
+                              Text(
+                                step['step'] as String,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                  color: isActive ? Colors.white : AppTheme.getMutedTextColor(context),
+                                ),
+                              ),
+                            const SizedBox(width: 4),
+                            Text(
+                              step['title'] as String,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 11,
+                                fontWeight: isActive ? FontWeight.bold : FontWeight.w600,
+                                color: isActive ? Colors.white : AppTheme.getTextColor(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // On Desktop & Tablet (>= 768px), keep the full original horizontal stepper
     return Container(
       margin: const EdgeInsets.only(bottom: 24),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

@@ -208,7 +208,7 @@ class JobAlignmentCard extends StatelessWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
-                childAspectRatio: useGrid ? 3.0 : 3.8,
+                childAspectRatio: useGrid ? 3.0 : 2.7,
                 children: ResumeType.values.map((type) {
                   final isSelected = selectedResumeType == type;
                   return InkWell(
