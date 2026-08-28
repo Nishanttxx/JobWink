@@ -59,6 +59,7 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON public.profiles;
 CREATE TRIGGER set_profiles_updated_at
     BEFORE UPDATE ON public.profiles
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS public.resumes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_resumes_updated_at ON public.resumes;
 CREATE TRIGGER set_resumes_updated_at
     BEFORE UPDATE ON public.resumes
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -106,6 +108,7 @@ ALTER TABLE public.resumes
     FOREIGN KEY (current_version_id) REFERENCES public.resume_versions(id)
     ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;
 
+DROP TRIGGER IF EXISTS set_resume_versions_updated_at ON public.resume_versions;
 CREATE TRIGGER set_resume_versions_updated_at
     BEFORE UPDATE ON public.resume_versions
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -124,6 +127,7 @@ CREATE TABLE IF NOT EXISTS public.reference_resumes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_reference_resumes_updated_at ON public.reference_resumes;
 CREATE TRIGGER set_reference_resumes_updated_at
     BEFORE UPDATE ON public.reference_resumes
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -145,6 +149,7 @@ CREATE TABLE IF NOT EXISTS public.ats_analysis (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_ats_analysis_updated_at ON public.ats_analysis;
 CREATE TRIGGER set_ats_analysis_updated_at
     BEFORE UPDATE ON public.ats_analysis
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -165,6 +170,7 @@ CREATE TABLE IF NOT EXISTS public.keyword_analysis (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_keyword_analysis_updated_at ON public.keyword_analysis;
 CREATE TRIGGER set_keyword_analysis_updated_at
     BEFORE UPDATE ON public.keyword_analysis
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -191,6 +197,7 @@ CREATE TABLE IF NOT EXISTS public.jobs (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_jobs_updated_at ON public.jobs;
 CREATE TRIGGER set_jobs_updated_at
     BEFORE UPDATE ON public.jobs
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -227,6 +234,7 @@ CREATE TABLE IF NOT EXISTS public.job_matches (
     CONSTRAINT uq_user_job_match UNIQUE (user_id, job_id)
 );
 
+DROP TRIGGER IF EXISTS set_job_matches_updated_at ON public.job_matches;
 CREATE TRIGGER set_job_matches_updated_at
     BEFORE UPDATE ON public.job_matches
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
@@ -246,9 +254,11 @@ CREATE TABLE IF NOT EXISTS public.cover_letters (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS set_cover_letters_updated_at ON public.cover_letters;
 CREATE TRIGGER set_cover_letters_updated_at
     BEFORE UPDATE ON public.cover_letters
     FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
 
 -- -----------------------------------------------------------------------------
 -- 10. USER ACTIVITY TABLE
