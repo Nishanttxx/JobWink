@@ -85,43 +85,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _signOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.getSurfaceColor(context),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Sign out?',
-          style: GoogleFonts.plusJakartaSans(
-            fontWeight: FontWeight.w700,
-            color: AppTheme.getTextColor(context),
-          ),
-        ),
-        content: Text(
-          'You will be returned to the home screen.',
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 14,
-            color: AppTheme.getMutedTextColor(context),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                    color: AppTheme.getMutedTextColor(context))),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFEF4444),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+        child: AlertDialog(
+          backgroundColor: AppTheme.getSurfaceColor(context),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Sign out?',
+            style: GoogleFonts.plusJakartaSans(
+              fontWeight: FontWeight.w700,
+              color: AppTheme.getTextColor(context),
             ),
-            child: Text('Sign Out',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
           ),
-        ],
+          content: Text(
+            'You will be returned to the home screen.',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 14,
+              color: AppTheme.getMutedTextColor(context),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text('Cancel',
+                  style: GoogleFonts.plusJakartaSans(
+                      color: AppTheme.getMutedTextColor(context))),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
+                elevation: 0,
+              ),
+              child: Text('Sign Out',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
       ),
     );
     if (confirmed == true && mounted) {

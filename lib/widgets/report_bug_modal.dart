@@ -16,7 +16,10 @@ class ReportBugModal extends StatefulWidget {
     return showDialog<void>(
       context: context,
       barrierDismissible: true,
-      builder: (ctx) => ReportBugModal(initialRoute: routeName),
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+        child: ReportBugModal(initialRoute: routeName),
+      ),
     );
   }
 

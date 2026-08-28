@@ -2719,6 +2719,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     required String hint,
     required IconData icon,
     required TextEditingController controller,
+    int maxLines = 1,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2734,6 +2735,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         const SizedBox(height: 6),
         TextField(
           controller: controller,
+          maxLines: maxLines,
           onChanged: (_) => setState(() {}),
           style: GoogleFonts.plusJakartaSans(
             fontSize: 14,
@@ -3011,22 +3013,29 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final endDateController = TextEditingController(text: initial?.endDate ?? '');
     final descController = TextEditingController(text: (initial?.description ?? []).join('\n'));
 
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            initial == null ? 'Add Work Experience' : 'Edit Work Experience',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppTheme.getTextColor(ctx),
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+          child: AlertDialog(
+            scrollable: true,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 40,
+              vertical: isMobile ? 16 : 24,
             ),
-          ),
-          content: SizedBox(
+            backgroundColor: AppTheme.getSurfaceColor(ctx),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              initial == null ? 'Add Work Experience' : 'Edit Work Experience',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: AppTheme.getTextColor(ctx),
+              ),
+            ),
+            content: SizedBox(
             width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -3150,9 +3159,10 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
               ),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 
   void _deleteProject(int index) {
@@ -3179,115 +3189,123 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   }
 
   void _showAddProjectChoiceDialog(BuildContext context) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            'Add Project',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppTheme.getTextColor(ctx),
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+          child: AlertDialog(
+            scrollable: true,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 40,
+              vertical: isMobile ? 16 : 24,
             ),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Choose how you would like to add a project to your resume:',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  color: AppTheme.getMutedTextColor(ctx),
-                ),
+            backgroundColor: AppTheme.getSurfaceColor(ctx),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              'Add Project',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: AppTheme.getTextColor(ctx),
               ),
-              const SizedBox(height: 16),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: AppTheme.getBorderColor(ctx)),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.edit_note_rounded, color: AppTheme.primaryOrange),
-                ),
-                title: Text(
-                  'Add Manually',
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Choose how you would like to add a project to your resume:',
                   style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppTheme.getTextColor(ctx),
-                  ),
-                ),
-                subtitle: Text(
-                  'Enter project details manually with AI description enhancement.',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
+                    fontSize: 13,
                     color: AppTheme.getMutedTextColor(ctx),
                   ),
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showManualProjectModal(context);
-                },
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: AppTheme.getBorderColor(ctx)),
-                ),
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
+                const SizedBox(height: 16),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppTheme.getBorderColor(ctx)),
                   ),
-                  child: const Icon(Icons.code_rounded, color: Color(0xFF3B82F6)),
-                ),
-                title: Text(
-                  'Import from GitHub',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: AppTheme.getTextColor(ctx),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.edit_note_rounded, color: AppTheme.primaryOrange),
                   ),
+                  title: Text(
+                    'Add Manually',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.getTextColor(ctx),
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Enter project details manually with AI description enhancement.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: AppTheme.getMutedTextColor(ctx),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showManualProjectModal(context);
+                  },
                 ),
-                subtitle: Text(
-                  'Fetch repository metadata & README to generate project automatically with AI.',
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: AppTheme.getBorderColor(ctx)),
+                  ),
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF3B82F6).withValues(alpha: 0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.code_rounded, color: Color(0xFF3B82F6)),
+                  ),
+                  title: Text(
+                    'Import from GitHub',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: AppTheme.getTextColor(ctx),
+                    ),
+                  ),
+                  subtitle: Text(
+                    'Fetch repository metadata & README to generate project automatically with AI.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: AppTheme.getMutedTextColor(ctx),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showGithubImportModal(context);
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Cancel',
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
                     color: AppTheme.getMutedTextColor(ctx),
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showGithubImportModal(context);
-                },
               ),
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.getMutedTextColor(ctx),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
         );
       },
     );
@@ -3309,33 +3327,40 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final bulletControllers = initialBullets.map((b) => TextEditingController(text: b)).toList();
     bool isImprovingAi = false;
 
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return AlertDialog(
-              scrollable: true,
-              backgroundColor: AppTheme.getSurfaceColor(ctx),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  Icon(
-                    initial?.source == 'github' ? Icons.code_rounded : Icons.folder_special_outlined,
-                    color: AppTheme.primaryOrange,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    initial == null ? 'Add Project' : 'Edit Project',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: AppTheme.getTextColor(ctx),
+            return MediaQuery(
+              data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+              child: AlertDialog(
+                scrollable: true,
+                insetPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 16 : 40,
+                  vertical: isMobile ? 16 : 24,
+                ),
+                backgroundColor: AppTheme.getSurfaceColor(ctx),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: Row(
+                  children: [
+                    Icon(
+                      initial?.source == 'github' ? Icons.code_rounded : Icons.folder_special_outlined,
+                      color: AppTheme.primaryOrange,
                     ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
+                    const SizedBox(width: 8),
+                    Text(
+                      initial == null ? 'Add Project' : 'Edit Project',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppTheme.getTextColor(ctx),
+                      ),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
                 width: 520,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -3590,12 +3615,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   ),
                 ),
               ],
-            );
-          },
-        );
-      },
-    );
-  }
+            ),
+          );
+        },
+      );
+    },
+  );
+}
 
   void _showAiComparisonDialog(
     BuildContext context,
@@ -3603,32 +3629,39 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     List<String> improved,
     Function(List<String>) onApply,
   ) {
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Row(
-            children: [
-              const Icon(Icons.auto_awesome_rounded, color: AppTheme.primaryOrange),
-              const SizedBox(width: 8),
-              Text(
-                'AI Description Comparison',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: AppTheme.getTextColor(ctx),
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 580,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+          child: AlertDialog(
+            scrollable: true,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 40,
+              vertical: isMobile ? 16 : 24,
+            ),
+            backgroundColor: AppTheme.getSurfaceColor(ctx),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
               children: [
+                const Icon(Icons.auto_awesome_rounded, color: AppTheme.primaryOrange),
+                const SizedBox(width: 8),
+                Text(
+                  'AI Description Comparison',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppTheme.getTextColor(ctx),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 580,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
                     'Review the AI-enhanced bullet points below. You can apply the changes or keep your original text.',
                     style: GoogleFonts.plusJakartaSans(
@@ -3640,81 +3673,82 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Original Column
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppTheme.getBgColor(ctx),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.getBorderColor(ctx)),
+                            color: AppTheme.isDarkMode(ctx)
+                                ? const Color(0xFF1B1E26)
+                                : const Color(0xFFF1F5F9),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppTheme.getBorderColor(ctx),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Original Description',
+                                'ORIGINAL',
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800,
                                   color: AppTheme.getMutedTextColor(ctx),
+                                  letterSpacing: 0.5,
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              if (original.isEmpty)
-                                Text(
-                                  'No original bullets',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    fontStyle: FontStyle.italic,
-                                    color: AppTheme.getMutedTextColor(ctx),
-                                  ),
-                                )
-                              else
-                                ...original.map((b) => Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Text(
-                                        '• $b',
-                                        style: GoogleFonts.plusJakartaSans(
-                                          fontSize: 12,
-                                          color: AppTheme.getTextColor(ctx),
-                                        ),
+                              ...original.map((bullet) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Text(
+                                      '• $bullet',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 12,
+                                        color: AppTheme.getTextColor(ctx),
                                       ),
-                                    )),
+                                    ),
+                                  )),
                             ],
                           ),
                         ),
                       ),
                       const SizedBox(width: 12),
+                      // Improved Column
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryOrange.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppTheme.primaryOrange.withValues(alpha: 0.3)),
+                            color: AppTheme.primaryOrange.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: AppTheme.primaryOrange.withValues(alpha: 0.3),
+                            ),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.auto_awesome_rounded, size: 14, color: AppTheme.primaryOrange),
+                                  const Icon(Icons.auto_awesome_rounded,
+                                      size: 14, color: AppTheme.primaryOrange),
                                   const SizedBox(width: 4),
                                   Text(
-                                    'AI Improved',
+                                    'AI ENHANCED',
                                     style: GoogleFonts.plusJakartaSans(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 13,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
                                       color: AppTheme.primaryOrange,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              ...improved.map((b) => Padding(
+                              ...improved.map((bullet) => Padding(
                                     padding: const EdgeInsets.only(bottom: 6),
                                     child: Text(
-                                      '• $b',
+                                      '• $bullet',
                                       style: GoogleFonts.plusJakartaSans(
                                         fontSize: 12,
                                         fontWeight: FontWeight.w500,
@@ -3731,34 +3765,35 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'Keep Original',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.getMutedTextColor(ctx),
-                  fontWeight: FontWeight.w600,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Keep Original',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.getMutedTextColor(ctx),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                onApply(improved);
-                Navigator.pop(ctx);
-              },
-              icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
-              label: Text(
-                'Apply AI Enhancements',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+              ElevatedButton.icon(
+                onPressed: () {
+                  onApply(improved);
+                  Navigator.pop(ctx);
+                },
+                icon: const Icon(Icons.check_circle_outline_rounded, size: 16),
+                label: Text(
+                  'Apply AI Enhancements',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
               ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryOrange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -3776,30 +3811,37 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     String? searchError;
     int importMode = 0; // 0 = By Username, 1 = By Direct URL
 
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            return AlertDialog(
-              scrollable: true,
-              backgroundColor: AppTheme.getSurfaceColor(ctx),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.code_rounded, color: Color(0xFF3B82F6)),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Import from GitHub',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 18,
-                      color: AppTheme.getTextColor(ctx),
+            return MediaQuery(
+              data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+              child: AlertDialog(
+                scrollable: true,
+                insetPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 16 : 40,
+                  vertical: isMobile ? 16 : 24,
+                ),
+                backgroundColor: AppTheme.getSurfaceColor(ctx),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: Row(
+                  children: [
+                    const Icon(Icons.code_rounded, color: Color(0xFF3B82F6)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Import from GitHub',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppTheme.getTextColor(ctx),
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              content: SizedBox(
+                  ],
+                ),
+                content: SizedBox(
                 width: 520,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -4138,12 +4180,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   ),
                 ),
               ],
-            );
-          },
-        );
-      },
-    );
-  }
+            ),
+          );
+        },
+      );
+    },
+  );
+}
 
   void _showEducationDialog(BuildContext context, {EducationEntry? initial, int? index}) {
     final degreeController = TextEditingController(text: initial?.degree ?? '');
@@ -4153,26 +4196,33 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final endController = TextEditingController(text: initial?.endDate ?? '');
     final gpaController = TextEditingController(text: initial?.gpa ?? '');
 
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
-        return AlertDialog(
-          scrollable: true,
-          backgroundColor: AppTheme.getSurfaceColor(ctx),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: Text(
-            initial == null ? 'Add Education' : 'Edit Education',
-            style: GoogleFonts.plusJakartaSans(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-              color: AppTheme.getTextColor(ctx),
+        return MediaQuery(
+          data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+          child: AlertDialog(
+            scrollable: true,
+            insetPadding: EdgeInsets.symmetric(
+              horizontal: isMobile ? 16 : 40,
+              vertical: isMobile ? 16 : 24,
             ),
-          ),
-          content: SizedBox(
-            width: 480,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+            backgroundColor: AppTheme.getSurfaceColor(ctx),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(
+              initial == null ? 'Add Education' : 'Edit Education',
+              style: GoogleFonts.plusJakartaSans(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: AppTheme.getTextColor(ctx),
+              ),
+            ),
+            content: SizedBox(
+              width: 480,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
                   _buildFormField(
                     context: ctx,
                     label: 'Degree',
@@ -4231,52 +4281,53 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ],
               ),
             ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  color: AppTheme.getMutedTextColor(ctx),
-                  fontWeight: FontWeight.w600,
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(
+                  'Cancel',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: AppTheme.getMutedTextColor(ctx),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final entry = EducationEntry(
-                  degree: degreeController.text.trim(),
-                  fieldOfStudy: fieldController.text.trim(),
-                  institution: instController.text.trim(),
-                  startDate: startController.text.trim(),
-                  endDate: endController.text.trim(),
-                  gpa: gpaController.text.trim(),
-                );
+              ElevatedButton(
+                onPressed: () {
+                  final entry = EducationEntry(
+                    degree: degreeController.text.trim(),
+                    fieldOfStudy: fieldController.text.trim(),
+                    institution: instController.text.trim(),
+                    startDate: startController.text.trim(),
+                    endDate: endController.text.trim(),
+                    gpa: gpaController.text.trim(),
+                  );
 
-                final currentList = List<EducationEntry>.from(_parsedResumeData?.education ?? []);
-                if (index != null && index >= 0 && index < currentList.length) {
-                  currentList[index] = entry;
-                } else {
-                  currentList.add(entry);
-                }
+                  final currentList = List<EducationEntry>.from(_parsedResumeData?.education ?? []);
+                  if (index != null && index >= 0 && index < currentList.length) {
+                    currentList[index] = entry;
+                  } else {
+                    currentList.add(entry);
+                  }
 
-                setState(() {
-                  _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(education: currentList);
-                });
-                _persistCurrentResume();
-                Navigator.pop(ctx);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.primaryOrange,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  setState(() {
+                    _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(education: currentList);
+                  });
+                  _persistCurrentResume();
+                  Navigator.pop(ctx);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  'Save',
+                  style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                ),
               ),
-              child: Text(
-                'Save',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-              ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );
@@ -4419,29 +4470,36 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       );
     }
 
+    final isMobile = MediaQuery.of(context).size.width < 600;
     showDialog(
       context: context,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (dialogCtx, setModalState) {
-            return AlertDialog(
-              scrollable: true,
-              backgroundColor: AppTheme.getSurfaceColor(dialogCtx),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text(
-                initial == null ? 'Add Certification / Activity' : 'Edit Certification / Activity',
-                style: GoogleFonts.plusJakartaSans(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: AppTheme.getTextColor(dialogCtx),
+            return MediaQuery(
+              data: MediaQuery.of(dialogCtx).copyWith(viewInsets: EdgeInsets.zero),
+              child: AlertDialog(
+                scrollable: true,
+                insetPadding: EdgeInsets.symmetric(
+                  horizontal: isMobile ? 16 : 40,
+                  vertical: isMobile ? 16 : 24,
                 ),
-              ),
-              content: SizedBox(
-                width: 480,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+                backgroundColor: AppTheme.getSurfaceColor(dialogCtx),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: Text(
+                  initial == null ? 'Add Certification / Activity' : 'Edit Certification / Activity',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
+                    color: AppTheme.getTextColor(dialogCtx),
+                  ),
+                ),
+                content: SizedBox(
+                  width: 480,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       _buildFormField(
                         context: dialogCtx,
                         label: 'Certification / Activity Title',
@@ -4453,7 +4511,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                       _buildFormField(
                         context: dialogCtx,
                         label: 'Role / Level (Optional)',
-                        hint: 'e.g. Certificate Holder / Lead Organizer',
+                        hint: 'e.g. Associate / Lead Organizer',
                         icon: Icons.badge_outlined,
                         controller: roleController,
                       ),
@@ -4462,43 +4520,25 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         context: dialogCtx,
                         label: 'Organization / Issuer',
                         hint: 'e.g. Amazon Web Services',
-                        icon: Icons.business_center_outlined,
+                        icon: Icons.business_outlined,
                         controller: orgController,
                       ),
                       const SizedBox(height: 12),
                       _buildFormField(
                         context: dialogCtx,
-                        label: 'Certificate / Activity Link (Optional)',
-                        hint: 'https://...',
+                        label: 'Credential URL / Verification Link',
+                        hint: 'e.g. https://aws.amazon.com/verify/...',
                         icon: Icons.link_rounded,
                         controller: linkController,
                       ),
                       const SizedBox(height: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Details (Optional)',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.getTextColor(dialogCtx),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: descController,
-                            maxLines: 2,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              color: AppTheme.getTextColor(dialogCtx),
-                            ),
-                            decoration: _inputDecoration(
-                              dialogCtx,
-                              'e.g. Credential ID 12345 • Score: 95%',
-                            ),
-                          ),
-                        ],
+                      _buildFormField(
+                        context: dialogCtx,
+                        label: 'Description / Achievements (Optional)',
+                        hint: 'e.g. Designed scalable multi-tier architectures...',
+                        icon: Icons.description_outlined,
+                        controller: descController,
+                        maxLines: 2,
                       ),
                       const SizedBox(height: 12),
                       Row(
@@ -4588,70 +4628,71 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ],
                   ),
                 ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogCtx),
-                  child: Text(
-                    'Cancel',
-                    style: GoogleFonts.plusJakartaSans(
-                      color: AppTheme.getMutedTextColor(dialogCtx),
-                      fontWeight: FontWeight.w600,
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogCtx),
+                    child: Text(
+                      'Cancel',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: AppTheme.getMutedTextColor(dialogCtx),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final sM = (startMonth != null && startYear != null) ? startMonth! : '';
-                    final sY = (startMonth != null && startYear != null) ? startYear! : (startYear ?? '');
-                    final eM = (endMonth != null && endYear != null) ? endMonth! : '';
-                    final eY = (endMonth != null && endYear != null) ? endYear! : (endYear ?? '');
+                  ElevatedButton(
+                    onPressed: () {
+                      final sM = (startMonth != null && startYear != null) ? startMonth! : '';
+                      final sY = (startMonth != null && startYear != null) ? startYear! : (startYear ?? '');
+                      final eM = (endMonth != null && endYear != null) ? endMonth! : '';
+                      final eY = (endMonth != null && endYear != null) ? endYear! : (endYear ?? '');
 
-                    String rawUrl = linkController.text.trim();
-                    if (rawUrl.isNotEmpty &&
-                        !rawUrl.startsWith('http://') &&
-                        !rawUrl.startsWith('https://') &&
-                        !rawUrl.startsWith('mailto:')) {
-                      if (rawUrl.contains('.') && !rawUrl.contains(' ')) {
-                        rawUrl = 'https://$rawUrl';
+                      String rawUrl = linkController.text.trim();
+                      if (rawUrl.isNotEmpty &&
+                          !rawUrl.startsWith('http://') &&
+                          !rawUrl.startsWith('https://') &&
+                          !rawUrl.startsWith('mailto:')) {
+                        if (rawUrl.contains('.') && !rawUrl.contains(' ')) {
+                          rawUrl = 'https://$rawUrl';
+                        }
                       }
-                    }
 
-                    final entry = ExtracurricularEntry(
-                      activity: activityController.text.trim(),
-                      role: roleController.text.trim(),
-                      organization: orgController.text.trim(),
-                      description: descController.text.trim(),
-                      url: rawUrl,
-                      startMonth: sM,
-                      startYear: sY,
-                      endMonth: eM,
-                      endYear: eY,
-                    );
+                      final entry = ExtracurricularEntry(
+                        activity: activityController.text.trim(),
+                        role: roleController.text.trim(),
+                        organization: orgController.text.trim(),
+                        description: descController.text.trim(),
+                        url: rawUrl,
+                        startMonth: sM,
+                        startYear: sY,
+                        endMonth: eM,
+                        endYear: eY,
+                      );
 
-                    final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.extracurriculars ?? []);
-                    if (index != null && index >= 0 && index < currentList.length) {
-                      currentList[index] = entry;
-                    } else {
-                      currentList.add(entry);
-                    }
+                      final currentList = List<ExtracurricularEntry>.from(_parsedResumeData?.extracurriculars ?? []);
+                      if (index != null && index >= 0 && index < currentList.length) {
+                        currentList[index] = entry;
+                      } else {
+                        currentList.add(entry);
+                      }
 
-                    setState(() {
-                      _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(extracurriculars: currentList);
-                    });
-                    _persistCurrentResume();
-                    Navigator.pop(dialogCtx);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryOrange,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      setState(() {
+                        _parsedResumeData = (_parsedResumeData ?? const ResumeData()).copyWith(extracurriculars: currentList);
+                      });
+                      _persistCurrentResume();
+                      Navigator.pop(dialogCtx);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryOrange,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: Text(
+                      'Save',
+                      style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
+                    ),
                   ),
-                  child: Text(
-                    'Save',
-                    style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
+                ],
+              ),
             );
           },
         );

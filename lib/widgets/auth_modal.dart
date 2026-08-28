@@ -23,10 +23,13 @@ class AuthModal extends StatefulWidget {
       context: context,
       barrierDismissible: true,
       barrierColor: Colors.black.withValues(alpha: 0.55),
-      builder: (context) => Dialog(
-        backgroundColor: Colors.transparent,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: AuthModal(onSuccess: onSuccess, initialIsSignUp: isSignUp),
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+        child: Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: AuthModal(onSuccess: onSuccess, initialIsSignUp: isSignUp),
+        ),
       ),
     );
   }

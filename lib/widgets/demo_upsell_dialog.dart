@@ -36,9 +36,12 @@ class DemoUpsellDialog extends StatelessWidget {
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => DemoUpsellDialog(
-        actionTitle: actionTitle,
-        description: description,
+      builder: (ctx) => MediaQuery(
+        data: MediaQuery.of(ctx).copyWith(viewInsets: EdgeInsets.zero),
+        child: DemoUpsellDialog(
+          actionTitle: actionTitle,
+          description: description,
+        ),
       ),
     );
 
