@@ -254,12 +254,6 @@
     }
   </style>
 
-  <!-- GSAP & ScrollTrigger Animation Libraries -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
-
-  <!-- Lenis Smooth Scroll Engine -->
-  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
   <script>
     // Prevent document window scroll displacement when mobile keyboard opens
     function resetWindowScroll() {
@@ -280,42 +274,6 @@
       window.visualViewport.addEventListener('resize', resetWindowScroll, { passive: true });
       window.visualViewport.addEventListener('scroll', resetWindowScroll, { passive: true });
     }
-
-    window.addEventListener('DOMContentLoaded', () => {
-      // Respect prefers-reduced-motion
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-
-      if (!prefersReducedMotion && typeof Lenis !== 'undefined') {
-        const lenis = new Lenis({
-          duration: 1.2,
-          easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)), // Lenis exponential decay
-          orientation: 'vertical',
-          gestureOrientation: 'vertical',
-          smoothWheel: !isMobile, // Disable on mobile if performance/native feel preferred
-          wheelMultiplier: 1.0,
-          touchMultiplier: 1.5,
-          infinite: false,
-        });
-
-        window.lenis = lenis;
-
-        // Sync Lenis scroll ticker with GSAP ScrollTrigger cleanly (single RAF loop)
-        if (typeof ScrollTrigger !== 'undefined' && typeof gsap !== 'undefined') {
-          lenis.on('scroll', ScrollTrigger.update);
-          gsap.ticker.add((time) => {
-            lenis.raf(time * 1000);
-          });
-          gsap.ticker.lagSmoothing(0);
-        } else {
-          function raf(time) {
-            lenis.raf(time);
-            requestAnimationFrame(raf);
-          }
-          requestAnimationFrame(raf);
-        }
-      }
-    });
   </script>
 </head>
 <body>

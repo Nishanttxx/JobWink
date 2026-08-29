@@ -32,8 +32,12 @@ class _HeroSectionState extends State<HeroSection> {
 
     return GsapScrollTrigger(
       triggerKey: 'hero_section',
-      onEnter: () => setState(() => _isTriggered = true),
-      onLeave: () => setState(() => _isTriggered = false),
+      triggerOnce: true,
+      onEnter: () {
+        if (!_isTriggered && mounted) {
+          setState(() => _isTriggered = true);
+        }
+      },
       child: Container(
         width: double.infinity,
         color: Colors.transparent,
@@ -91,7 +95,7 @@ class _HeroSectionState extends State<HeroSection> {
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 900),
                       child: Shuffle(
-                        text: 'Build a Resume That Gets You Hired.',
+                        text: 'Build a Resume\nThat Gets You Hired.',
                         style: GoogleFonts.syne(
                           fontSize: isDesktop
                               ? 58

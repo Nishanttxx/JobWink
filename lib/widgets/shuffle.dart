@@ -144,8 +144,21 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
     }
   }
 
-  String _getRandomChar() {
-    return _scrambleChars[_random.nextInt(_scrambleChars.length)];
+  static const String _lowercaseChars = 'abcdefghijklmnopqrstuvwxyz';
+  static const String _uppercaseChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  static const String _digitChars = '0123456789';
+
+  String _getRandomCharFor(String targetChar) {
+    if (targetChar.isEmpty) return '';
+    final code = targetChar.codeUnitAt(0);
+    if (code >= 65 && code <= 90) {
+      return _uppercaseChars[_random.nextInt(_uppercaseChars.length)];
+    } else if (code >= 97 && code <= 122) {
+      return _lowercaseChars[_random.nextInt(_lowercaseChars.length)];
+    } else if (code >= 48 && code <= 57) {
+      return _digitChars[_random.nextInt(_digitChars.length)];
+    }
+    return targetChar;
   }
 
   String _buildScrambledText(double currentElapsedSec, double totalDurationSec) {
@@ -165,9 +178,9 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
       charIndex++;
 
       if (currentElapsedSec < startDelaySec) {
-        buffer.write(_hasTriggered ? char : _getRandomChar());
+        buffer.write(_hasTriggered ? char : _getRandomCharFor(char));
       } else if (currentElapsedSec >= startDelaySec && currentElapsedSec < endSec) {
-        buffer.write(_getRandomChar());
+        buffer.write(_getRandomCharFor(char));
       } else {
         buffer.write(char);
       }
@@ -197,6 +210,7 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
       fontWeight: widget.fontWeight ?? widget.style?.fontWeight ?? FontWeight.w900,
     );
 
+    final double exactLineHeight = (effectiveFontSize * (baseStyle.height ?? 1.1)).ceilToDouble();
     final curve = _getCurve();
     final totalDurationSec = (_controller.duration?.inMilliseconds ?? 1000) / 1000.0;
 
@@ -213,23 +227,68 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
                     totalDurationSec,
                   );
 
-        Widget textWidget = Text(
-          displayText,
-          style: baseStyle,
-          textAlign: widget.textAlign,
-        );
-
-        if (widget.triggerOnHover && kIsWeb) {
-          textWidget = MouseRegion(
-            cursor: SystemMouseCursors.click,
-            onEnter: (_) => _triggerAnimation(),
-            child: textWidget,
+        final lines = displayText.split('\n');
+        if (lines.length > 1) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: widget.textAlign == TextAlign.center
+                ? CrossAxisAlignment.center
+                : widget.textAlign == TextAlign.right
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
+            children: lines.map((line) {
+              return SizedBox(
+                height: exactLineHeight,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: widget.textAlign == TextAlign.center
+                      ? Alignment.center
+                      : widget.textAlign == TextAlign.right
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                  child: Text(
+                    line,
+                    style: baseStyle,
+                    textAlign: widget.textAlign,
+                    maxLines: 1,
+                    softWrap: false,
+                  ),
+                ),
+              );
+            }).toList(),
           );
         }
 
-        return textWidget;
+        return SizedBox(
+          height: exactLineHeight,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: widget.textAlign == TextAlign.center
+                ? Alignment.center
+                : widget.textAlign == TextAlign.right
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+            child: Text(
+              displayText,
+              style: baseStyle,
+              textAlign: widget.textAlign,
+              maxLines: 1,
+              softWrap: false,
+            ),
+          ),
+        );
       },
     );
+
+    Widget result = childWidget;
+
+    if (widget.triggerOnHover && kIsWeb) {
+      result = MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => _triggerAnimation(),
+        child: result,
+      );
+    }
 
     return VisibilityDetector(
       key: Key('shuffle_${widget.text.hashCode}_${widget.text.length}'),
@@ -245,7 +304,7 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
           }
         }
       },
-      child: childWidget,
+      child: result,
     );
   }
 }
