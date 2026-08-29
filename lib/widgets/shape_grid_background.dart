@@ -183,6 +183,9 @@ class _ShapeGridBackgroundState extends State<ShapeGridBackground>
   @override
   Widget build(BuildContext context) {
     final isDark = AppTheme.isDarkMode(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isMobile = screenWidth < 768;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
 
     final defaultBorderColor = widget.borderColor ??
         (isDark
@@ -193,6 +196,25 @@ class _ShapeGridBackgroundState extends State<ShapeGridBackground>
         (isDark
             ? AppTheme.primaryOrange.withValues(alpha: 0.25)
             : AppTheme.primaryOrange.withValues(alpha: 0.16));
+
+    // On mobile or reduced motion, render a clean static grid to conserve 100% frame budget for entrance animations
+    if (isMobile || reduceMotion) {
+      return RepaintBoundary(
+        child: CustomPaint(
+          painter: _ShapeGridPainter(
+            animationValue: 0.0,
+            speed: widget.speed,
+            squareSize: widget.squareSize,
+            direction: widget.direction,
+            shape: widget.shape,
+            borderColor: defaultBorderColor,
+            hoverFillColor: defaultHoverFillColor,
+            cellOpacities: const {},
+          ),
+          size: Size.infinite,
+        ),
+      );
+    }
 
     return MouseRegion(
       onHover: _onHover,

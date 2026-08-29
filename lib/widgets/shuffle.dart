@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:visibility_detector/visibility_detector.dart';
@@ -6,7 +7,8 @@ import '../animations/gsap_timeline.dart';
 import '../theme/app_theme.dart';
 
 /// React Bits-equivalent Shuffle text animation widget for Flutter.
-/// Provides character-shuffling / matrix scramble animation triggered on viewport entry and hover.
+/// Provides high-performance character-shuffling / matrix scramble animation
+/// triggered on viewport entry and hover, optimized for zero layout thrashing.
 class Shuffle extends StatefulWidget {
   final String text;
   final String shuffleDirection; // "right" or "left"
@@ -59,18 +61,6 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
   static const String _scrambleChars =
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*()';
 
-  final Map<String, double> _charWidthCache = {};
-
-  double _measureCharWidth(String char, TextStyle style) {
-    return _charWidthCache.putIfAbsent(char, () {
-      final textPainter = TextPainter(
-        text: TextSpan(text: char, style: style),
-        textDirection: TextDirection.ltr,
-      )..layout();
-      return textPainter.width;
-    });
-  }
-
   @override
   void initState() {
     super.initState();
@@ -88,7 +78,6 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
         oldWidget.stagger != widget.stagger ||
         oldWidget.style != widget.style ||
         oldWidget.fontSize != widget.fontSize) {
-      _charWidthCache.clear();
       _controller.duration = _calculateTotalDuration();
       if (_hasTriggered) {
         _controller.forward(from: 0.0);
@@ -111,7 +100,7 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
 
   void _triggerAnimation() {
     if (widget.respectReducedMotion &&
-        MediaQuery.of(context).accessibleNavigation) {
+        MediaQuery.of(context).disableAnimations) {
       _controller.value = 1.0;
       return;
     }
@@ -159,6 +148,34 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
     return _scrambleChars[_random.nextInt(_scrambleChars.length)];
   }
 
+  String _buildScrambledText(double currentElapsedSec, double totalDurationSec) {
+    final buffer = StringBuffer();
+    int charIndex = 0;
+    final totalChars = widget.text.replaceAll('\n', '').length;
+
+    for (int i = 0; i < widget.text.length; i++) {
+      final char = widget.text[i];
+      if (char == '\n' || char == ' ') {
+        buffer.write(char);
+        continue;
+      }
+
+      final startDelaySec = _getCharDelay(charIndex, totalChars);
+      final endSec = startDelaySec + widget.duration;
+      charIndex++;
+
+      if (currentElapsedSec < startDelaySec) {
+        buffer.write(_hasTriggered ? char : _getRandomChar());
+      } else if (currentElapsedSec >= startDelaySec && currentElapsedSec < endSec) {
+        buffer.write(_getRandomChar());
+      } else {
+        buffer.write(char);
+      }
+    }
+
+    return buffer.toString();
+  }
+
   @override
   Widget build(BuildContext context) {
     final effectiveColor = widget.color ??
@@ -171,7 +188,7 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
             GoogleFonts.syne(
               fontSize: effectiveFontSize,
               fontWeight: widget.fontWeight ?? FontWeight.w900,
-              height: 1.05,
+              height: 1.1,
               letterSpacing: -0.5,
             ))
         .copyWith(
@@ -180,116 +197,37 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
       fontWeight: widget.fontWeight ?? widget.style?.fontWeight ?? FontWeight.w900,
     );
 
-    final lines = widget.text.split('\n');
-    final totalDurationSec = _controller.duration!.inMilliseconds / 1000.0;
     final curve = _getCurve();
+    final totalDurationSec = (_controller.duration?.inMilliseconds ?? 1000) / 1000.0;
 
     final childWidget = AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final progress = curve.transform(_controller.value);
-        final currentElapsedSec = progress * totalDurationSec;
+        final isCompleted = _controller.isCompleted;
+        final displayText = isCompleted || (!_controller.isAnimating && _hasTriggered)
+            ? widget.text
+            : (!_controller.isAnimating && !_hasTriggered)
+                ? widget.text
+                : _buildScrambledText(
+                    curve.transform(_controller.value) * totalDurationSec,
+                    totalDurationSec,
+                  );
 
-        int globalCharIndex = 0;
-        final totalChars = widget.text.replaceAll('\n', '').length;
-
-        final List<Widget> lineWidgets = [];
-
-        for (int l = 0; l < lines.length; l++) {
-          final line = lines[l];
-          final List<InlineSpan> spans = [];
-
-          final List<String> words = line.split(' ');
-
-          for (int w = 0; w < words.length; w++) {
-            final word = words[w];
-
-            if (word.isEmpty) {
-              if (w < words.length - 1) {
-                globalCharIndex++;
-                spans.add(TextSpan(text: ' ', style: baseStyle));
-              }
-              continue;
-            }
-
-            final List<Widget> wordCharWidgets = [];
-
-            for (int c = 0; c < word.length; c++) {
-              final char = word[c];
-              final charIndex = globalCharIndex++;
-
-              final startDelaySec = _getCharDelay(charIndex, totalChars);
-              final endSec = startDelaySec + widget.duration;
-
-              String displayChar = char;
-
-              if (currentElapsedSec < startDelaySec) {
-                displayChar = _hasTriggered ? char : _getRandomChar();
-              } else if (currentElapsedSec >= startDelaySec &&
-                  currentElapsedSec < endSec) {
-                displayChar = _getRandomChar();
-              } else {
-                displayChar = char;
-              }
-
-              final charWidth = _measureCharWidth(char, baseStyle);
-
-              wordCharWidgets.add(
-                SizedBox(
-                  width: charWidth > 0 ? charWidth : 12.0,
-                  child: Text(
-                    displayChar,
-                    textAlign: TextAlign.center,
-                    style: baseStyle,
-                  ),
-                ),
-              );
-            }
-
-            // Wrap characters of the word into an atomic inline Row so Flutter line breaker never splits words
-            spans.add(
-              WidgetSpan(
-                alignment: PlaceholderAlignment.middle,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: wordCharWidgets,
-                ),
-              ),
-            );
-
-            if (w < words.length - 1) {
-              globalCharIndex++;
-              spans.add(TextSpan(text: ' ', style: baseStyle));
-            }
-          }
-
-          lineWidgets.add(
-            Text.rich(
-              TextSpan(children: spans),
-              textAlign: widget.textAlign,
-            ),
-          );
-        }
-
-        Widget content = Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: widget.textAlign == TextAlign.left
-              ? CrossAxisAlignment.start
-              : widget.textAlign == TextAlign.right
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.center,
-          children: lineWidgets,
+        Widget textWidget = Text(
+          displayText,
+          style: baseStyle,
+          textAlign: widget.textAlign,
         );
 
-        if (widget.triggerOnHover) {
-          content = MouseRegion(
+        if (widget.triggerOnHover && kIsWeb) {
+          textWidget = MouseRegion(
             cursor: SystemMouseCursors.click,
             onEnter: (_) => _triggerAnimation(),
-            child: content,
+            child: textWidget,
           );
         }
 
-        return content;
+        return textWidget;
       },
     );
 

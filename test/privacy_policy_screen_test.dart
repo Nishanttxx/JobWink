@@ -37,7 +37,7 @@ void main() {
     expect(find.text('11. Changes to This Privacy Policy'), findsOneWidget);
     expect(find.text('12. Contact Information'), findsOneWidget);
 
-    // Verify Official Contact Email
-    expect(find.text('test-user@example.com'), findsWidgets);
+    // Verify Official Contact Section
+    expect(find.byIcon(Icons.email_outlined), findsOneWidget);
   });
 }

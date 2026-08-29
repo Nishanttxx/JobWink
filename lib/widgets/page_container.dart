@@ -41,7 +41,10 @@ class PageContainer extends StatelessWidget {
 
     if (scrollable) {
       return SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: content,
       );
     }
