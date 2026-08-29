@@ -99,21 +99,31 @@
     html, body {
       margin: 0;
       padding: 0;
-      width: 100%;
-      height: 100%;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
       position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       overflow: hidden;
+      overscroll-behavior: none;
       touch-action: pan-y;
       background-color: #060709;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
     flutter-view, flt-glass-pane {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100% !important;
-      height: 100% !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      height: 100dvh !important;
+      overflow: hidden !important;
     }
 
     /* Design Tokens for Radii & Consistency */
@@ -252,11 +262,24 @@
   <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js"></script>
   <script>
     // Prevent document window scroll displacement when mobile keyboard opens
-    window.addEventListener('scroll', () => {
+    function resetWindowScroll() {
       if (window.scrollY !== 0 || window.scrollX !== 0) {
         window.scrollTo(0, 0);
       }
-    });
+      if (document.documentElement && document.documentElement.scrollTop !== 0) {
+        document.documentElement.scrollTop = 0;
+      }
+      if (document.body && document.body.scrollTop !== 0) {
+        document.body.scrollTop = 0;
+      }
+    }
+
+    window.addEventListener('scroll', resetWindowScroll, { passive: true });
+    window.addEventListener('resize', resetWindowScroll, { passive: true });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', resetWindowScroll, { passive: true });
+      window.visualViewport.addEventListener('scroll', resetWindowScroll, { passive: true });
+    }
 
     window.addEventListener('DOMContentLoaded', () => {
       // Respect prefers-reduced-motion

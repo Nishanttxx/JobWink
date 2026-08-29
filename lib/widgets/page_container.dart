@@ -29,7 +29,8 @@ class PageContainer extends StatelessWidget {
       vertical: 24,
     );
 
-    final content = Center(
+    final content = Align(
+      alignment: Alignment.topCenter,
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: maxWidth),
         child: Padding(

@@ -58,6 +58,7 @@ class _AppLayoutState extends State<AppLayout> {
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: AppTheme.getBgColor(context),
+      resizeToAvoidBottomInset: false,
       drawer: !isDesktop
           ? Drawer(
               child: AppSidebar(

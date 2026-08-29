@@ -251,6 +251,7 @@ class _LandingPageState extends State<LandingPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
+      resizeToAvoidBottomInset: false,
       body: MouseRegion(
         onHover: (event) {
           _mousePositionNotifier.value = event.localPosition;
