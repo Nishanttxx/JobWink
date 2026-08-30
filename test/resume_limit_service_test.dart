@@ -150,4 +150,105 @@ void main() {
       expect(checkAfterRefund.allowed, isTrue);
     });
   });
+
+  group('ResumeLimitService.normalizeUsageMap Tests', () {
+    test('1. Normalizes raw Supabase RPC output with "used" and "limit" keys for new user', () {
+      final rpcOutput = {
+        'used': 0,
+        'limit': 4,
+        'remaining': 4,
+        'usage_date': ResumeLimitService.formatDateOnly(DateTime.now()),
+      };
+
+      final normalized = ResumeLimitService.normalizeUsageMap(rpcOutput);
+
+      expect(normalized['allowed'], isTrue);
+      expect(normalized['daily_limit'], 4);
+      expect(normalized['limit'], 4);
+      expect(normalized['usage_count'], 0);
+      expect(normalized['used'], 0);
+      expect(normalized['resumes_generated_today'], 0);
+      expect(normalized['remaining'], 4);
+      expect(normalized['is_unlimited'], isFalse);
+    });
+
+    test('2. Normalizes database row with legacy "resumes_generated_today" and "daily_limit"', () {
+      final dbRow = {
+        'daily_limit': 10,
+        'resumes_generated_today': 3,
+        'usage_date': ResumeLimitService.formatDateOnly(DateTime.now()),
+      };
+
+      final normalized = ResumeLimitService.normalizeUsageMap(dbRow);
+
+      expect(normalized['allowed'], isTrue);
+      expect(normalized['daily_limit'], 10);
+      expect(normalized['usage_count'], 3);
+      expect(normalized['remaining'], 7);
+    });
+
+    test('3. Correctly flags allowed = false when usage reaches or exceeds limit', () {
+      final atLimit = {
+        'used': 4,
+        'limit': 4,
+        'usage_date': ResumeLimitService.formatDateOnly(DateTime.now()),
+      };
+
+      final normalized = ResumeLimitService.normalizeUsageMap(atLimit);
+
+      expect(normalized['allowed'], isFalse);
+      expect(normalized['usage_count'], 4);
+      expect(normalized['remaining'], 0);
+
+      final overLimit = {
+        'used': 5,
+        'limit': 4,
+        'usage_date': ResumeLimitService.formatDateOnly(DateTime.now()),
+      };
+
+      final normOver = ResumeLimitService.normalizeUsageMap(overLimit);
+      expect(normOver['allowed'], isFalse);
+      expect(normOver['remaining'], 0);
+    });
+
+    test('4. Resets usage to 0 if record is from a previous calendar day', () {
+      final yesterday = {
+        'used': 4,
+        'limit': 4,
+        'usage_date': '2020-01-01',
+      };
+
+      final normalized = ResumeLimitService.normalizeUsageMap(yesterday);
+
+      expect(normalized['allowed'], isTrue);
+      expect(normalized['usage_count'], 0);
+      expect(normalized['used'], 0);
+      expect(normalized['remaining'], 4);
+    });
+
+    test('5. Grants unlimited access for admin users regardless of usage count', () {
+      final adminRow = {
+        'used': 50,
+        'limit': 4,
+        'usage_date': ResumeLimitService.formatDateOnly(DateTime.now()),
+      };
+
+      final normalized = ResumeLimitService.normalizeUsageMap(adminRow, isAdmin: true);
+
+      expect(normalized['allowed'], isTrue);
+      expect(normalized['daily_limit'], 999999);
+      expect(normalized['remaining'], 999999);
+      expect(normalized['is_unlimited'], isTrue);
+    });
+
+    test('6. Empty or missing map defaults to allowed = true with 4 remaining', () {
+      final empty = <String, dynamic>{};
+      final normalized = ResumeLimitService.normalizeUsageMap(empty);
+
+      expect(normalized['allowed'], isTrue);
+      expect(normalized['daily_limit'], 4);
+      expect(normalized['usage_count'], 0);
+      expect(normalized['remaining'], 4);
+    });
+  });
 }

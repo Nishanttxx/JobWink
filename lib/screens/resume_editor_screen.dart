@@ -5522,16 +5522,17 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final usageInfo = await ResumeLimitService.instance.getUserResumeUsage();
     final user = Supabase.instance.client.auth.currentUser;
     final userId = user?.id ?? 'guest';
-    final dailyLimit = (usageInfo['daily_limit'] as num? ?? 4).toInt();
-    final usedBefore = (usageInfo['usage_count'] as num? ?? 0).toInt();
-    final remainingBefore = (usageInfo['remaining'] as num? ?? 0).toInt();
-    final isAllowed = usageInfo['allowed'] == true;
+    final dailyLimit = (usageInfo['daily_limit'] as num? ?? usageInfo['limit'] as num? ?? 4).toInt();
+    final usedBefore = (usageInfo['usage_count'] as num? ?? usageInfo['used'] as num? ?? 0).toInt();
+    final remainingBefore = (usageInfo['remaining'] as num? ?? (dailyLimit - usedBefore)).toInt();
+    final isAllowed = (usageInfo['allowed'] as bool?) ?? (usedBefore < dailyLimit);
 
     debugPrint('[QUOTA DEBUG]');
     debugPrint('User ID: $userId');
     debugPrint('Daily Limit: $dailyLimit');
     debugPrint('Used Before Download: $usedBefore');
     debugPrint('Remaining Before Download: $remainingBefore');
+    debugPrint('Is Allowed: $isAllowed');
 
     if (!isAllowed || remainingBefore <= 0) {
       if (mounted) {

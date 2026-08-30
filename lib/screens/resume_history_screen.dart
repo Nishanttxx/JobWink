@@ -70,10 +70,10 @@ class ResumeHistoryScreenState extends State<ResumeHistoryScreen> {
 
     // 1. Quota Check (History download respects daily limit)
     final usageInfo = await ResumeLimitService.instance.getUserResumeUsage();
-    final allowed = usageInfo['allowed'] as bool? ?? true;
+    final dailyLimit = (usageInfo['daily_limit'] as num? ?? usageInfo['limit'] as num? ?? 4).toInt();
+    final usageCount = (usageInfo['usage_count'] as num? ?? usageInfo['used'] as num? ?? 0).toInt();
+    final allowed = (usageInfo['allowed'] as bool?) ?? (usageCount < dailyLimit);
     if (!allowed) {
-      final dailyLimit = usageInfo['daily_limit'] ?? 4;
-      final usageCount = usageInfo['usage_count'] ?? 4;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

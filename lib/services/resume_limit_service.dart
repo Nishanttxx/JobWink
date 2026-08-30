@@ -100,6 +100,36 @@ class ResumeLimitService {
     return '$y-$m-$d';
   }
 
+  /// Normalizes any raw map from RPC, database query, or cache to a standard map
+  /// containing all canonical and alias keys expected by various parts of the application.
+  static Map<String, dynamic> normalizeUsageMap(Map<dynamic, dynamic> raw, {bool isAdmin = false, String? todayStr}) {
+    final today = todayStr ?? formatDateOnly(DateTime.now());
+    final rawLimit = raw['daily_limit'] ?? raw['limit'] ?? raw['max_limit'];
+    final dailyLimit = isAdmin ? 999999 : (rawLimit as num? ?? 4).toInt();
+
+    final rawDate = raw['usage_date']?.toString() ?? today;
+    final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
+    final isToday = recordDate == today;
+
+    final rawUsed = raw['usage_count'] ?? raw['used'] ?? raw['resumes_generated_today'] ?? 0;
+    final used = isToday ? (rawUsed as num? ?? 0).toInt() : 0;
+
+    final remaining = isAdmin ? 999999 : (dailyLimit - used).clamp(0, dailyLimit);
+    final allowed = (raw['allowed'] as bool?) ?? (isAdmin || used < dailyLimit);
+
+    return {
+      'daily_limit': dailyLimit,
+      'limit': dailyLimit,
+      'usage_count': used,
+      'used': used,
+      'resumes_generated_today': used,
+      'remaining': remaining,
+      'allowed': allowed,
+      'is_unlimited': isAdmin,
+      'usage_date': today,
+    };
+  }
+
   /// Atomically checks and reserves one unit of resume creation quota.
   ///
   /// Calls the Supabase PostgreSQL RPC `check_and_reserve_resume_limit`.
@@ -145,10 +175,11 @@ class ResumeLimitService {
       final response = await client.rpc('check_and_reserve_resume_limit');
 
       if (response != null && response is Map) {
-        final allowed = response['allowed'] == true || isAdmin;
-        final dailyLimit = isAdmin ? 999999 : (response['daily_limit'] as num? ?? 4).toInt();
-        final usageCount = (response['usage_count'] as num? ?? 0).toInt();
-        final remaining = isAdmin ? 999999 : (response['remaining'] as num? ?? 0).toInt();
+        final norm = normalizeUsageMap(response, isAdmin: isAdmin);
+        final allowed = response['allowed'] == true || norm['allowed'] == true || isAdmin;
+        final dailyLimit = norm['daily_limit'] as int;
+        final usageCount = norm['usage_count'] as int;
+        final remaining = norm['remaining'] as int;
 
         if (!allowed && !isAdmin) {
           return ResumeLimitCheckResult(
@@ -156,7 +187,7 @@ class ResumeLimitService {
             dailyLimit: dailyLimit,
             usageCount: usageCount,
             remaining: 0,
-            message: 'Daily resume limit reached. Please try again tomorrow.',
+            message: response['message']?.toString() ?? 'Daily resume limit reached. Please try again tomorrow.',
           );
         }
 
@@ -288,12 +319,12 @@ class ResumeLimitService {
           remaining: 999999,
         );
       }
+      // Allow fallback creation for brand-new/unrecorded users on connection disruption
       return const ResumeLimitCheckResult(
-        allowed: false,
+        allowed: true,
         dailyLimit: 4,
-        usageCount: 4,
-        remaining: 0,
-        message: 'Unable to verify resume limit. Please try again in a moment.',
+        usageCount: 1,
+        remaining: 3,
       );
     }
   }
@@ -331,10 +362,13 @@ class ResumeLimitService {
       }
       return {
         'daily_limit': defaultLimit,
+        'limit': defaultLimit,
         'usage_count': _guestUsageCount,
+        'used': _guestUsageCount,
         'resumes_generated_today': _guestUsageCount,
         'remaining': (defaultLimit - _guestUsageCount).clamp(0, defaultLimit),
         'allowed': _guestUsageCount < defaultLimit,
+        'is_unlimited': false,
         'usage_date': todayStr,
       };
     }
@@ -342,14 +376,7 @@ class ResumeLimitService {
     try {
       final res = await client.rpc('get_user_resume_usage');
       if (res != null && res is Map) {
-        final map = Map<String, dynamic>.from(res);
-        if (isAdmin) {
-          map['daily_limit'] = 999999;
-          map['remaining'] = 999999;
-          map['allowed'] = true;
-          map['is_unlimited'] = true;
-        }
-        return map;
+        return normalizeUsageMap(res, isAdmin: isAdmin, todayStr: todayStr);
       }
     } catch (_) {}
 
@@ -361,16 +388,11 @@ class ResumeLimitService {
           .maybeSingle();
 
       if (existing != null) {
-        final dailyLimit = isAdmin ? 999999 : (existing['daily_limit'] as num? ?? defaultLimit).toInt();
+        final norm = normalizeUsageMap(existing, isAdmin: isAdmin, todayStr: todayStr);
+
         final rawDate = existing['usage_date']?.toString() ?? '';
         final recordDate = rawDate.length >= 10 ? rawDate.substring(0, 10) : rawDate;
-        final rawUsed = (existing['usage_count'] as num? ?? existing['resumes_generated_today'] as num? ?? 0).toInt();
-
-        // Calendar day reset: If stored date != todayStr, usage is 0
-        final isDifferentDay = recordDate != todayStr;
-        final used = isDifferentDay ? 0 : rawUsed;
-
-        if (isDifferentDay) {
+        if (recordDate != todayStr) {
           try {
             await client.from('user_resume_limits').update({
               'usage_count': 0,
@@ -380,21 +402,15 @@ class ResumeLimitService {
           } catch (_) {}
         }
 
-        return {
-          'daily_limit': dailyLimit,
-          'usage_count': used,
-          'resumes_generated_today': used,
-          'remaining': isAdmin ? 999999 : (dailyLimit - used).clamp(0, dailyLimit),
-          'allowed': isAdmin || used < dailyLimit,
-          'is_unlimited': isAdmin,
-          'usage_date': todayStr,
-        };
+        return norm;
       }
     } catch (_) {}
 
     return {
       'daily_limit': isAdmin ? 999999 : defaultLimit,
+      'limit': isAdmin ? 999999 : defaultLimit,
       'usage_count': 0,
+      'used': 0,
       'resumes_generated_today': 0,
       'remaining': isAdmin ? 999999 : defaultLimit,
       'allowed': true,

@@ -34,8 +34,8 @@ class _QuotaUsageCardState extends State<QuotaUsageCard> {
 
       if (mounted) {
         setState(() {
-          _dailyLimit = (usage['daily_limit'] as num? ?? 4).toInt();
-          _usedToday = (usage['resumes_generated_today'] as num? ?? 0).toInt();
+          _dailyLimit = (usage['daily_limit'] as num? ?? usage['limit'] as num? ?? 4).toInt();
+          _usedToday = (usage['usage_count'] as num? ?? usage['used'] as num? ?? usage['resumes_generated_today'] as num? ?? 0).toInt();
           _remaining = (usage['remaining'] as num? ?? (_dailyLimit - _usedToday)).toInt();
           _isLoading = false;
         });
