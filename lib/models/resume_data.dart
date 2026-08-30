@@ -259,17 +259,22 @@ class ResumeData {
         .replaceAll(RegExp(r'github\.com\/\S+'), '');
 
     String phone = '';
-    final explicitPlusPhone = RegExp(r'\+\d{1,4}[\s\-\.]?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').firstMatch(textForPhone);
+    final explicitPlusPhone = RegExp(r'(?:\+|00)\d{1,4}[\s\-\.]?(?:\(\d{2,4}\)|\d{2,4})[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').firstMatch(textForPhone);
     if (explicitPlusPhone != null) {
       phone = explicitPlusPhone.group(0)!.trim();
     } else {
-      final phoneMatches = RegExp(r'\b(?:\+?\d{1,4}[\s\-\.]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').allMatches(textForPhone);
-      for (final pm in phoneMatches) {
-        final candidate = pm.group(0)!.trim();
-        final digitCount = candidate.replaceAll(RegExp(r'\D'), '').length;
-        if (digitCount >= 7 && digitCount <= 15) {
-          phone = candidate;
-          break;
+      final parenPhone = RegExp(r'\(\d{2,4}\)[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4}\b').firstMatch(textForPhone);
+      if (parenPhone != null) {
+        phone = parenPhone.group(0)!.trim();
+      } else {
+        final phoneMatches = RegExp(r'(?:(?:\+|00)?\d{1,4}[\s\-\.]?)?(?:\(\d{2,4}\)|\d{2,4})[\s\-\.]?\d{3,4}(?:[\s\-\.]?\d{3,4})?\b').allMatches(textForPhone);
+        for (final pm in phoneMatches) {
+          final candidate = pm.group(0)!.trim();
+          final digitCount = candidate.replaceAll(RegExp(r'\D'), '').length;
+          if (digitCount >= 7 && digitCount <= 15) {
+            phone = candidate;
+            break;
+          }
         }
       }
     }
@@ -288,20 +293,27 @@ class ResumeData {
     String extractedLocation = '';
     final headerLines = sectionBlocks['header'] ?? [];
     for (final line in headerLines) {
-      final locMatch = RegExp(r'\b([A-Z][a-zA-Z\s]{2,20},\s*[A-Z][a-zA-Z\s]{2,20})\b').firstMatch(line);
-      if (locMatch != null) {
-        final cand = locMatch.group(0)!.trim();
-        final candLower = cand.toLowerCase();
-        final isTechOrSkill = RegExp(r'\b(python|docker|java|c\+\+|dart|flutter|html|css|sql|react|node|aws|git|rest|api|linux|tools|skills|cloud|supabase|firebase|postman)\b', caseSensitive: false).hasMatch(candLower);
-        if (!candLower.contains('summary') &&
-            !candLower.contains('university') &&
-            !candLower.contains('college') &&
-            !candLower.contains('school') &&
-            !isTechOrSkill) {
-          extractedLocation = cand;
-          break;
+      final segments = line.split(RegExp(r'[|•\t]')).map((s) => s.trim()).where((s) => s.isNotEmpty);
+      for (final seg in segments) {
+        final locMatch = RegExp(r'\b([A-Z][a-zA-Z\s]{1,25},\s*[A-Z][a-zA-Z\s]{1,25}(?:,\s*[A-Z][a-zA-Z\s]{1,25})?(?:\s*[\-\–]\s*\d{3,6}|\s+\d{5})?)\b').firstMatch(seg);
+        if (locMatch != null) {
+          final cand = locMatch.group(0)!.trim();
+          final candLower = cand.toLowerCase();
+          final isTechOrSkill = RegExp(r'\b(python|docker|java|c\+\+|dart|flutter|html|css|sql|react|node|aws|git|rest|api|linux|tools|skills|cloud|supabase|firebase|postman)\b', caseSensitive: false).hasMatch(candLower);
+          final isDateOrUrl = RegExp(r'\b(http|www|github|linkedin|gmail|\.com|\.org|\.in|present|current|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4})\b', caseSensitive: false).hasMatch(candLower);
+          if (!candLower.contains('summary') &&
+              !candLower.contains('university') &&
+              !candLower.contains('college') &&
+              !candLower.contains('school') &&
+              !candLower.contains('institute') &&
+              !isTechOrSkill &&
+              !isDateOrUrl) {
+            extractedLocation = cand;
+            break;
+          }
         }
       }
+      if (extractedLocation.isNotEmpty) break;
     }
 
     // Title detection from header block
@@ -1411,19 +1423,36 @@ class ResumeData {
     }
 
     String getString(List<String> keys) {
-      final val = _getNormalized(targetJson, keys);
-      if (val != null && val is! Map && val is! List && val.toString().trim().isNotEmpty) {
-        final s = val.toString().trim();
-        if (!_isPlaceholderValue(s)) return s;
+      String extractFromVal(dynamic v) {
+        if (v == null) return '';
+        if (v is Map) {
+          final city = v['city']?.toString().trim() ?? v['address']?.toString().trim() ?? '';
+          final state = v['state']?.toString().trim() ?? v['region']?.toString().trim() ?? v['province']?.toString().trim() ?? '';
+          final country = v['country']?.toString().trim() ?? '';
+          final zip = v['zip']?.toString().trim() ?? v['postalCode']?.toString().trim() ?? v['postal_code']?.toString().trim() ?? '';
+          final locParts = [city, state, zip, country].where((p) => p.isNotEmpty && !_isPlaceholderValue(p)).toList();
+          if (locParts.isNotEmpty) return locParts.join(', ');
+
+          final phoneVal = v['number']?.toString().trim() ?? v['phone']?.toString().trim() ?? v['value']?.toString().trim() ?? '';
+          if (phoneVal.isNotEmpty && !_isPlaceholderValue(phoneVal)) return phoneVal;
+          return '';
+        } else if (v is! List && v.toString().trim().isNotEmpty) {
+          final s = v.toString().trim();
+          if (!_isPlaceholderValue(s)) return s;
+        }
+        return '';
       }
+
+      final val = _getNormalized(targetJson, keys);
+      final directStr = extractFromVal(val);
+      if (directStr.isNotEmpty) return directStr;
+
       for (final subMapKey in ['personal', 'personal_info', 'personalInfo', 'contact_info', 'contactInfo', 'contact', 'contactInformation', 'contact_information', 'identity', 'header', 'profile', 'user', 'basics', 'info', 'details']) {
         final subMapVal = _getNormalized(targetJson, [subMapKey]);
         if (subMapVal is Map) {
           final sVal = _getNormalized(subMapVal, keys);
-          if (sVal != null && sVal is! Map && sVal is! List && sVal.toString().trim().isNotEmpty) {
-            final s = sVal.toString().trim();
-            if (!_isPlaceholderValue(s)) return s;
-          }
+          final nestedStr = extractFromVal(sVal);
+          if (nestedStr.isNotEmpty) return nestedStr;
         }
       }
       return '';

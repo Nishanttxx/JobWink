@@ -103,38 +103,40 @@ class _IdentityContactCardState extends State<IdentityContactCard> {
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Col 1: Full Name, LinkedIn Profile
+                    // Col 1: Full Name, Email Address, LinkedIn Profile
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildFieldItem(context, 'Full Name', widget.nameController, 'e.g. Syed Jabbar'),
                           const SizedBox(height: 14),
+                          _buildFieldItem(context, 'Email Address', widget.emailController, 'e.g. syed@example.com'),
+                          const SizedBox(height: 14),
                           _buildFieldItem(context, 'LinkedIn Profile', widget.linkedinController, 'https://linkedin.com/in/...'),
                         ],
                       ),
                     ),
                     const SizedBox(width: 20),
-                    // Col 2: Role / Job Title, Location(s)
+                    // Col 2: Role / Job Title, Phone Number, Github / Portfolio
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildFieldItem(context, 'Role / Job Title', widget.roleController, 'e.g. AI / Machine Learning Engineer'),
                           const SizedBox(height: 14),
-                          _buildFieldItem(context, 'Location(s)', widget.locationController, 'e.g. DHA 1, Okara, Punjab'),
+                          _buildFieldItem(context, 'Phone Number', widget.phoneController, 'e.g. +92 4200002556'),
+                          const SizedBox(height: 14),
+                          _buildFieldItem(context, 'Github / Portfolio', widget.githubController, 'https://github.com/...'),
                         ],
                       ),
                     ),
                     const SizedBox(width: 20),
-                    // Col 3: Phone Number, Github / Portfolio
+                    // Col 3: Location(s)
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildFieldItem(context, 'Phone Number', widget.phoneController, 'e.g. +92 4200002556'),
-                          const SizedBox(height: 14),
-                          _buildFieldItem(context, 'Github / Portfolio', widget.githubController, 'https://github.com/...'),
+                          _buildFieldItem(context, 'Location(s)', widget.locationController, 'e.g. DHA 1, Okara, Punjab'),
                         ],
                       ),
                     ),
@@ -148,24 +150,31 @@ class _IdentityContactCardState extends State<IdentityContactCard> {
                       children: [
                         Expanded(child: _buildFieldItem(context, 'Full Name', widget.nameController, 'e.g. John Doe')),
                         const SizedBox(width: 14),
+                        Expanded(child: _buildFieldItem(context, 'Email Address', widget.emailController, 'e.g. john@example.com')),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Expanded(child: _buildFieldItem(context, 'Role / Job Title', widget.roleController, 'e.g. Software Engineer')),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+                        const SizedBox(width: 14),
                         Expanded(child: _buildFieldItem(context, 'Phone Number', widget.phoneController, 'e.g. +1 (555) 000-0000')),
-                        const SizedBox(width: 14),
-                        Expanded(child: _buildFieldItem(context, 'Location(s)', widget.locationController, 'e.g. New York, NY')),
                       ],
                     ),
                     const SizedBox(height: 14),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: _buildFieldItem(context, 'LinkedIn Profile', widget.linkedinController, 'https://linkedin.com/in/...')),
+                        Expanded(child: _buildFieldItem(context, 'Location(s)', widget.locationController, 'e.g. New York, NY')),
                         const SizedBox(width: 14),
+                        Expanded(child: _buildFieldItem(context, 'LinkedIn Profile', widget.linkedinController, 'https://linkedin.com/in/...')),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Expanded(child: _buildFieldItem(context, 'Github / Portfolio', widget.githubController, 'https://github.com/...')),
                       ],
                     ),
@@ -176,6 +185,8 @@ class _IdentityContactCardState extends State<IdentityContactCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildFieldItem(context, 'Full Name', widget.nameController, 'e.g. John Doe'),
+                    const SizedBox(height: 12),
+                    _buildFieldItem(context, 'Email Address', widget.emailController, 'e.g. john@example.com'),
                     const SizedBox(height: 12),
                     _buildFieldItem(context, 'Role / Job Title', widget.roleController, 'e.g. Software Engineer'),
                     const SizedBox(height: 12),

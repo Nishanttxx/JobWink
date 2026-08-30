@@ -190,6 +190,7 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<Offset?> _mousePositionNotifier = ValueNotifier<Offset?>(null);
 
   // Global Keys for smooth section scrolling
   final GlobalKey _heroKey = GlobalKey();
@@ -236,6 +237,7 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
+    _mousePositionNotifier.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -249,25 +251,30 @@ class _LandingPageState extends State<LandingPage> {
     return Scaffold(
       backgroundColor: bgColor,
       resizeToAvoidBottomInset: false,
-      body: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          // 1. Continuous Full-Page Animated Geometric ShapeGrid Canvas
-          Positioned.fill(
-            child: IgnorePointer(
-              child: RepaintBoundary(
-                child: ShapeGridBackground(
-                  speed: 0.35,
-                  squareSize: 50.0,
-                  direction: ShapeGridDirection.diagonal,
-                  shape: ShapeGridShape.square,
-                  borderColor: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
+      body: MouseRegion(
+        onHover: (event) => _mousePositionNotifier.value = event.localPosition,
+        onExit: (_) => _mousePositionNotifier.value = null,
+        opaque: false,
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            // 1. Continuous Full-Page Animated Geometric ShapeGrid Canvas
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: ShapeGridBackground(
+                    speed: 0.35,
+                    squareSize: 50.0,
+                    direction: ShapeGridDirection.diagonal,
+                    shape: ShapeGridShape.square,
+                    mousePositionNotifier: _mousePositionNotifier,
+                    borderColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                  ),
                 ),
               ),
             ),
-          ),
 
             // 2. Ambient Floating Radial Glow Orbs across sections
             Positioned(
@@ -398,6 +405,7 @@ class _LandingPageState extends State<LandingPage> {
             ),
           ],
         ),
+      ),
     );
   }
 }
