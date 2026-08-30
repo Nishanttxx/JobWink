@@ -1,6 +1,6 @@
-﻿<div align="center">
+<div align="center">
 
-# ✨ JobWink
+# <img src="assets/images/jobwink_logo.png" width="38" height="38" style="vertical-align: middle; border-radius: 8px;" alt="JobWink logo" /> JobWink
 
 ### *Your AI-Powered Career Intelligence Platform*
 
