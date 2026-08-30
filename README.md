@@ -1,12 +1,10 @@
 ﻿<div align="center">
 
-<p align="center">
-  <img src="assets/logo.png" alt="JobWink logo" width="160" />
-</p>
+<h1>
+  <img src="assets/logo.png" alt="JobWink logo" width="48" style="vertical-align: middle; margin-right: 8px;" /> ✨ JobWink
+</h1>
 
-# ✨ JobWink
-
-### *Your AI-Powered Career Intelligence Platform*
+# *Your AI-Powered Career Intelligence Platform*
 
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.12+-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
