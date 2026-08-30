@@ -10,9 +10,9 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-Python-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![License](https://img.shields.io/badge/License-Private-red?style=for-the-badge)](LICENSE)
 
-> **JobWink** is an intelligent, full-stack Flutter web application that supercharges your job search — from AI-crafted resumes and real-time ATS scoring to Tinder-style job matching and ML-powered career predictions.
+> **JobWink** is an intelligent, full-stack Flutter web application that supercharges your job search — from AI-crafted resumes and real-time ATS scoring to Tinder-style job matching and ML-powe[...]
 
-[🚀 Features](#-features) · [🏗️ Architecture](#-architecture) · [⚙️ Setup](#️-setup) · [🤖 AI Providers](#-ai-providers) · [🗂️ Project Structure](#️-project-structure) · [🛠️ Backend](#️-backend-api-reference)
+[🚀 Features](#-features) · [🏗️ Architecture](#-architecture) · [⚙️ Setup](#️-setup) · [🤖 AI Providers](#-ai-providers) · [🗂️ Project Structure](#️-project-structure) ·[...]
 
 ---
 
@@ -20,7 +20,7 @@
 
 ## 🌟 What is JobWink?
 
-JobWink transforms the painful, manual job hunt into a seamless, AI-driven experience. It combines a **beautiful Flutter web UI**, a **Python FastAPI backend**, a **job intelligence collector**, and a **multi-provider AI orchestration layer** to give job seekers an unfair advantage.
+JobWink transforms the painful, manual job hunt into a seamless, AI-driven experience. It combines a **beautiful Flutter web UI**, a **Python FastAPI backend**, a **job intelligence collector**, a[...]
 
 Whether you're tailoring your resume for a specific role, checking your ATS match score, swiping through curated job listings, or predicting your salary — JobWink has you covered.
 
@@ -132,7 +132,7 @@ Whether you're tailoring your resume for a specific role, checking your ATS matc
 
 ## 🤖 AI Providers
 
-JobWink uses a **cascading multi-provider AI orchestration** system. If the primary provider hits a quota limit or error, it automatically falls back to the next available provider — zero downtime, zero user impact.
+JobWink uses a **cascading multi-provider AI orchestration** system. If the primary provider hits a quota limit or error, it automatically falls back to the next available provider — zero downt[...]
 
 | Priority | Provider | Model | Use Case |
 |----------|----------|-------|----------|
@@ -392,7 +392,7 @@ This project is **private and proprietary**. All rights reserved.
 
 <div align="center">
 
-Built with ❤️ using **Flutter**, **Dart**, **Python**, and the power of **AI**
+Built with ❤️ using **Flutter**, **Dart**, **Python**, and the power of **AI"
 
 *JobWink — Wink at your dream job.*
 
