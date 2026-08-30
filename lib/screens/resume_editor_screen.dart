@@ -3315,8 +3315,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final nameController = TextEditingController(text: initial?.name ?? '');
     final typeController = TextEditingController(text: initial?.type ?? '');
     final techController = TextEditingController(text: (initial?.technologies ?? []).join(', '));
-    final githubUrlController = TextEditingController(text: initial?.githubUrl ?? (initial?.source == 'github' ? initial?.url ?? '' : ''));
-    final demoUrlController = TextEditingController(text: initial?.demoUrl ?? (initial?.source == 'manual' ? initial?.url ?? '' : ''));
+    final githubUrlController = TextEditingController(text: initial?.effectiveGithubUrl.isNotEmpty == true ? initial!.effectiveGithubUrl : (initial?.githubUrl ?? ''));
+    final demoUrlController = TextEditingController(text: initial?.effectiveDemoUrl.isNotEmpty == true ? initial!.effectiveDemoUrl : (initial?.demoUrl ?? ''));
 
     final initialBullets = initial?.descriptionBullets.isNotEmpty == true
         ? initial!.descriptionBullets
@@ -3351,7 +3351,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      initial == null ? 'Add Project' : 'Edit Project',
+                      initial == null ? 'Add Project' : (initial.source == 'github' ? 'Edit GitHub Project' : 'Edit Project'),
                       style: GoogleFonts.plusJakartaSans(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -3441,13 +3441,42 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                                     }
                                     setModalState(() => isImprovingAi = true);
                                     try {
+                                      String readme = initial?.readmeContent ?? '';
+                                      final ghUrl = githubUrlController.text.trim();
+                                      final dmUrl = demoUrlController.text.trim();
+                                      if (readme.isEmpty && ghUrl.isNotEmpty) {
+                                        final parsed = GitHubService.instance.parseGithubUrl(ghUrl);
+                                        if (parsed != null) {
+                                          try {
+                                            readme = await GitHubService.instance.fetchRepositoryReadme(parsed.key, parsed.value) ?? '';
+                                          } catch (_) {}
+                                        }
+                                      }
+
                                       final improved = await AIService.instance.improveProjectDescription(
                                         name: nameController.text.trim(),
                                         type: typeController.text.trim(),
                                         technologies: techController.text.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList(),
                                         bullets: currentBullets,
+                                        readmeContent: readme,
+                                        githubUrl: ghUrl,
+                                        demoUrl: dmUrl,
+                                        githubOwner: initial?.githubOwner,
+                                        githubRepo: initial?.githubRepo,
                                       );
                                       setModalState(() => isImprovingAi = false);
+
+                                      if (AIService.areBulletsNearlyIdentical(currentBullets, improved)) {
+                                        if (ctx.mounted) {
+                                          ScaffoldMessenger.of(ctx).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('The project description is already well-optimized. No further AI enhancement was needed.'),
+                                              duration: Duration(seconds: 3),
+                                            ),
+                                          );
+                                        }
+                                        return;
+                                      }
 
                                       if (ctx.mounted) {
                                         _showAiComparisonDialog(ctx, currentBullets, improved, (acceptedBullets) {
@@ -3578,17 +3607,23 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         .where((b) => b.isNotEmpty)
                         .toList();
 
+                    final rawGh = githubUrlController.text.trim();
+                    final normalizedGh = rawGh.isNotEmpty ? _normalizeUrl(rawGh) : '';
+                    final rawDemo = demoUrlController.text.trim();
+                    final normalizedDemo = rawDemo.isNotEmpty ? _normalizeUrl(rawDemo) : '';
+
                     final entry = ProjectEntry(
                       id: initial?.id,
                       name: projName,
                       type: typeController.text.trim(),
                       descriptionBullets: bullets,
                       technologies: techs,
-                      githubUrl: _normalizeUrl(githubUrlController.text.trim()),
-                      demoUrl: _normalizeUrl(demoUrlController.text.trim()),
-                      source: initial?.source ?? 'manual',
+                      githubUrl: normalizedGh,
+                      demoUrl: normalizedDemo,
+                      source: initial?.source ?? (normalizedGh.isNotEmpty ? 'github' : 'manual'),
                       githubOwner: initial?.githubOwner,
                       githubRepo: initial?.githubRepo,
+                      readmeContent: initial?.readmeContent,
                     );
 
                     final currentList = List<ProjectEntry>.from(_parsedResumeData?.projects ?? []);

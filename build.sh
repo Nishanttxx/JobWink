@@ -138,28 +138,40 @@ if [ -f "$JOBWINK_ROOT/.env" ]; then
     done < "$JOBWINK_ROOT/.env"
 fi
 
+# Normalize common variable naming variants if primary is empty
+if [ -z "$SUPABASE_URL" ]; then
+    SUPABASE_URL="${supabase_url:-${VITE_SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL}}}"
+fi
+if [ -z "$SUPABASE_ANON_KEY" ]; then
+    SUPABASE_ANON_KEY="${SUPABASE_KEY:-${SUPABASE_PUBLISHABLE_KEY:-${supabase_anon_key:-${VITE_SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY}}}}}"
+fi
+
+# Export all normalized variables to ensure child python/node subshells can access them
+export SUPABASE_URL="$SUPABASE_URL"
+export SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
+
 echo "============================================================"
 echo "CHECKING PRODUCTION BUILD-TIME ENVIRONMENT VARIABLES"
 echo "============================================================"
-echo "SUPABASE_URL_PRESENT: ${SUPABASE_URL:+YES}"
-echo "SUPABASE_ANON_KEY_PRESENT: ${SUPABASE_ANON_KEY:+YES}"
-echo "BACKEND_URL_PRESENT: ${BACKEND_URL:+YES}"
-echo "ADMIN_EMAIL_PRESENT: ${ADMIN_EMAIL:+YES}"
-echo "GEMINI_API_KEY_PRESENT: ${GEMINI_API_KEY:+YES}"
-echo "OPENAI_API_KEY_PRESENT: ${OPENAI_API_KEY:+YES}"
-echo "GROQ_API_KEY_PRESENT: ${GROQ_API_KEY:+YES}"
-echo "XAI_API_KEY_PRESENT: ${XAI_API_KEY:+YES}"
-echo "MISTRAL_API_KEY_PRESENT: ${MISTRAL_API_KEY:+YES}"
-echo "CEREBRAS_API_KEY_PRESENT: ${CEREBRAS_API_KEY:+YES}"
-echo "NVIDIA_API_KEY_PRESENT: ${NVIDIA_API_KEY:+YES}"
+echo "SUPABASE_URL_FROM_SHELL = $([ -n "$SUPABASE_URL" ] && echo "YES" || echo "NO")"
+echo "SUPABASE_ANON_KEY_FROM_SHELL = $([ -n "$SUPABASE_ANON_KEY" ] && echo "YES" || echo "NO")"
+echo "BACKEND_URL_PRESENT = ${BACKEND_URL:+YES}"
+echo "ADMIN_EMAIL_PRESENT = ${ADMIN_EMAIL:+YES}"
+echo "GEMINI_API_KEY_PRESENT = ${GEMINI_API_KEY:+YES}"
+echo "OPENAI_API_KEY_PRESENT = ${OPENAI_API_KEY:+YES}"
+echo "GROQ_API_KEY_PRESENT = ${GROQ_API_KEY:+YES}"
+echo "XAI_API_KEY_PRESENT = ${XAI_API_KEY:+YES}"
+echo "MISTRAL_API_KEY_PRESENT = ${MISTRAL_API_KEY:+YES}"
+echo "CEREBRAS_API_KEY_PRESENT = ${CEREBRAS_API_KEY:+YES}"
+echo "NVIDIA_API_KEY_PRESENT = ${NVIDIA_API_KEY:+YES}"
 echo "============================================================"
 
 # Verification check: Fail fast if essential Supabase credentials are missing
 if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_ANON_KEY" ]; then
     echo ""
     echo "FATAL BUILD ERROR: Supabase production configuration is missing!"
-    echo "SUPABASE_URL_PRESENT: ${SUPABASE_URL:+YES:-NO}"
-    echo "SUPABASE_ANON_KEY_PRESENT: ${SUPABASE_ANON_KEY:+YES:-NO}"
+    echo "SUPABASE_URL_FROM_SHELL = $([ -n "$SUPABASE_URL" ] && echo "YES" || echo "NO")"
+    echo "SUPABASE_ANON_KEY_FROM_SHELL = $([ -n "$SUPABASE_ANON_KEY" ] && echo "YES" || echo "NO")"
     echo ""
     echo "Action required:"
     echo "1. Go to Cloudflare Pages Dashboard -> Jobwink -> Settings -> Environment variables."
@@ -215,8 +227,11 @@ fs.writeFileSync('$DEFINES_JSON', JSON.stringify(data, null, 2));
 }
 
 echo "Successfully generated compile-time Dart configuration definition."
-echo "Executing: $FLUTTER_BIN build web --release --dart-define-from-file=dart_defines.json"
-"$FLUTTER_BIN" build web --release --dart-define-from-file="$DEFINES_JSON"
+echo "Executing: $FLUTTER_BIN build web --release --dart-define-from-file=dart_defines.json --dart-define=SUPABASE_URL=... --dart-define=SUPABASE_ANON_KEY=..."
+"$FLUTTER_BIN" build web --release \
+    --dart-define-from-file="$DEFINES_JSON" \
+    --dart-define=SUPABASE_URL="$SUPABASE_URL" \
+    --dart-define=SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY"
 
 echo "============================================================"
 echo "BUILD SUCCEEDED — Artifacts available in build/web"

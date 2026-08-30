@@ -1245,9 +1245,9 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
     var rawType = _clean(proj.type);
     final cleanTechs = proj.technologies.map(_clean).where((t) => t.isNotEmpty).toList();
     var rawTech = cleanTechs.isNotEmpty && rawType.isEmpty ? cleanTechs.join(", ") : (rawType.isNotEmpty ? rawType : '');
-    var rawUrl = _clean(proj.url).isNotEmpty
-        ? _clean(proj.url)
-        : (_clean(proj.githubUrl).isNotEmpty ? _clean(proj.githubUrl) : _clean(proj.demoUrl));
+    var rawUrl = _clean(proj.githubUrl).isNotEmpty
+        ? _clean(proj.githubUrl)
+        : (_clean(proj.source) == 'github' ? _clean(proj.legacyUrl) : (_clean(proj.url).contains('github.com') ? _clean(proj.url) : ''));
 
     // Support combined heading in proj.name if structured fields were combined (e.g. "Title | Tech | Link")
     if (rawTitle.contains(' | ')) {
@@ -1537,6 +1537,44 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
           widgets.add(_bulletItem(cleaned, cfg, highlightKeywords: bulletKeywords.isNotEmpty ? bulletKeywords : highlightKeywords));
         }
       }
+
+      final demoUrl = _clean(proj.effectiveDemoUrl);
+      if (demoUrl.isNotEmpty) {
+        final dest = _normalizeUrlForLink(demoUrl);
+        widgets.add(
+          pw.Padding(
+            padding: pw.EdgeInsets.only(left: cfg.contentLeftIndent + cfg.bulletIndent, top: 1.5, bottom: 2.0),
+            child: pw.RichText(
+              text: pw.TextSpan(
+                children: [
+                  pw.TextSpan(
+                    text: 'Live Demo: ',
+                    style: pw.TextStyle(
+                      fontSize: cfg.bodyFontSize,
+                      lineSpacing: cfg.bodyLineSpacing,
+                      color: cfg.bodyTextColor,
+                      fontWeight: pw.FontWeight.bold,
+                      font: _unicodeBoldFont,
+                    ),
+                  ),
+                  pw.TextSpan(
+                    text: _sanitizePdfText(demoUrl),
+                    style: pw.TextStyle(
+                      fontSize: cfg.bodyFontSize,
+                      lineSpacing: cfg.bodyLineSpacing,
+                      color: cfg.linkColor,
+                      fontWeight: pw.FontWeight.normal,
+                      font: _unicodeBaseFont,
+                    ),
+                    annotation: pw.AnnotationUrl(dest),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }
+
       widgets.add(pw.SizedBox(height: cfg.entrySpaceAfter));
     }
     return widgets;
@@ -1746,7 +1784,7 @@ utilization=${finalM.utilizationPercentage.toStringAsFixed(1)}%''');
       sb.write('${e.company}:${e.role}:${e.startDate}:${e.endDate}:${e.description.join(";")}');
     }
     for (final p in resume.projects) {
-      sb.write('${p.name}:${p.technologies.join(",")}:${p.descriptionBullets.join(";")}');
+      sb.write('${p.name}:${p.type}:${p.technologies.join(",")}:${p.githubUrl}:${p.demoUrl}:${p.url}:${p.descriptionBullets.join(";")}');
     }
     for (final ed in resume.education) {
       sb.write('${ed.institution}:${ed.degree}:${ed.fieldOfStudy}:${ed.startDate}:${ed.endDate}');

@@ -16,26 +16,42 @@ class SupabaseService {
   // ---------------------------------------------------------------------------
 
   static Future<void> initialize() async {
-    if (SupabaseConfig.url.isEmpty ||
-        SupabaseConfig.anonKey.isEmpty ||
-        SupabaseConfig.anonKey.length < 20) {
-      debugPrint('[SUPABASE] Initialization skipped: No valid API key or SUPABASE_URL configured.');
+    final url = SupabaseConfig.url;
+    final key = SupabaseConfig.anonKey;
+
+    debugPrint('============================================================');
+    debugPrint('[SUPABASE CONFIG DIAGNOSTICS]');
+    debugPrint('SUPABASE_URL_FROM_DART = ${url.isNotEmpty ? "YES" : "NO"}');
+    debugPrint('SUPABASE_ANON_KEY_FROM_DART = ${key.isNotEmpty ? "YES" : "NO"}');
+    if (url.isNotEmpty) {
+      debugPrint('SUPABASE_URL = $url');
+    }
+    debugPrint('============================================================');
+
+    if (!SupabaseConfig.isConfigured) {
+      debugPrint('SUPABASE_INITIALIZATION_STARTED = NO');
+      debugPrint('SUPABASE_INITIALIZATION_COMPLETED = NO');
+      debugPrint('[SUPABASE] Initialization skipped: SUPABASE_URL or SUPABASE_ANON_KEY is missing or invalid.');
       return;
     }
 
+    debugPrint('SUPABASE_INITIALIZATION_STARTED = YES');
     try {
       await Supabase.initialize(
-        url: SupabaseConfig.url,
-        publishableKey: SupabaseConfig.anonKey,
+        url: url,
+        publishableKey: key,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.pkce,
         ),
       );
       _isInitialized = true;
-      debugPrint('[SUPABASE] Initialized successfully with: ${SupabaseConfig.url}');
+      debugPrint('SUPABASE_INITIALIZATION_COMPLETED = YES');
+      debugPrint('[SUPABASE] Initialized successfully with: $url');
     } on AuthException catch (e) {
+      debugPrint('SUPABASE_INITIALIZATION_COMPLETED = NO');
       debugPrint('[SUPABASE] AuthException caught: ${e.message}');
     } catch (e) {
+      debugPrint('SUPABASE_INITIALIZATION_COMPLETED = NO');
       debugPrint('[SUPABASE] Initialization note: $e');
     }
   }
@@ -119,6 +135,20 @@ class SupabaseService {
   // Social OAuth
   // ---------------------------------------------------------------------------
 
+  /// Dynamically determines the OAuth redirect URL based on the current browser origin.
+  ///
+  /// Works across all environments without hardcoding ports:
+  /// - Localhost with any dynamic port: `http://localhost:<port>/`
+  /// - Production on Cloudflare Pages: `https://jobwink.pages.dev/`
+  /// - Preview deployments: `https://<preview>.jobwink.pages.dev/`
+  static String resolveOAuthRedirectUrl({String? customOrigin}) {
+    final origin = customOrigin ?? (kIsWeb ? Uri.base.origin : '');
+    if (origin.isNotEmpty && !origin.startsWith('null') && origin != 'null') {
+      return origin.endsWith('/') ? origin : '$origin/';
+    }
+    return 'https://jobwink.pages.dev/';
+  }
+
   /// Sign In with a social OAuth provider (Google, GitHub, …).
   Future<bool> signInWithOAuth(OAuthProvider provider) async {
     final providerTitle = provider == OAuthProvider.google
@@ -136,7 +166,7 @@ class SupabaseService {
       return false;
     }
 
-    final redirectTo = kIsWeb ? '${Uri.base.origin}/' : null;
+    final redirectTo = resolveOAuthRedirectUrl();
     debugPrint('[OAUTH DEBUG] Redirect URL: $redirectTo');
 
     try {

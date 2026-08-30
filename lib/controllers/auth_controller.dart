@@ -345,10 +345,18 @@ class AuthController extends ChangeNotifier {
     _set(AuthStatus.loading);
     final result = await _repo.signInWithOAuth(provider);
     return result.when(
-      onSuccess: (_) {
-        // Browser opened; reset loading — stream will fire on redirect.
-        _set(AuthStatus.unauthenticated);
-        return true;
+      onSuccess: (launched) {
+        if (launched) {
+          // Browser opened; reset loading — stream will fire on redirect.
+          _set(AuthStatus.unauthenticated);
+          return true;
+        } else {
+          final errorMsg = !SupabaseService.instance.isInitialized
+              ? 'Supabase is not initialized. Check SUPABASE_URL and SUPABASE_ANON_KEY build settings.'
+              : 'Failed to launch ${provider.name} login.';
+          _set(AuthStatus.error, error: errorMsg);
+          return false;
+        }
       },
       onFailure: (msg) {
         _set(AuthStatus.error, error: msg);

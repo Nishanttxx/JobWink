@@ -98,8 +98,13 @@ void main() {
     expect(pdfBytes, isNotNull);
     expect(pdfBytes.length, greaterThan(2000));
 
-    // Save to brain scratch for visual inspection
-    final file = File('C:/Users/na623/.gemini/antigravity-ide/brain/d34d8d0b-61d5-4e96-9a27-4bbf00d79f31/scratch/generated_test_resume.pdf');
+    // Save to portable temporary test output directory for visual inspection
+    final outDir = Directory('${Directory.systemTemp.path}/jobwink_test_output');
+    if (!outDir.existsSync()) {
+      outDir.createSync(recursive: true);
+    }
+    final file = File('${outDir.path}/generated_test_resume.pdf');
     await file.writeAsBytes(pdfBytes);
+    expect(file.existsSync(), isTrue);
   });
 }

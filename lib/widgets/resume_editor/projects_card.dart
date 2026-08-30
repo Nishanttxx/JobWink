@@ -268,6 +268,58 @@ class ProjectsCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ],
+
+          if (proj.effectiveGithubUrl.isNotEmpty || proj.effectiveDemoUrl.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                if (proj.effectiveGithubUrl.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.terminal_rounded, size: 12, color: AppTheme.primaryOrange),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          proj.effectiveGithubUrl,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryOrange,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                if (proj.effectiveDemoUrl.isNotEmpty)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.launch_rounded, size: 12, color: AppTheme.primaryOrange),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          proj.effectiveDemoUrl,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.primaryOrange,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );

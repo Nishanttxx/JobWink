@@ -1407,53 +1407,180 @@ Return ONLY a valid JSON object matching this exact schema:
   // 6. IMPROVE PROJECT DESCRIPTION
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // 6. IMPROVE PROJECT DESCRIPTION
+  // ---------------------------------------------------------------------------
+
+  static bool areBulletsNearlyIdentical(List<String> b1, List<String> b2) {
+    if (b1.isEmpty || b2.isEmpty) return false;
+    if (b1.length != b2.length) return false;
+    String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    for (int i = 0; i < b1.length; i++) {
+      if (norm(b1[i]) != norm(b2[i])) return false;
+    }
+    return true;
+  }
+
   Future<List<String>> improveProjectDescription({
     required String name,
     required String type,
     required List<String> technologies,
     required List<String> bullets,
+    String readmeContent = '',
+    String githubUrl = '',
+    String demoUrl = '',
+    String? githubOwner,
+    String? githubRepo,
   }) async {
-    final cleanBullets = bullets.map((b) => b.trim()).where((b) => b.isNotEmpty).toList();
+    final cleanBullets = bullets
+        .map((b) => b.replaceAll(RegExp(r'^[•\-\*–—\d\.\)\s]+'), '').trim())
+        .where((b) => b.isNotEmpty)
+        .toList();
     if (cleanBullets.isEmpty && name.isEmpty) return bullets;
 
-    final prompt = '''
-You are an expert technical resume writer and ATS optimizer.
-Improve the following resume project description bullet points to be action-driven, concise, professional, and ATS-optimized.
+    final cleanReadme = _sanitizeReadmeContent(readmeContent);
 
-PROJECT NAME: $name
-PROJECT TYPE: $type
-TECHNOLOGIES: ${technologies.join(', ')}
-EXISTING BULLETS:
+    final prompt = '''
+You are enhancing a resume project description based on a real software repository. Use the supplied README/project information as the factual source. Do not invent functionality. Preserve all important functionality from the original description. Improve clarity, specificity, professional wording, technical impact, and resume quality. Return no more than 3 bullet points. Bullets may contain long, information-rich sentences.
+
+Do not merely rewrite the existing text with synonyms. Identify the repository's actual overall purpose and functionality from the README and produce a materially improved description.
+
+==================================================
+PROJECT INFORMATION:
+==================================================
+- Project Name: $name
+- Project Type: $type
+- Technologies: ${technologies.join(', ')}
+${githubUrl.isNotEmpty ? '- GitHub URL: $githubUrl' : ''}
+${demoUrl.isNotEmpty ? '- Live Demo URL: $demoUrl' : ''}
+
+==================================================
+ORIGINAL EXTRACTED PROJECT DESCRIPTION (BULLET POINTS):
+==================================================
 ${cleanBullets.map((b) => '- $b').join('\n')}
 
-RULES:
-1. Rewrite bullet points using strong action verbs (e.g. Spearheaded, Engineered, Architected, Integrated, Optimized, Developed).
-2. Keep bullet points concise and high-impact (1-2 lines each).
-3. Strictly preserve all facts — do NOT invent fake metrics, statistics, or missing tech.
-4. Return a JSON object with a single key "bullets": ["bullet 1", "bullet 2"]
-5. Return ONLY the JSON object.
+==================================================
+README / REPOSITORY CONTEXT (FACTUAL SOURCE):
+==================================================
+${cleanReadme.isNotEmpty ? cleanReadme : (cleanBullets.join('\n'))}
+
+==================================================
+INSTRUCTIONS:
+==================================================
+1. Base all improvements on the actual functionality described above.
+2. Polish each bullet point to professional engineering resume standards using strong action verbs (e.g. Spearheaded, Engineered, Architected, Integrated, Optimized, Developed).
+3. Ensure bullets are information-dense, high-impact, and clearly describe the overall functioning and real capabilities of the project.
+4. Sentences can be long and detailed to preserve rich technical context.
+5. Strictly MAXIMUM 3 bullet points (1 to 3 points).
+6. Do NOT return identical text to the original bullets. Materially elevate the quality, phrasing, and technical clarity.
+7. Return a JSON object with schema:
+{
+  "bullets": [
+    "Improved bullet point 1",
+    "Improved bullet point 2",
+    "Improved bullet point 3"
+  ]
+}
+Return ONLY the JSON object.
 ''';
 
     try {
       final jsonMap = await generateJsonWithFallback(prompt);
       if (jsonMap != null && jsonMap['bullets'] is List) {
         final list = (jsonMap['bullets'] as List)
-            .map((e) => e.toString().replaceAll(RegExp(r'^[•\-\*]\s*'), '').trim())
+            .map((e) => _cleanBulletText(e.toString()))
             .where((s) => s.isNotEmpty)
+            .take(3)
             .toList();
-        if (list.isNotEmpty) return list;
+        if (list.isNotEmpty) {
+          // If AI returned bullets that are identical to input, re-attempt with stronger instruction
+          if (areBulletsNearlyIdentical(cleanBullets, list)) {
+            debugPrint('[AIService] AI returned identical bullets, retrying with intensified prompt');
+            final retryPrompt = '$prompt\n\nCRITICAL: The previous output was too similar to the original text. You MUST use stronger action verbs, rephrase and elevate the engineering impact, and provide a visibly superior professional resume bullet description.';
+            final retryJson = await generateJsonWithFallback(retryPrompt);
+            if (retryJson != null && retryJson['bullets'] is List) {
+              final retryList = (retryJson['bullets'] as List)
+                  .map((e) => _cleanBulletText(e.toString()))
+                  .where((s) => s.isNotEmpty)
+                  .take(3)
+                  .toList();
+              if (retryList.isNotEmpty && !areBulletsNearlyIdentical(cleanBullets, retryList)) {
+                return retryList;
+              }
+            }
+          } else {
+            return list;
+          }
+        }
       }
     } catch (e) {
       debugPrint('[AIService] improveProjectDescription error: $e');
     }
 
-    // Local smart fallback: sanitize bullet points, capitalize, ensure strong style
-    return cleanBullets.map((b) {
-      var s = b.replaceAll(RegExp(r'^[•\-\*]\s*'), '').trim();
-      if (s.isEmpty) return s;
-      if (!s.endsWith('.') && !s.endsWith('!')) s = '$s.';
-      return s[0].toUpperCase() + s.substring(1);
-    }).where((s) => s.isNotEmpty).toList();
+    // Local smart fallback: elevate action verbs, polish phrasing, ensure max 3 points
+    final enhancedLocal = _enhanceBulletsLocally(
+      originalBullets: cleanBullets,
+      name: name,
+      type: type,
+      technologies: technologies,
+      readmeContent: cleanReadme,
+    );
+
+    if (enhancedLocal.isNotEmpty && !areBulletsNearlyIdentical(cleanBullets, enhancedLocal)) {
+      return enhancedLocal;
+    }
+
+    return cleanBullets.take(3).map(_cleanBulletText).where((s) => s.isNotEmpty).toList();
+  }
+
+  static List<String> _enhanceBulletsLocally({
+    required List<String> originalBullets,
+    required String name,
+    required String type,
+    required List<String> technologies,
+    String readmeContent = '',
+  }) {
+    if (originalBullets.isEmpty) return [];
+
+    final enhanced = <String>[];
+
+    for (int i = 0; i < originalBullets.length && enhanced.length < 3; i++) {
+      var b = originalBullets[i].replaceAll(RegExp(r'^[•\-\*–—\d\.\)\s]+'), '').trim();
+      if (b.isEmpty) continue;
+
+      if (i == 0) {
+        if (RegExp(r'^developed\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^developed\s+', caseSensitive: false), 'Architected and developed ');
+        } else if (RegExp(r'^built\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^built\s+', caseSensitive: false), 'Engineered and deployed ');
+        } else if (RegExp(r'^implemented\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^implemented\s+', caseSensitive: false), 'Designed and implemented ');
+        } else if (!RegExp(r'^(architected|engineered|spearheaded|designed|implemented|developed)\b', caseSensitive: false).hasMatch(b)) {
+          b = 'Engineered $b';
+        }
+      } else if (i == 1) {
+        if (RegExp(r'^implemented\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^implemented\s+', caseSensitive: false), 'Streamlined and implemented ');
+        } else if (RegExp(r'^built\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^built\s+', caseSensitive: false), 'Architected robust ');
+        } else if (RegExp(r'^added\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^added\s+', caseSensitive: false), 'Integrated production-ready ');
+        } else if (!RegExp(r'^(integrated|optimized|architected|orchestrated|streamlined|implemented)\b', caseSensitive: false).hasMatch(b)) {
+          b = 'Integrated $b';
+        }
+      } else if (i == 2) {
+        if (RegExp(r'^structured\s+', caseSensitive: false).hasMatch(b)) {
+          b = b.replaceFirst(RegExp(r'^structured\s+', caseSensitive: false), 'Established modular codebase architecture and ');
+        } else if (!RegExp(r'^(optimized|established|scaled|automated|configured)\b', caseSensitive: false).hasMatch(b)) {
+          b = 'Optimized $b';
+        }
+      }
+
+      b = _cleanBulletText(b);
+      if (b.isNotEmpty) enhanced.add(b);
+    }
+
+    return enhanced.take(3).toList();
   }
 
   // ---------------------------------------------------------------------------
@@ -1507,17 +1634,21 @@ REPOSITORY METADATA (SECONDARY SOURCE):
 STRICT INSTRUCTIONS & ACCURACY RULES:
 ==================================================
 1. README.md IS THE PRIMARY SOURCE:
+   - Carefully read the README to understand what the project is, what problem it solves, what the system does, major functionality, important workflows, and major user-facing capabilities.
    - Base all bullets strictly on features, capabilities, architecture, and technologies documented in README.md.
-   - Do NOT invent, assume, or hallucinate functionality (e.g. do NOT claim authentication, database integration, AI summarization, microservices, or specific metrics unless explicitly present in the README or repository).
-   - If a feature is not mentioned in README.md or repository metadata, DO NOT include it.
+   - Do NOT simply copy the README.
+   - Do NOT produce a generic description or focus only on the repo name.
+   - Strictly preserve factual accuracy — do NOT invent fake metrics, fake authentication, databases, or AI capabilities not present in the repository.
 
-2. BULLETS REQUIREMENT (STRICTLY 2 OR 3 BULLETS):
-   - You MUST generate EXACTLY 2 or 3 concise, resume-ready bullet points. NEVER generate 1, and NEVER generate 4 or more.
-   - Target 12–25 words per bullet. Keep bullets concise, technical, and high-impact.
-   - Prefer bullets containing: ACTION + ACTUAL FEATURE + RELEVANT TECHNOLOGY.
-   - Start each bullet with a strong past-tense action verb (e.g. "Developed", "Engineered", "Implemented", "Architected", "Built", "Integrated", "Designed").
-   - Do NOT include bullet symbols (•, -, *) inside the strings.
-   - Do NOT include installation commands, setup instructions, license text, or contributor lists.
+2. BULLET POINTS REQUIREMENT (1 TO 3 BULLETS MAXIMUM):
+   - Generate between 1 and 3 high-impact, professional resume bullet points (MAXIMUM 3).
+   - Bullets MAY contain long, information-rich sentences detailing the overall functioning of the application. Do NOT artificially shorten sentences.
+   - Start each bullet with a strong past-tense action verb (e.g. "Developed", "Engineered", "Implemented", "Architected", "Built", "Integrated").
+   - Example structure:
+     • Developed a full-stack application that [overall functioning and core capabilities]...
+     • Implemented [key features / workflows] to [solve specific problem]...
+     • Built [integrated components / technologies] enabling users to [user capability]...
+   - Do NOT include bullet symbols (•, -, *) inside the JSON strings.
 
 3. "name": Clean, professional Title Case project title (e.g. "JobWink Mobile App").
 4. "type": Specific classification (e.g. "Mobile Application", "Full-Stack Web App", "Developer Tool", "REST API Backend", "AI Service", "CLI Utility").
@@ -1529,9 +1660,9 @@ Return a JSON object matching this schema EXACTLY:
   "type": "Project Type",
   "technologies": ["Tech1", "Tech2", "Tech3"],
   "bullets": [
-    "Action-driven bullet point 1 describing project purpose and core feature (12-25 words)",
-    "Action-driven bullet point 2 detailing technical implementation or architecture (12-25 words)",
-    "Action-driven bullet point 3 highlighting key capabilities or integrated technologies (12-25 words)"
+    "Detailed action-driven bullet point 1 describing overall functioning and purpose",
+    "Detailed action-driven bullet point 2 describing key features and technical workflows",
+    "Detailed action-driven bullet point 3 describing system integration or user capabilities"
   ]
 }
 
@@ -1552,14 +1683,14 @@ Return ONLY valid JSON.
             ? bulletsVal.map((e) => _cleanBulletText(e.toString())).where((s) => s.isNotEmpty).toList()
             : <String>[];
 
-        final finalizedBullets = _normalizeToTwoOrThreeBullets(
+        final finalizedBullets = _normalizeToMaxThreeBullets(
           bullets: rawBullets,
           repoName: repoName,
           repoDescription: repoDescription,
           technologies: techs.isNotEmpty ? techs : (language.isNotEmpty ? [language, ...topics] : topics),
         );
 
-        if (finalizedBullets.length >= 2 && finalizedBullets.length <= 3) {
+        if (finalizedBullets.isNotEmpty && finalizedBullets.length <= 3) {
           return ProjectEntry(
             name: name.isNotEmpty ? name : _formatRepoTitle(repoName),
             type: type.isNotEmpty ? type : (language.isNotEmpty ? '$language Application' : 'GitHub Project'),
@@ -1569,6 +1700,7 @@ Return ONLY valid JSON.
             source: 'github',
             githubOwner: owner,
             githubRepo: repo,
+            readmeContent: cleanReadme,
           );
         }
       }
@@ -1600,6 +1732,7 @@ Return ONLY valid JSON.
       source: 'github',
       githubOwner: owner,
       githubRepo: repo,
+      readmeContent: cleanReadme,
     );
   }
 
@@ -1615,7 +1748,7 @@ Return ONLY valid JSON.
     return s;
   }
 
-  static List<String> _normalizeToTwoOrThreeBullets({
+  static List<String> _normalizeToMaxThreeBullets({
     required List<String> bullets,
     required String repoName,
     required String repoDescription,
@@ -1627,17 +1760,8 @@ Return ONLY valid JSON.
       return cleaned.sublist(0, 3);
     }
 
-    if (cleaned.length == 2 || cleaned.length == 3) {
+    if (cleaned.isNotEmpty) {
       return cleaned;
-    }
-
-    if (cleaned.length == 1) {
-      final b1 = cleaned[0];
-      final techStr = technologies.isNotEmpty ? technologies.take(4).join(', ') : '';
-      final b2 = techStr.isNotEmpty
-          ? 'Engineered core system components and application logic using $techStr.'
-          : 'Structured codebase with modular architecture to ensure maintainability and extensible feature delivery.';
-      return [b1, b2];
     }
 
     return [];
@@ -1650,36 +1774,82 @@ Return ONLY valid JSON.
     required String cleanReadme,
   }) {
     final bullets = <String>[];
+    final techStr = fallbackTechs.isNotEmpty ? fallbackTechs.take(4).join(', ') : '';
 
     // Bullet 1: Core purpose / description
     if (repoDescription.isNotEmpty) {
-      final desc = repoDescription.replaceAll(RegExp(r'[\.\s]+$'), '');
-      bullets.add('Developed $formattedName, $desc.');
+      var desc = repoDescription.replaceAll(RegExp(r'[\.\s]+$'), '').trim();
+      final namePattern = RegExp('^${RegExp.escape(formattedName)}\\s+is\\s+(a|an|the)\\s+', caseSensitive: false);
+      if (namePattern.hasMatch(desc)) {
+        desc = desc.replaceFirst(namePattern, 'an ');
+        bullets.add('Developed $formattedName, $desc.');
+      } else if (desc.toLowerCase().startsWith('a ') || desc.toLowerCase().startsWith('an ') || desc.toLowerCase().startsWith('the ')) {
+        bullets.add('Developed $formattedName, $desc.');
+      } else if (RegExp(r'^[A-Za-z0-9_\-]+\s+is\s+', caseSensitive: false).hasMatch(desc)) {
+        final rest = desc.replaceFirst(RegExp(r'^[A-Za-z0-9_\-]+\s+is\s+', caseSensitive: false), '');
+        bullets.add('Developed $formattedName, an application that $rest.');
+      } else {
+        bullets.add('Developed $formattedName, $desc.');
+      }
+    } else if (cleanReadme.isNotEmpty) {
+      final readmeLines = cleanReadme.split('\n');
+      String? firstDesc;
+      for (final line in readmeLines) {
+        final t = line.replaceAll(RegExp(r'^#+\s*'), '').trim();
+        if (t.length > 20 && !t.startsWith('http') && !t.startsWith('|') && !t.contains('npm install') && !t.contains('flutter pub')) {
+          firstDesc = t;
+          break;
+        }
+      }
+      if (firstDesc != null && firstDesc.isNotEmpty) {
+        if (!firstDesc.endsWith('.')) firstDesc = '$firstDesc.';
+        bullets.add('Developed $formattedName, $firstDesc');
+      } else {
+        bullets.add('Developed and engineered $formattedName as an open-source solution on GitHub.');
+      }
     } else {
-      bullets.add('Engineered and open-sourced $formattedName on GitHub.');
+      bullets.add('Developed and engineered $formattedName as an open-source solution on GitHub.');
     }
 
-    // Bullet 2: Technologies and implementation
-    if (fallbackTechs.isNotEmpty) {
-      bullets.add('Implemented core application functionality and workflow utilizing ${fallbackTechs.take(4).join(", ")}.');
-    } else {
-      bullets.add('Designed and implemented modular application architecture with focused technical components.');
+    // Bullet 2: Feature or core workflow from README or technical implementation
+    bool addedFeatureBullet = false;
+    if (cleanReadme.isNotEmpty && cleanReadme.length > 60) {
+      final featureLines = <String>[];
+      for (final line in cleanReadme.split('\n')) {
+        final trimmed = line.trim();
+        if (RegExp(r'^[-*•]\s+').hasMatch(trimmed)) {
+          final fText = trimmed.replaceFirst(RegExp(r'^[-*•]\s+'), '').trim();
+          if (fText.length > 15 && fText.length < 150 && !fText.contains('http') && !fText.contains('`')) {
+            featureLines.add(fText);
+            if (featureLines.length >= 2) break;
+          }
+        }
+      }
+      if (featureLines.isNotEmpty) {
+        final joinedFeatures = featureLines.join(', and ');
+        bullets.add('Implemented core application capabilities including $joinedFeatures.');
+        addedFeatureBullet = true;
+      }
     }
 
-    // Bullet 3: Features or architecture if README available
-    if (cleanReadme.isNotEmpty && cleanReadme.length > 50) {
-      bullets.add('Structured repository workflows and code modules according to best engineering practices.');
+    if (!addedFeatureBullet) {
+      if (techStr.isNotEmpty) {
+        bullets.add('Implemented core application functionality and workflow utilizing $techStr.');
+      } else {
+        bullets.add('Designed and implemented modular application architecture with focused technical components.');
+      }
     }
 
-    // Strictly enforce 2 or 3 bullets
-    if (bullets.length > 3) {
-      return bullets.sublist(0, 3);
-    }
-    if (bullets.length < 2) {
-      bullets.add('Maintained structured repository workflow to ensure reliable application execution.');
+    // Bullet 3: Technology stack / architecture
+    if (bullets.length < 3) {
+      if (techStr.isNotEmpty && !bullets.any((b) => b.contains(techStr))) {
+        bullets.add('Structured codebase workflows and system components utilizing $techStr to ensure maintainability and performance.');
+      } else if (cleanReadme.isNotEmpty && cleanReadme.length > 50) {
+        bullets.add('Structured repository workflows and code modules according to best engineering practices.');
+      }
     }
 
-    return bullets;
+    return bullets.take(3).map(_cleanBulletText).where((s) => s.isNotEmpty).toList();
   }
 
   static String _formatRepoTitle(String str) {

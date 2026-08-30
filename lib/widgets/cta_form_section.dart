@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../animations/gsap_timeline.dart';
+import '../providers/auth_provider.dart';
 import '../services/demo_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
@@ -130,8 +131,12 @@ class _CtaFormSectionState extends State<CtaFormSection> {
     });
 
     try {
-      debugPrint('[AUTH] OAuth started: ${provider.name}');
-      await SupabaseService.instance.signInWithOAuth(provider);
+      final auth = AuthProviderScope.read(context);
+      final success = await auth.signInWithOAuth(provider);
+      if (!success && mounted) {
+        setState(() => _errorMessage =
+            auth.errorMessage ?? 'Failed to connect to ${provider.name}.');
+      }
     } on AuthException catch (e) {
       if (mounted) setState(() => _errorMessage = e.message);
     } catch (e) {

@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "JobWink (Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "cwd": "${workspaceFolder}",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ],
+      "args": [
+        "--dart-define-from-file=.env"
+      ]
+    },
+    {
+      "name": "JobWink (Web Server)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "web-server",
+      "cwd": "${workspaceFolder}",
+      "toolArgs": [
+        "--web-port=65457",
+        "--dart-define-from-file=.env"
+      ],
+      "args": [
+        "--web-port=65457",
+        "--dart-define-from-file=.env"
+      ]
+    },
+    {
+      "name": "JobWink (Profile Mode - Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "cwd": "${workspaceFolder}",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ]
+    },
+    {
+      "name": "JobWink (Release Mode - Chrome)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "program": "lib/main.dart",
+      "deviceId": "chrome",
+      "cwd": "${workspaceFolder}",
+      "toolArgs": [
+        "--dart-define-from-file=.env"
+      ]
+    }
+  ]
+}

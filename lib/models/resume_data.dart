@@ -2637,6 +2637,7 @@ class ProjectEntry {
   final String source; // 'manual' | 'github'
   final String? githubOwner;
   final String? githubRepo;
+  final String? readmeContent;
 
   ProjectEntry({
     String? id,
@@ -2651,6 +2652,7 @@ class ProjectEntry {
     this.source = 'manual',
     this.githubOwner,
     this.githubRepo,
+    this.readmeContent,
   })  : id = (id != null && id.isNotEmpty)
             ? id
             : 'proj_${DateTime.now().microsecondsSinceEpoch}',
@@ -2689,16 +2691,33 @@ class ProjectEntry {
 
   /// Effective GitHub URL.
   String get effectiveGithubUrl {
-    if (githubUrl.isNotEmpty) return githubUrl;
-    if (source == 'github' && legacyUrl.isNotEmpty) return legacyUrl;
-    if (legacyUrl.contains('github.com')) return legacyUrl;
+    final clean = githubUrl.trim();
+    if (clean.isNotEmpty && clean.toLowerCase() != 'null' && clean.toLowerCase() != 'undefined') {
+      return clean;
+    }
+    if (source == 'github' && legacyUrl.trim().isNotEmpty) {
+      final leg = legacyUrl.trim();
+      if (leg.toLowerCase() != 'null' && leg.toLowerCase() != 'undefined') return leg;
+    }
+    if (legacyUrl.contains('github.com')) {
+      final leg = legacyUrl.trim();
+      if (leg.toLowerCase() != 'null' && leg.toLowerCase() != 'undefined') return leg;
+    }
     return '';
   }
 
   /// Effective Demo URL.
   String get effectiveDemoUrl {
-    if (demoUrl.isNotEmpty) return demoUrl;
-    if (source != 'github' && legacyUrl.isNotEmpty && !legacyUrl.contains('github.com')) return legacyUrl;
+    final clean = demoUrl.trim();
+    if (clean.isNotEmpty && clean.toLowerCase() != 'null' && clean.toLowerCase() != 'undefined') {
+      return clean;
+    }
+    if (source != 'github' && legacyUrl.trim().isNotEmpty) {
+      final leg = legacyUrl.trim();
+      if (!leg.contains('github.com') && leg.toLowerCase() != 'null' && leg.toLowerCase() != 'undefined') {
+        return leg;
+      }
+    }
     return '';
   }
 
@@ -2715,6 +2734,7 @@ class ProjectEntry {
     String? source,
     String? githubOwner,
     String? githubRepo,
+    String? readmeContent,
   }) {
     return ProjectEntry(
       id: id ?? this.id,
@@ -2731,6 +2751,7 @@ class ProjectEntry {
       source: source ?? this.source,
       githubOwner: githubOwner ?? this.githubOwner,
       githubRepo: githubRepo ?? this.githubRepo,
+      readmeContent: readmeContent ?? this.readmeContent,
     );
   }
 
@@ -2805,17 +2826,36 @@ class ProjectEntry {
       }
 
       String getGhUrl() {
-        final val = ResumeData._getNormalized(map, ['githubUrl', 'github_url', 'repoUrl', 'repo_url', 'github', 'link', 'url']);
+        final val = ResumeData._getNormalized(map, ['githubUrl', 'github_url', 'repoUrl', 'repo_url', 'github', 'repo']);
         if (val != null && val is! Map && val is! List && val.toString().trim().isNotEmpty) {
-          return val.toString().trim();
+          final s = val.toString().trim();
+          if (s.toLowerCase() != 'null' && s.toLowerCase() != 'undefined' && !ResumeData._isPlaceholderValue(s)) {
+            return s;
+          }
         }
         return '';
       }
 
       String getDemoUrl() {
-        final val = ResumeData._getNormalized(map, ['demoUrl', 'demo_url', 'liveUrl', 'live_url', 'website']);
+        final val = ResumeData._getNormalized(map, [
+          'demoUrl',
+          'demo_url',
+          'liveDemoUrl',
+          'live_demo_url',
+          'liveDemo',
+          'live_demo',
+          'liveUrl',
+          'live_url',
+          'website',
+          'appUrl',
+          'app_url',
+          'demo',
+        ]);
         if (val != null && val is! Map && val is! List && val.toString().trim().isNotEmpty) {
-          return val.toString().trim();
+          final s = val.toString().trim();
+          if (s.toLowerCase() != 'null' && s.toLowerCase() != 'undefined' && !ResumeData._isPlaceholderValue(s)) {
+            return s;
+          }
         }
         return '';
       }
@@ -2823,7 +2863,10 @@ class ProjectEntry {
       String getLegacyUrl() {
         final val = ResumeData._getNormalized(map, ['url', 'link', 'projectUrl']);
         if (val != null && val is! Map && val is! List && val.toString().trim().isNotEmpty) {
-          return val.toString().trim();
+          final s = val.toString().trim();
+          if (s.toLowerCase() != 'null' && s.toLowerCase() != 'undefined' && !ResumeData._isPlaceholderValue(s)) {
+            return s;
+          }
         }
         return '';
       }
@@ -2835,6 +2878,7 @@ class ProjectEntry {
 
       var projName = getName();
       var ghUrl = getGhUrl();
+      var demoUrl = getDemoUrl();
       var legacyUrl = getLegacyUrl();
       var bullets = getBullets();
 
@@ -2895,16 +2939,22 @@ class ProjectEntry {
         projName = derivedName.isNotEmpty ? derivedName : 'Project';
       }
 
+      final readmeVal = map['readmeContent'] ?? map['readme_content'] ?? map['readme'];
+
       return ProjectEntry(
         id: map['id']?.toString() ?? '',
         name: projName,
         type: getType(),
         technologies: getTech(),
         githubUrl: ghUrl,
-        demoUrl: getDemoUrl(),
+        demoUrl: demoUrl,
         url: legacyUrl,
         descriptionBullets: bullets,
         description: bullets.join(' '),
+        source: map['source']?.toString() ?? (ghUrl.isNotEmpty ? 'github' : 'manual'),
+        githubOwner: map['githubOwner']?.toString() ?? map['github_owner']?.toString(),
+        githubRepo: map['githubRepo']?.toString() ?? map['github_repo']?.toString(),
+        readmeContent: readmeVal?.toString(),
       );
     }
 
@@ -2924,6 +2974,8 @@ class ProjectEntry {
         'source': source,
         'githubOwner': githubOwner,
         'githubRepo': githubRepo,
+        if (readmeContent != null && readmeContent!.isNotEmpty)
+          'readmeContent': readmeContent,
       };
 }
 

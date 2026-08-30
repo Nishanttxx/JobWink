@@ -153,12 +153,14 @@ class GitHubService {
     }
 
     // Direct raw.githubusercontent.com fallback in case of rate limits or missing API response
-    for (final branch in ['main', 'master']) {
-      for (final filename in ['README.md', 'readme.md', 'README', 'README.markdown']) {
+    final branches = ['main', 'master', 'HEAD', 'dev', 'develop'];
+    final filenames = ['README.md', 'README', 'readme.md', 'Readme.md', 'README.markdown', 'readme.markdown', 'readme'];
+    for (final branch in branches) {
+      for (final filename in filenames) {
         try {
           final rawUrl = Uri.parse('https://raw.githubusercontent.com/$owner/$repo/$branch/$filename');
           final rawRes = await http.get(rawUrl);
-          if (rawRes.statusCode == 200 && rawRes.body.trim().isNotEmpty && !rawRes.body.startsWith('404: Not Found')) {
+          if (rawRes.statusCode == 200 && rawRes.body.trim().isNotEmpty && !rawRes.body.startsWith('404: Not Found') && !rawRes.body.startsWith('400: Invalid request')) {
             return rawRes.body;
           }
         } catch (_) {}

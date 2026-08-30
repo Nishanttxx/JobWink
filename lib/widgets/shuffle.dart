@@ -58,9 +58,6 @@ class _ShuffleState extends State<Shuffle> with SingleTickerProviderStateMixin {
   bool _hasTriggered = false;
   final Random _random = Random();
 
-  static const String _scrambleChars =
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#\$%^&*()';
-
   @override
   void initState() {
     super.initState();
