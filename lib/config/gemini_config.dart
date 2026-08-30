@@ -6,5 +6,5 @@ class GeminiConfig {
       String.fromEnvironment('GCP_PROJECT_NUMBER', defaultValue: '');
 
   /// The Gemini model to use for resume analysis.
-  static const String modelId = 'gemini-1.5-flash';
+  static const String modelId = 'gemini-3.7-flash';
 }
