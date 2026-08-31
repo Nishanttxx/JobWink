@@ -18,6 +18,7 @@ import 'widgets/features_section.dart';
 import 'widgets/footer_section.dart';
 import 'widgets/header_nav.dart';
 import 'widgets/hero_section.dart';
+import 'widgets/jobwink_loading_screen.dart';
 import 'widgets/logo_cloud.dart';
 import 'widgets/product_preview_section.dart';
 import 'widgets/shape_grid_background.dart';
@@ -123,44 +124,9 @@ class AppRootGate extends StatelessWidget {
   Widget build(BuildContext context) {
     final auth = AuthProviderScope.of(context);
 
-    // 1. Session resolution in progress: display clean themed startup state
+    // 1. Session resolution in progress: display clean branded JobWink loading/splash screen
     if (auth.isInitializing) {
-      return Scaffold(
-        backgroundColor: AppTheme.getBgColor(context),
-        body: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppTheme.primaryOrange.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: AppTheme.primaryOrange.withValues(alpha: 0.3),
-                    width: 1.5,
-                  ),
-                ),
-                child: const Icon(
-                  Icons.auto_awesome,
-                  color: AppTheme.primaryOrange,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(height: 24),
-              const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.2,
-                  color: AppTheme.primaryOrange,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
+      return const JobwinkLoadingScreen();
     }
 
     // 2. Authenticated user: open dashboard directly (no landing flash)
@@ -190,6 +156,8 @@ class LandingPage extends StatefulWidget {
 
 class _LandingPageState extends State<LandingPage> {
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<Offset?> _mousePositionNotifier =
+      ValueNotifier<Offset?>(null);
 
   // Global Keys for smooth section scrolling
   final GlobalKey _heroKey = GlobalKey();
@@ -236,6 +204,7 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   void dispose() {
+    _mousePositionNotifier.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -249,25 +218,33 @@ class _LandingPageState extends State<LandingPage> {
     return Scaffold(
       backgroundColor: bgColor,
       resizeToAvoidBottomInset: false,
-      body: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          // 1. Continuous Full-Page Animated Geometric ShapeGrid Canvas
-          Positioned.fill(
-            child: IgnorePointer(
-              child: RepaintBoundary(
-                child: ShapeGridBackground(
-                  speed: 0.35,
-                  squareSize: 50.0,
-                  direction: ShapeGridDirection.diagonal,
-                  shape: ShapeGridShape.square,
-                  borderColor: isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.03),
+      body: MouseRegion(
+        onHover: (event) => _mousePositionNotifier.value = event.localPosition,
+        onExit: (_) => _mousePositionNotifier.value = null,
+        opaque: false,
+        child: Stack(
+          clipBehavior: Clip.hardEdge,
+          children: [
+            // 1. Continuous Full-Page Animated Geometric ShapeGrid Canvas
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: ShapeGridBackground(
+                    speed: 0.35,
+                    squareSize: 50.0,
+                    direction: ShapeGridDirection.diagonal,
+                    shape: ShapeGridShape.square,
+                    hoverTrailAmount: 8,
+                    mousePositionNotifier: _mousePositionNotifier,
+                    borderColor: isDark
+                        ? Colors.white.withValues(alpha: 0.05)
+                        : Colors.black.withValues(alpha: 0.03),
+                    hoverFillColor: AppTheme.primaryOrange
+                        .withValues(alpha: isDark ? 0.22 : 0.15),
+                  ),
                 ),
               ),
             ),
-          ),
 
             // 2. Ambient Floating Radial Glow Orbs across sections
             Positioned(
@@ -398,6 +375,7 @@ class _LandingPageState extends State<LandingPage> {
             ),
           ],
         ),
+      ),
     );
   }
 }

@@ -557,7 +557,7 @@ class _ResumePreviewDialogState extends State<ResumePreviewDialog> {
                     Expanded(
                       flex: isMobile ? 1 : 0,
                       child: ElevatedButton.icon(
-                        onPressed: (hasResume && validation.isValid)
+                        onPressed: (hasResume && validation.isValid && widget.jobDescription.trim().isNotEmpty)
                             ? () {
                                 Navigator.of(context).pop();
                                 widget.onDownload();

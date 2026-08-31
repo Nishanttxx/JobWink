@@ -58,33 +58,43 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   void openAtsScore() => handleSubSectionSelected(7);
   void openUploadResume() => _uploadResume();
 
+  void _showValidationError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        backgroundColor: const Color(0xFFEF4444),
+        content: Row(
+          children: [
+            const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
+
   void _openFullPreviewDialog() {
     final currentResume = _buildCurrentResumeData();
     final validation = _selectedResumeType.validateCriteria(currentResume);
     if (!validation.isValid) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    validation.fullMessage,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      _showValidationError(validation.fullMessage);
+      return;
+    }
+
+    final jd = _jobDescriptionController.text.trim();
+    if (jd.isEmpty) {
+      _showValidationError('Job Description is required before exporting your resume.');
       return;
     }
 
@@ -94,7 +104,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       selectedResumeType: _selectedResumeType,
       originalPdfBytes: _uploadedFileBytes,
       highlightKeywords: _matchedJobKeywords,
-      jobDescription: _jobDescriptionController.text.trim(),
+      jobDescription: jd,
       onDownload: () => _downloadTailoredResume(format: 'pdf'),
     );
   }
@@ -142,29 +152,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
       final currentResume = _buildCurrentResumeData();
       final validation = _selectedResumeType.validateCriteria(currentResume);
       if (!validation.isValid) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              backgroundColor: const Color(0xFFEF4444),
-              content: Row(
-                children: [
-                  const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      validation.fullMessage,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              duration: const Duration(seconds: 4),
-            ),
-          );
-        }
+        _showValidationError(validation.fullMessage);
+        return;
+      }
+
+      final jd = _jobDescriptionController.text.trim();
+      if (jd.isEmpty) {
+        _showValidationError('Job Description is required before exporting your resume.');
         return;
       }
     }
@@ -307,7 +301,14 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
   @override
   void initState() {
     super.initState();
-    _activeSubTab = widget.initialTab.clamp(0, 9);
+    final rawTab = widget.initialTab.clamp(0, 9);
+    if (rawTab == 8 && _jobDescriptionController.text.trim().isEmpty) {
+      _activeSubTab = 6;
+      _activeSubSectionIndex = 6;
+    } else {
+      _activeSubTab = rawTab;
+      _activeSubSectionIndex = rawTab;
+    }
     _nameController.addListener(_onFieldChanged);
     _emailController.addListener(_onFieldChanged);
     _phoneController.addListener(_phoneChanged);
@@ -945,14 +946,18 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          _jobDescriptionController.text.trim().isNotEmpty
-                              ? 'Job Matched (${_jobMatchScore.toInt()}% Match)'
-                              : 'Job Alignment Ready',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46),
+                        Flexible(
+                          child: Text(
+                            _jobDescriptionController.text.trim().isNotEmpty
+                                ? 'Job Matched (${_jobMatchScore.toInt()}% Match)'
+                                : 'Job Alignment Ready',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isDarkMode ? const Color(0xFF34D399) : const Color(0xFF065F46),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -1676,6 +1681,8 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
         // Tab 8: Live Preview & Export
         final exportResume = _buildCurrentResumeData();
         final exportValidation = _selectedResumeType.validateCriteria(exportResume);
+        final isJdValid = _jobDescriptionController.text.trim().isNotEmpty;
+        final canExport = exportValidation.isValid && isJdValid;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1747,6 +1754,64 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 ),
               ),
             ],
+            if (!isJdValid) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.35)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.error_outline_rounded, color: Color(0xFFEF4444), size: 24),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Job Description is required before exporting your resume.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                              color: const Color(0xFFEF4444),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Please paste the target job description in Step 7 to tailor your resume before previewing and exporting.',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 13,
+                              color: AppTheme.getTextColor(context).withValues(alpha: 0.9),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          ElevatedButton.icon(
+                            onPressed: () => handleSubSectionSelected(6),
+                            icon: const Icon(Icons.arrow_back_rounded, size: 16),
+                            label: Text(
+                              'Go to Target Job (Step 7)',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: AppTheme.primaryOrange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (!isDesktop)
               Column(
                 children: [
@@ -1757,19 +1822,19 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                       icon: Icon(
                         Icons.visibility_rounded,
                         size: 20,
-                        color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                        color: canExport ? AppTheme.primaryOrange : const Color(0xFF8B949E),
                       ),
                       label: Text(
                         'Preview Resume',
                         style: GoogleFonts.plusJakartaSans(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                          color: canExport ? AppTheme.primaryOrange : const Color(0xFF8B949E),
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                          color: exportValidation.isValid
+                          color: canExport
                               ? AppTheme.primaryOrange
                               : const Color(0xFF8B949E).withValues(alpha: 0.5),
                           width: 1.5,
@@ -1785,7 +1850,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: (exportValidation.isValid && !_isDownloadingResume)
+                      onPressed: (canExport && !_isDownloadingResume)
                           ? () => _showExportModal(context)
                           : null,
                       icon: _isDownloadingResume
@@ -1808,11 +1873,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
+                        backgroundColor: canExport ? AppTheme.primaryOrange : const Color(0xFF4B5563),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: exportValidation.isValid ? 2 : 0,
+                        elevation: canExport ? 2 : 0,
                       ),
                     ),
                   ),
@@ -1827,19 +1892,19 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                       icon: Icon(
                         Icons.visibility_rounded,
                         size: 20,
-                        color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                        color: canExport ? AppTheme.primaryOrange : const Color(0xFF8B949E),
                       ),
                       label: Text(
                         'Preview Resume',
                         style: GoogleFonts.plusJakartaSans(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
-                          color: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF8B949E),
+                          color: canExport ? AppTheme.primaryOrange : const Color(0xFF8B949E),
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
                         side: BorderSide(
-                          color: exportValidation.isValid
+                          color: canExport
                               ? AppTheme.primaryOrange
                               : const Color(0xFF8B949E).withValues(alpha: 0.5),
                           width: 1.5,
@@ -1855,7 +1920,7 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton.icon(
-                      onPressed: (exportValidation.isValid && !_isDownloadingResume)
+                      onPressed: (canExport && !_isDownloadingResume)
                           ? () => _showExportModal(context)
                           : null,
                       icon: _isDownloadingResume
@@ -1878,11 +1943,11 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: exportValidation.isValid ? AppTheme.primaryOrange : const Color(0xFF4B5563),
+                        backgroundColor: canExport ? AppTheme.primaryOrange : const Color(0xFF4B5563),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        elevation: exportValidation.isValid ? 2 : 0,
+                        elevation: canExport ? 2 : 0,
                       ),
                     ),
                   ),
@@ -1907,46 +1972,95 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     String? nextTitle,
     VoidCallback? onNext,
   }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        if (prevTitle != null && onPrev != null)
-          OutlinedButton(
-            onPressed: onPrev,
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text(
-              prevTitle,
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          )
-        else
-          const SizedBox.shrink(),
-        if (nextTitle != null && onNext != null)
-          ElevatedButton(
-            onPressed: onNext,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryOrange,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: Text(
-              nextTitle,
-              style: GoogleFonts.plusJakartaSans(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-            ),
-          )
-        else
-          const SizedBox.shrink(),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isNarrow = constraints.maxWidth < 460;
+        if (isNarrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (nextTitle != null && onNext != null) ...[
+                ElevatedButton(
+                  onPressed: onNext,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primaryOrange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text(
+                    nextTitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                if (prevTitle != null && onPrev != null) const SizedBox(height: 10),
+              ],
+              if (prevTitle != null && onPrev != null)
+                OutlinedButton(
+                  onPressed: onPrev,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text(
+                    prevTitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
+          );
+        }
+
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            if (prevTitle != null && onPrev != null)
+              OutlinedButton(
+                onPressed: onPrev,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  prevTitle,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              )
+            else
+              const SizedBox.shrink(),
+            if (nextTitle != null && onNext != null)
+              ElevatedButton(
+                onPressed: onNext,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primaryOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: Text(
+                  nextTitle,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+              )
+            else
+              const SizedBox.shrink(),
+          ],
+        );
+      },
     );
   }
 
@@ -1973,44 +2087,50 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           // Header Row with Edit / Save toggle
           Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.person_outline_rounded,
-                    color: AppTheme.primaryOrange,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Identity & Contact Details',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.getTextColor(context),
-                        ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 420;
+                final headerTitle = Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      Text(
-                        'Name, title, email, phone, location & career profiles',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: AppTheme.getMutedTextColor(context),
-                        ),
+                      child: const Icon(
+                        Icons.person_outline_rounded,
+                        color: AppTheme.primaryOrange,
+                        size: 20,
                       ),
-                    ],
-                  ),
-                ),
-                OutlinedButton.icon(
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Identity & Contact Details',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.getTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Name, title, email, phone, location & career profiles',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: AppTheme.getMutedTextColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
+                final editBtn = OutlinedButton.icon(
                   onPressed: () {
                     setState(() {
                       _isEditingIdentity = !_isEditingIdentity;
@@ -2036,8 +2156,30 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                     ),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                ),
-              ],
+                );
+
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerTitle,
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: editBtn,
+                      ),
+                    ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: headerTitle),
+                    const SizedBox(width: 12),
+                    editBtn,
+                  ],
+                );
+              },
             ),
           ),
           const Divider(height: 1),
@@ -2157,92 +2299,125 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           // Header Row with AI Enhance and Edit buttons
           Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: AppTheme.primaryOrange.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.article_outlined,
-                    color: AppTheme.primaryOrange,
-                    size: 20,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Professional Summary',
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isNarrow = constraints.maxWidth < 460;
+                final headerTitle = Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primaryOrange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.article_outlined,
+                        color: AppTheme.primaryOrange,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Professional Summary',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.getTextColor(context),
+                            ),
+                          ),
+                          Text(
+                            'Executive summary highlighting your core strengths & impact',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: AppTheme.getMutedTextColor(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+
+                final actionButtons = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton.icon(
+                      onPressed: _isEnhancingSummary ? null : _enhanceSummaryWithAI,
+                      icon: _isEnhancingSummary
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Icon(Icons.auto_awesome, size: 14),
+                      label: Text(
+                        _isEnhancingSummary ? 'Enhancing...' : 'AI Enhance',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryOrange,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          _isEditingSummary = !_isEditingSummary;
+                        });
+                      },
+                      icon: Icon(
+                        _isEditingSummary ? Icons.check_circle_rounded : Icons.edit_rounded,
+                        size: 16,
+                        color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange,
+                      ),
+                      label: Text(
+                        _isEditingSummary ? 'Save' : 'Edit',
                         style: GoogleFonts.plusJakartaSans(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppTheme.getTextColor(context),
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange,
                         ),
                       ),
-                      Text(
-                        'Executive summary highlighting your core strengths & impact',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: AppTheme.getMutedTextColor(context),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        side: BorderSide(
+                          color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange.withValues(alpha: 0.5),
                         ),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ],
+                );
+
+                if (isNarrow) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      headerTitle,
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: actionButtons,
                       ),
                     ],
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: _isEnhancingSummary ? null : _enhanceSummaryWithAI,
-                  icon: _isEnhancingSummary
-                      ? const SizedBox(
-                          width: 14,
-                          height: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Icon(Icons.auto_awesome, size: 14),
-                  label: Text(
-                    _isEnhancingSummary ? 'Enhancing...' : 'AI Enhance',
-                    style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryOrange,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: () {
-                    setState(() {
-                      _isEditingSummary = !_isEditingSummary;
-                    });
-                  },
-                  icon: Icon(
-                    _isEditingSummary ? Icons.check_circle_rounded : Icons.edit_rounded,
-                    size: 16,
-                    color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange,
-                  ),
-                  label: Text(
-                    _isEditingSummary ? 'Save' : 'Edit',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange,
-                    ),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    side: BorderSide(
-                      color: _isEditingSummary ? Colors.green : AppTheme.primaryOrange.withValues(alpha: 0.5),
-                    ),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ],
+                  );
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: headerTitle),
+                    const SizedBox(width: 12),
+                    actionButtons,
+                  ],
+                );
+              },
             ),
           ),
           const Divider(height: 1),
@@ -2348,98 +2523,103 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
           width: (_uploadedFileName != null || _parseError != null) ? 1.5 : 1.0,
         ),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: _parseError != null
-                  ? const Color(0xFFEF4444).withValues(alpha: 0.12)
-                  : (_uploadedFileName != null
-                      ? const Color(0xFF10B981).withValues(alpha: 0.12)
-                      : AppTheme.primaryOrange.withValues(alpha: 0.12)),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              _parseError != null
-                  ? Icons.error_outline_rounded
-                  : (_uploadedFileName != null
-                      ? Icons.check_circle_rounded
-                      : Icons.cloud_upload_outlined),
-              color: _parseError != null
-                  ? const Color(0xFFEF4444)
-                  : (_uploadedFileName != null
-                      ? const Color(0xFF10B981)
-                      : AppTheme.primaryOrange),
-              size: 26,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isParsing
-                      ? 'AI Extracting Resume... ✨'
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 460;
+          final bannerContent = Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _parseError != null
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.12)
                       : (_uploadedFileName != null
-                          ? 'Resume Active'
-                          : 'Upload Existing Resume 📤'),
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: AppTheme.getTextColor(context),
-                  ),
+                          ? const Color(0xFF10B981).withValues(alpha: 0.12)
+                          : AppTheme.primaryOrange.withValues(alpha: 0.12)),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  _isParsing
-                      ? 'AI Parsing'
-                      : (_parseError ??
-                          (_uploadedFileName ??
-                              'Upload PDF, DOCX, or Image (JPG/PNG) to auto-extract info.')),
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: _parseError != null
-                        ? const Color(0xFFEF4444)
-                        : (_uploadedFileName != null
-                            ? const Color(0xFF10B981)
-                            : AppTheme.getMutedTextColor(context)),
-                    fontWeight: _uploadedFileName != null
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                  ),
+                child: Icon(
+                  _parseError != null
+                      ? Icons.error_outline_rounded
+                      : (_uploadedFileName != null
+                          ? Icons.check_circle_rounded
+                          : Icons.cloud_upload_outlined),
+                  color: _parseError != null
+                      ? const Color(0xFFEF4444)
+                      : (_uploadedFileName != null
+                          ? const Color(0xFF10B981)
+                          : AppTheme.primaryOrange),
+                  size: 26,
                 ),
-                if (_uploadedFileBytes != null && _parseError != null) ...[
-                  const SizedBox(height: 6),
-                  InkWell(
-                    onTap: (_isUploading || _isParsing) ? null : _retryParsing,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFFEF4444)),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Retry AI Extraction',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFFEF4444),
-                              decoration: TextDecoration.underline,
-                            ),
-                          ),
-                        ],
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isParsing
+                          ? 'AI Extracting Resume... ✨'
+                          : (_uploadedFileName != null
+                              ? 'Resume Active'
+                              : 'Upload Existing Resume 📤'),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.getTextColor(context),
                       ),
                     ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
+                    const SizedBox(height: 2),
+                    Text(
+                      _isParsing
+                          ? 'AI Parsing'
+                          : (_parseError ??
+                              (_uploadedFileName ??
+                                  'Upload PDF, DOCX, or Image (JPG/PNG) to auto-extract info.')),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: _parseError != null
+                            ? const Color(0xFFEF4444)
+                            : (_uploadedFileName != null
+                                ? const Color(0xFF10B981)
+                                : AppTheme.getMutedTextColor(context)),
+                        fontWeight: _uploadedFileName != null
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                    if (_uploadedFileBytes != null && _parseError != null) ...[
+                      const SizedBox(height: 6),
+                      InkWell(
+                        onTap: (_isUploading || _isParsing) ? null : _retryParsing,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.refresh_rounded, size: 14, color: Color(0xFFEF4444)),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Retry AI Extraction',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFFEF4444),
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          );
+
+          final uploadButton = ElevatedButton.icon(
             onPressed: (_isUploading || _isParsing) ? null : _uploadResume,
             icon: (_isUploading || _isParsing)
                 ? const SizedBox(
@@ -2483,8 +2663,30 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-          ),
-        ],
+          );
+
+          if (isNarrow) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                bannerContent,
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: uploadButton,
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            children: [
+              Expanded(child: bannerContent),
+              const SizedBox(width: 12),
+              uploadButton,
+            ],
+          );
+        },
       ),
     );
   }
@@ -5490,29 +5692,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final currentResume = _buildCurrentResumeData();
     final validation = _selectedResumeType.validateCriteria(currentResume);
     if (!validation.isValid) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            backgroundColor: const Color(0xFFEF4444),
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    validation.fullMessage,
-                    style: GoogleFonts.plusJakartaSans(
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
-      }
+      _showValidationError(validation.fullMessage);
+      return;
+    }
+
+    final jd = _jobDescriptionController.text.trim();
+    if (jd.isEmpty) {
+      _showValidationError('Job Description is required before exporting your resume.');
       return;
     }
 
@@ -5755,27 +5941,13 @@ class ResumeEditorScreenState extends State<ResumeEditorScreen> {
     final currentResume = _buildCurrentResumeData();
     final validation = _selectedResumeType.validateCriteria(currentResume);
     if (!validation.isValid) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: const Color(0xFFEF4444),
-          content: Row(
-            children: [
-              const Icon(Icons.error_outline_rounded, color: Colors.white, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  validation.fullMessage,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      _showValidationError(validation.fullMessage);
+      return;
+    }
+
+    final jd = _jobDescriptionController.text.trim();
+    if (jd.isEmpty) {
+      _showValidationError('Job Description is required before exporting your resume.');
       return;
     }
 

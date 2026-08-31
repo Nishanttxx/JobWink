@@ -252,6 +252,107 @@
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
       backdrop-filter: blur(12px) !important;
     }
+
+    /* JobWink Website Initial Splash / Loading Screen */
+    #jobwink-splash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      background-color: #08090C;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99998;
+      opacity: 1;
+      transition: opacity 0.3s ease-out;
+      pointer-events: none;
+    }
+    #jobwink-splash.fade-out {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .jobwink-splash-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      animation: jobwinkFadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .jobwink-splash-logo-container {
+      width: 88px;
+      height: 88px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 28px rgba(255, 95, 56, 0.18);
+      overflow: hidden;
+      background-color: transparent;
+    }
+    .jobwink-splash-logo {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 20px;
+      display: block;
+    }
+    .jobwink-splash-title {
+      margin-top: 18px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
+    .jobwink-splash-loader {
+      margin-top: 22px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .jobwink-splash-spinner {
+      width: 22px;
+      height: 22px;
+      border: 2.2px solid rgba(255, 95, 56, 0.15);
+      border-top-color: #FF5F38;
+      border-radius: 50%;
+      animation: jobwinkSpin 0.75s linear infinite;
+    }
+    @keyframes jobwinkFadeIn {
+      0% {
+        opacity: 0;
+        transform: scale(0.92);
+      }
+      100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+    @keyframes jobwinkSpin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    @media (max-width: 600px) {
+      .jobwink-splash-logo-container {
+        width: 76px;
+        height: 76px;
+        border-radius: 18px;
+      }
+      .jobwink-splash-logo {
+        border-radius: 18px;
+      }
+      .jobwink-splash-title {
+        font-size: 19px;
+        margin-top: 16px;
+      }
+    }
   </style>
 
   <script>
@@ -277,6 +378,53 @@
   </script>
 </head>
 <body>
+  <!-- Initial JobWink Website Loading/Splash Screen -->
+  <div id="jobwink-splash" aria-hidden="false">
+    <div class="jobwink-splash-content">
+      <div class="jobwink-splash-logo-container">
+        <img src="icons/Icon-192.png" alt="JobWink" class="jobwink-splash-logo" />
+      </div>
+      <div class="jobwink-splash-title">JobWink</div>
+      <div class="jobwink-splash-loader">
+        <div class="jobwink-splash-spinner"></div>
+      </div>
+    </div>
+  </div>
+  <script>
+    (function() {
+      function removeJobwinkSplash() {
+        var splash = document.getElementById('jobwink-splash');
+        if (splash && !splash.classList.contains('fade-out')) {
+          splash.classList.add('fade-out');
+          setTimeout(function() {
+            if (splash && splash.parentNode) {
+              splash.parentNode.removeChild(splash);
+            }
+          }, 350);
+        }
+      }
+
+      window.addEventListener('flutter-first-frame', removeJobwinkSplash);
+
+      // Mutation observer fallback for when Flutter view mounts
+      var observer = new MutationObserver(function(mutations, obs) {
+        for (var i = 0; i < mutations.length; i++) {
+          var added = mutations[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var node = added[j];
+            if (node.tagName === 'FLUTTER-VIEW' || node.tagName === 'FLT-GLASS-PANE') {
+              removeJobwinkSplash();
+              obs.disconnect();
+              return;
+            }
+          }
+        }
+      });
+      if (document.body) {
+        observer.observe(document.body, { childList: true });
+      }
+    })();
+  </script>
   <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader

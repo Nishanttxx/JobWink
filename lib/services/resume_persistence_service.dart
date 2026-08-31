@@ -9,17 +9,25 @@ class ResumePersistenceService {
       ResumePersistenceService._internal();
   ResumePersistenceService._internal();
 
-  SupabaseClient get _client => Supabase.instance.client;
-  String? get _userId => _client.auth.currentUser?.id;
+  SupabaseClient? get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String? get _userId => _client?.auth.currentUser?.id;
 
   /// Saves parsed resume data to the database.
   ///
   /// Creates or updates a resume row and inserts a new version with the
   /// full parsed content stored as JSONB.
   Future<void> saveParsedResume(ResumeData data) async {
+    final client = _client;
     final userId = _userId;
-    if (userId == null) {
-      debugPrint('[ResumePersistence] No authenticated user — skipping save');
+    if (userId == null || client == null) {
+      debugPrint('[ResumePersistence] No authenticated user or uninitialized client — skipping save');
       return;
     }
 
@@ -27,7 +35,7 @@ class ResumePersistenceService {
       // 1. Check for an existing resume for this user
       List<dynamic> existingResumes = [];
       try {
-        existingResumes = await _client
+        existingResumes = await client
             .from('resumes')
             .select('id')
             .eq('user_id', userId)
@@ -38,7 +46,7 @@ class ResumePersistenceService {
         if (e.toString().contains('42501') || e.toString().contains('23503')) {
           await _ensureProfileRow(userId, data);
           try {
-            existingResumes = await _client
+            existingResumes = await client
                 .from('resumes')
                 .select('id')
                 .eq('user_id', userId)
@@ -53,7 +61,7 @@ class ResumePersistenceService {
       if (existingResumes.isNotEmpty) {
         resumeId = existingResumes.first['id'] as String;
         try {
-          await _client.from('resumes').update({
+          await client.from('resumes').update({
             'extracted_data': data.toJson(),
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('id', resumeId);
@@ -63,7 +71,7 @@ class ResumePersistenceService {
       } else {
         // Create new resume record
         try {
-          final newResume = await _client.from('resumes').insert({
+          final newResume = await client.from('resumes').insert({
             'user_id': userId,
             'extracted_data': data.toJson(),
           }).select('id').single();
@@ -71,14 +79,14 @@ class ResumePersistenceService {
         } catch (insertErr) {
           debugPrint('[ResumePersistence] Column insert note ($insertErr). Inserting base resume...');
           try {
-            final newResume = await _client.from('resumes').insert({
+            final newResume = await client.from('resumes').insert({
               'user_id': userId,
             }).select('id').single();
             resumeId = newResume['id'] as String;
           } on PostgrestException catch (pgErr) {
             if (pgErr.code == '23503' || pgErr.code == '42501') {
               await _ensureProfileRow(userId, data);
-              final newResume = await _client.from('resumes').insert({
+              final newResume = await client.from('resumes').insert({
                 'user_id': userId,
               }).select('id').single();
               resumeId = newResume['id'] as String;
@@ -92,7 +100,7 @@ class ResumePersistenceService {
       // 2. Determine next version number from resume_versions
       int nextVersion = 1;
       try {
-        final versions = await _client
+        final versions = await client
             .from('resume_versions')
             .select('version_number')
             .eq('resume_id', resumeId)
@@ -107,7 +115,7 @@ class ResumePersistenceService {
       }
 
       // 3. Insert new version with full parsed content into resume_versions (parsed_content JSONB)
-      final versionRow = await _client.from('resume_versions').insert({
+      final versionRow = await client.from('resume_versions').insert({
         'resume_id': resumeId,
         'user_id': userId,
         'version_number': nextVersion,
@@ -117,7 +125,7 @@ class ResumePersistenceService {
 
       // 4. Update resume to point to current_version_id
       try {
-        await _client.from('resumes').update({
+        await client.from('resumes').update({
           'current_version_id': versionRow['id'],
         }).eq('id', resumeId);
       } catch (_) {}
@@ -131,12 +139,13 @@ class ResumePersistenceService {
 
   /// Loads the latest saved resume data for the authenticated user from Supabase.
   Future<ResumeData?> loadLatestParsedResume({String? fileHash}) async {
+    final client = _client;
     final userId = _userId;
-    if (userId == null) return null;
+    if (userId == null || client == null) return null;
 
     // 1. Try fetching from resume_versions table (parsed_content JSONB)
     try {
-      final versions = await _client
+      final versions = await client
           .from('resume_versions')
           .select('parsed_content')
           .eq('user_id', userId)
@@ -160,7 +169,7 @@ class ResumePersistenceService {
 
     // 2. Try fetching from resumes table (extracted_data JSONB)
     try {
-      final resumes = await _client
+      final resumes = await client
           .from('resumes')
           .select('extracted_data')
           .eq('user_id', userId)
@@ -190,15 +199,16 @@ class ResumePersistenceService {
   /// Newest resumes appear first (ordered by `created_at` descending).
   /// Enforces database Row-Level Security (RLS) and does NOT consume resume quota.
   Future<List<ResumeHistoryItem>> loadResumeHistory({int limit = 50, int offset = 0}) async {
+    final client = _client;
     final userId = _userId;
-    if (userId == null) {
-      debugPrint('[ResumePersistence] loadResumeHistory: No authenticated user');
+    if (userId == null || client == null) {
+      debugPrint('[ResumePersistence] loadResumeHistory: No authenticated user or uninitialized client');
       return [];
     }
 
     try {
       // 1. Query resume_versions with parent resumes join scoped to current user
-      final versionsResponse = await _client
+      final versionsResponse = await client
           .from('resume_versions')
           .select('id, resume_id, user_id, version_number, parsed_content, change_summary, created_at, updated_at, resumes(id, title, template_type)')
           .eq('user_id', userId)
@@ -225,7 +235,7 @@ class ResumePersistenceService {
 
       // 2. Fallback: If no resume_versions found, check `resumes` table directly
       if (items.isEmpty) {
-        final legacyResumes = await _client
+        final legacyResumes = await client
             .from('resumes')
             .select('id, user_id, title, template_type, extracted_data, created_at, updated_at')
             .eq('user_id', userId)
@@ -256,10 +266,11 @@ class ResumePersistenceService {
 
   /// Fetches all resumes owned by the authenticated user.
   Future<List<Map<String, dynamic>>> loadUserResumes() async {
+    final client = _client;
     final userId = _userId;
-    if (userId == null) return [];
+    if (userId == null || client == null) return [];
     try {
-      final resumes = await _client
+      final resumes = await client
           .from('resumes')
           .select('id, user_id, extracted_data, created_at, updated_at')
           .eq('user_id', userId)
@@ -273,15 +284,17 @@ class ResumePersistenceService {
 
   /// Helper to ensure profile record exists without throwing RLS errors
   Future<void> _ensureProfileRow(String userId, ResumeData data) async {
-    final authUser = _client.auth.currentUser;
+    final client = _client;
+    if (client == null) return;
+    final authUser = client.auth.currentUser;
     final userEmail = authUser?.email ?? 'user_${userId.length > 8 ? userId.substring(0, 8) : userId}@jobwink.app';
     final authName = authUser?.userMetadata?['full_name'] as String? ??
         authUser?.userMetadata?['name'] as String?;
 
     try {
-      final existing = await _client.from('profiles').select('id').eq('id', userId).maybeSingle();
+      final existing = await client.from('profiles').select('id').eq('id', userId).maybeSingle();
       if (existing == null) {
-        await _client.from('profiles').insert({
+        await client.from('profiles').insert({
           'id': userId,
           'email': userEmail,
           'full_name': authName ?? (userEmail.split('@').first),
@@ -301,11 +314,12 @@ class ResumePersistenceService {
     required int keywordScore,
     required Map<String, dynamic> feedback,
   }) async {
+    final client = _client;
     final userId = _userId;
-    if (userId == null) return;
+    if (userId == null || client == null) return;
 
     try {
-      await _client.from('ats_analysis').insert({
+      await client.from('ats_analysis').insert({
         'user_id': userId,
         'ats_score': overallScore,
         'formatting_score': formatScore,
@@ -317,7 +331,7 @@ class ResumePersistenceService {
       if (e is PostgrestException && (e.code == '23503' || e.code == '42501')) {
         await _ensureProfileRow(userId, ResumeData());
         try {
-          await _client.from('ats_analysis').insert({
+          await client.from('ats_analysis').insert({
             'user_id': userId,
             'ats_score': overallScore,
             'formatting_score': formatScore,
