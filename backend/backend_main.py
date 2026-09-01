@@ -135,7 +135,11 @@ def save_resume_persist(
 
     # 2. Save local disk snapshot (guarantees state retention across restarts)
     try:
-        file_path = DATA_STORE_DIR / f"{resume_id}.json"
+        file_path = (DATA_STORE_DIR / f"{resume_id}.json").resolve()
+        # Security: prevent path traversal vulnerabilities
+        if not file_path.is_relative_to(DATA_STORE_DIR.resolve()):
+            raise ValueError("Invalid resume_id: Path traversal detected")
+
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump({
                 "resume_id": resume_id,
@@ -182,8 +186,9 @@ def load_resume_persist(resume_id: str) -> Optional[ResumeSections]:
         return RESUMES[resume_id]
 
     # 2. Check local disk snapshot
-    file_path = DATA_STORE_DIR / f"{resume_id}.json"
-    if file_path.exists():
+    file_path = (DATA_STORE_DIR / f"{resume_id}.json").resolve()
+    # Security: prevent path traversal vulnerabilities
+    if file_path.is_relative_to(DATA_STORE_DIR.resolve()) and file_path.exists():
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
