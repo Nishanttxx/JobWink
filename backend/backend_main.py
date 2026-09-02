@@ -22,6 +22,7 @@ import re
 import json
 import uuid
 import datetime
+import html
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -1050,6 +1051,21 @@ Screenshot:  {report.screenshot_reference or 'None'}
 ==================================================
 """
 
+    esc_name = html.escape(str(report.user_name or '')) if report.user_name else 'N/A'
+    esc_email = html.escape(str(report.user_email or ''))
+    esc_uid = html.escape(str(report.user_id or '')) if report.user_id else 'Unauthenticated / Anonymous'
+    esc_title = html.escape(str(report.title or ''))
+    esc_desc = html.escape(str(report.description or ''))
+    esc_route = html.escape(str(report.route or '')) if report.route else (html.escape(str(report.page_url or '')) if report.page_url else 'N/A')
+    esc_browser = html.escape(str(report.browser or '')) if report.browser else 'N/A'
+    esc_os = html.escape(str(report.os or '')) if report.os else 'N/A'
+    esc_screen = html.escape(str(report.screen_size or '')) if report.screen_size else 'N/A'
+
+    screenshot_html = ''
+    if report.screenshot_reference and report.screenshot_reference.startswith(("http://", "https://")):
+        esc_screenshot = html.escape(str(report.screenshot_reference))
+        screenshot_html = f'<tr><td style="padding: 4px 0; font-weight: 600; color: #64748B;">Screenshot:</td><td><a href="{esc_screenshot}" target="_blank" style="color: #2563EB; font-weight: 600;">View Attached Screenshot &rarr;</a></td></tr>'
+
     html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -1059,32 +1075,32 @@ Screenshot:  {report.screenshot_reference or 'None'}
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 20px; background-color: #F1F5F9;">
   <div style="background: #0F172A; padding: 20px 24px; border-radius: 12px 12px 0 0; color: #ffffff;">
     <h2 style="margin: 0; color: #FB923C; font-size: 20px; display: flex; align-items: center;">🐛 JobWink Bug Report</h2>
-    <p style="margin: 4px 0 0 0; font-size: 12px; color: #94A3B8;">Report ID: <code style="color: #CBD5E1;">{report_id}</code> &bull; {now_str}</p>
+    <p style="margin: 4px 0 0 0; font-size: 12px; color: #94A3B8;">Report ID: <code style="color: #CBD5E1;">{html.escape(str(report_id))}</code> &bull; {html.escape(str(now_str))}</p>
   </div>
   <div style="background: #ffffff; border: 1px solid #E2E8F0; padding: 24px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);">
     <h3 style="margin-top: 0; color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Reporter Identity</h3>
     <table style="width: 100%; font-size: 14px; margin-bottom: 20px; border-collapse: collapse;">
-      <tr><td style="width: 120px; padding: 6px 0; font-weight: 600; color: #64748B;">Name:</td><td style="color: #0F172A; font-weight: 600;">{report.user_name or 'N/A'}</td></tr>
-      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">Email:</td><td><a href="mailto:{report.user_email}" style="color: #EA580C; font-weight: 600; text-decoration: none;">{report.user_email}</a></td></tr>
-      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">User ID:</td><td style="font-family: monospace; font-size: 12px; color: #475569;">{report.user_id or 'Unauthenticated / Anonymous'}</td></tr>
+      <tr><td style="width: 120px; padding: 6px 0; font-weight: 600; color: #64748B;">Name:</td><td style="color: #0F172A; font-weight: 600;">{esc_name}</td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">Email:</td><td><a href="mailto:{esc_email}" style="color: #EA580C; font-weight: 600; text-decoration: none;">{esc_email}</a></td></tr>
+      <tr><td style="padding: 6px 0; font-weight: 600; color: #64748B;">User ID:</td><td style="font-family: monospace; font-size: 12px; color: #475569;">{esc_uid}</td></tr>
     </table>
 
     <h3 style="color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Bug Summary</h3>
     <div style="background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #EA580C; border-radius: 6px; padding: 14px; margin-bottom: 20px;">
-      <p style="margin: 0 0 8px 0; font-weight: 700; font-size: 15px; color: #0F172A;">{report.title}</p>
-      <p style="margin: 0; font-size: 14px; white-space: pre-wrap; color: #334155;">{report.description}</p>
+      <p style="margin: 0 0 8px 0; font-weight: 700; font-size: 15px; color: #0F172A;">{esc_title}</p>
+      <p style="margin: 0; font-size: 14px; white-space: pre-wrap; color: #334155;">{esc_desc}</p>
     </div>
 
     <h3 style="color: #0F172A; font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid #FB923C; padding-bottom: 6px;">Environment & Telemetry</h3>
     <table style="width: 100%; font-size: 13px; color: #475569; border-collapse: collapse;">
-      <tr><td style="width: 120px; padding: 4px 0; font-weight: 600; color: #64748B;">Route / Page:</td><td>{report.route or report.page_url or 'N/A'}</td></tr>
-      <tr><td style="font-weight: 600; color: #64748B;">Browser:</td><td>{report.browser or 'N/A'}</td></tr>
-      <tr><td style="font-weight: 600; color: #64748B;">Platform / OS:</td><td>{report.os or 'N/A'}</td></tr>
-      <tr><td style="font-weight: 600; color: #64748B;">Screen Size:</td><td>{report.screen_size or 'N/A'}</td></tr>
-      {f'<tr><td style="padding: 4px 0; font-weight: 600; color: #64748B;">Screenshot:</td><td><a href="{report.screenshot_reference}" target="_blank" style="color: #2563EB; font-weight: 600;">View Attached Screenshot &rarr;</a></td></tr>' if report.screenshot_reference else ''}
+      <tr><td style="width: 120px; padding: 4px 0; font-weight: 600; color: #64748B;">Route / Page:</td><td>{esc_route}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Browser:</td><td>{esc_browser}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Platform / OS:</td><td>{esc_os}</td></tr>
+      <tr><td style="font-weight: 600; color: #64748B;">Screen Size:</td><td>{esc_screen}</td></tr>
+      {screenshot_html}
     </table>
   </div>
-  <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 18px;">JobWink Bug Reporter &bull; Replying to this email will directly message {report.user_email}</p>
+  <p style="font-size: 12px; color: #94A3B8; text-align: center; margin-top: 18px;">JobWink Bug Reporter &bull; Replying to this email will directly message {esc_email}</p>
 </body>
 </html>
 """
