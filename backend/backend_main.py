@@ -66,20 +66,20 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 TEMPLATES: Dict[str, TemplateConfig] = {}
 
-# Security Fix: Configure CORS strictly using ALLOWED_ORIGINS env var with safe defaults
-allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
-if allowed_origins_env:
-    allowed_origins = [origin.strip() for origin in allowed_origins_env.split(",") if origin.strip()]
-else:
-    allowed_origins = [
-        "http://localhost",
-        "http://localhost:3000",
-        "http://localhost:8080",
-    ]
+# Security: Restrict CORS to specific origins via environment variable or default to localhost
+# to prevent overly permissive Cross-Origin Resource Sharing (CORS) attacks.
+ALLOWED_ORIGINS_STR = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [
+    orig.strip() for orig in ALLOWED_ORIGINS_STR.split(",") if orig.strip()
+] if ALLOWED_ORIGINS_STR else [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:8080",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -1075,7 +1075,7 @@ Screenshot:  {report.screenshot_reference or 'None'}
     screenshot_html = ''
     if report.screenshot_reference and report.screenshot_reference.startswith(("http://", "https://")):
         esc_screenshot = html.escape(str(report.screenshot_reference))
-        screenshot_html = f'<tr><td style="padding: 4px 0; font-weight: 600; color: #64748B;">Screenshot:</td><td><a href="{esc_screenshot}" target="_blank" style="color: #2563EB; font-weight: 600;">View Attached Screenshot &rarr;</a></td></tr>'
+        screenshot_html = f'<tr><td style="padding: 4px 0; font-weight: 600; color: #64748B;">Screenshot:</td><td><a href="{esc_screenshot}" target="_blank" style="color: #2563EB; font-weight: 600; text-decoration: none;">{esc_screenshot}</a></td></tr>'
 
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -1083,7 +1083,7 @@ Screenshot:  {report.screenshot_reference or 'None'}
   <meta charset="utf-8">
   <title>Bug Report</title>
 </head>
-<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 20px; background-color: #F1F5F9;">
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1E293B; line-height: 1.6; max-width: 620px; margin: 0 auto; padding: 20px; background: #F8FAFC;">
   <div style="background: #0F172A; padding: 20px 24px; border-radius: 12px 12px 0 0; color: #ffffff;">
     <h2 style="margin: 0; color: #FB923C; font-size: 20px; display: flex; align-items: center;">🐛 JobWink Bug Report</h2>
     <p style="margin: 4px 0 0 0; font-size: 12px; color: #94A3B8;">Report ID: <code style="color: #CBD5E1;">{html.escape(str(report_id))}</code> &bull; {html.escape(str(now_str))}</p>
@@ -1233,5 +1233,3 @@ async def report_bug_endpoint(payload: BugReportPayload, x_user_id: Optional[str
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend_main:app", host="127.0.0.1", port=8000, reload=True)
-
-
