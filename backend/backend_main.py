@@ -66,9 +66,14 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 TEMPLATES: Dict[str, TemplateConfig] = {}
 
+# Security: Restrict CORS to specific origins via environment variable or default to localhost
+# to prevent overly permissive Cross-Origin Resource Sharing (CORS) attacks.
+ALLOWED_ORIGINS_STR = os.environ.get("ALLOWED_ORIGINS", "")
+ALLOWED_ORIGINS = [orig.strip() for orig in ALLOWED_ORIGINS_STR.split(",")] if ALLOWED_ORIGINS_STR else ["http://localhost", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
