@@ -9,7 +9,22 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+const ALLOWED_ORIGINS_STR = process.env.ALLOWED_ORIGINS || "";
+const ALLOWED_ORIGINS = ALLOWED_ORIGINS_STR
+  ? ALLOWED_ORIGINS_STR.split(',').map(o => o.trim())
+  : ['http://localhost', 'http://localhost:3000', 'http://127.0.0.1:8000', 'http://127.0.0.1:3000'];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+}));
+
 app.use(express.json({ limit: '25mb' }));
 
 // File upload configuration in memory
