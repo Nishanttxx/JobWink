@@ -1,5 +1,14 @@
 {
   "devDependencies": {
     "supabase": "^2.116.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@google/genai": "^2.27.0",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5"
   }
 }
