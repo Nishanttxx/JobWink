@@ -3,6 +3,6 @@
 **Learning:** Python's `pathlib` operator `/` does not protect against `..` components. Since the backend allows users to provide an arbitrary string as `resume_id` in API requests, validating paths is strictly required when reading/writing state to the disk.
 **Prevention:** Ensure that all dynamically constructed paths from user inputs are resolved and explicitly checked using `file_path.is_relative_to(DATA_STORE_DIR.resolve())` before executing any file operations.
 ## 2026-09-07 - [Secure CORS Configuration]
-**Vulnerability:** The FastAPI backend used a dangerously permissive CORS configuration (`allow_origins=["*"]`), which allowed any origin to make cross-origin requests to the API.
-**Learning:** In production environments, allowing all origins can expose sensitive endpoints to CSRF-like attacks or data theft from malicious domains. APIs must explicitly define allowed origins.
-**Prevention:** Ensure `CORSMiddleware` reads allowed origins from environment variables and provides a strict default for local development, rather than using wildcards.
+**Vulnerability:** Both the FastAPI backend and Node.js proxy (`server.js`) used dangerously permissive CORS configurations (`allow_origins=["*"]` and `app.use(cors())`), which allowed any origin to make cross-origin requests to the API.
+**Learning:** In production environments, allowing all origins can expose sensitive endpoints to CSRF-like attacks or data theft from malicious domains. APIs must explicitly define allowed origins. It is important to ensure all entry points and proxy servers in a multi-service architecture enforce the same CORS policies.
+**Prevention:** Ensure CORS middlewares read allowed origins from environment variables and provide a strict default for local development, rather than using wildcards.

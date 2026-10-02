@@ -9,7 +9,15 @@ import { GoogleGenAI } from '@google/genai';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// Security: Restrict CORS to specific origins via environment variable or default to localhost
+// to prevent overly permissive Cross-Origin Resource Sharing (CORS) attacks.
+const allowedOriginsStr = process.env.ALLOWED_ORIGINS || "";
+const allowedOrigins = allowedOriginsStr ? allowedOriginsStr.split(',').map(o => o.trim()) : ["http://localhost", "http://localhost:3000"];
+
+app.use(cors({
+  origin: allowedOrigins
+}));
 app.use(express.json({ limit: '25mb' }));
 
 // File upload configuration in memory
