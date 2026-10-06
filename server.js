@@ -2,14 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import multer from 'multer';
-import pdfParse from 'pdf-parse';
+import * as pdfParseModule from 'pdf-parse';
+const pdfParse = pdfParseModule.default || pdfParseModule;
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+const ALLOWED_ORIGINS_STR = process.env.ALLOWED_ORIGINS || '';
+const allowedOrigins = ALLOWED_ORIGINS_STR ? ALLOWED_ORIGINS_STR.split(',').map(orig => orig.trim()) : ['http://localhost', 'http://localhost:3000'];
+
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: '25mb' }));
 
 // File upload configuration in memory

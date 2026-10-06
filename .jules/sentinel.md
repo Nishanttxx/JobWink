@@ -6,3 +6,7 @@
 **Vulnerability:** The FastAPI backend used a dangerously permissive CORS configuration (`allow_origins=["*"]`), which allowed any origin to make cross-origin requests to the API.
 **Learning:** In production environments, allowing all origins can expose sensitive endpoints to CSRF-like attacks or data theft from malicious domains. APIs must explicitly define allowed origins.
 **Prevention:** Ensure `CORSMiddleware` reads allowed origins from environment variables and provides a strict default for local development, rather than using wildcards.
+## 2026-09-08 - [Secure CORS Configuration in Node.js Proxy]
+**Vulnerability:** The Express.js Node proxy server (`server.js`) was using a dangerously permissive CORS configuration (`app.use(cors())`), allowing any origin to make cross-origin requests to its parsing API. This mirrored a previous vulnerability found in the FastAPI backend.
+**Learning:** In production environments, allowing all origins exposes sensitive endpoints to unauthorized access, CSRF-like attacks, or data theft from malicious domains. Security practices must be uniform across all services (backend and proxy).
+**Prevention:** Ensure `cors()` middleware is configured to read allowed origins from an environment variable (`ALLOWED_ORIGINS`), and fallback to a strict default like `http://localhost` for development. Avoid using wildcard defaults across all server setups.
